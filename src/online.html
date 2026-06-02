@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>皇室德州 · 真人对战</title>
+  <meta name="theme-color" content="#0a1410" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    #onlinebar { display:flex; align-items:center; justify-content:space-between; padding:6px 14px; border-bottom:1px solid rgba(245,207,107,.12); font-size:12px; color:#cfe7d8; }
+    #onlinebar .left { display:flex; gap:8px; align-items:center; }
+    #conn-state { padding:3px 10px; border-radius:12px; background:rgba(0,0,0,.35); }
+    #conn-state.ok { color:#5be08a; } #conn-state.bad { color:#ff8a8a; }
+    .host-ctl { display:flex; gap:8px; }
+    .host-ctl button { background:rgba(245,207,107,.18); border:1px solid var(--gold); color:var(--gold); border-radius:9px; padding:6px 12px; font-weight:700; font-size:12px; }
+    #timer-wrap { position:absolute; left:50%; bottom:2%; transform:translateX(-50%); width:60%; height:6px; background:rgba(0,0,0,.4); border-radius:4px; overflow:hidden; display:none; }
+    #timer-bar { height:100%; width:100%; background:linear-gradient(90deg,#5be08a,var(--gold)); transition:width .25s linear; }
+    #join-overlay { position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.75); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; }
+    #join-card { width:100%; max-width:380px; background:linear-gradient(180deg,#163123,#0a1410); border:1.5px solid rgba(245,207,107,.4); border-radius:18px; padding:22px; text-align:center; }
+    #join-card h2 { color:var(--gold); margin-bottom:6px; font-size:20px; }
+    #join-card p { color:#bfe6cf; font-size:12px; margin-bottom:16px; }
+    #join-name { width:100%; padding:12px; border-radius:10px; border:1px solid rgba(245,207,107,.4); background:rgba(0,0,0,.4); color:#fff; font-size:15px; text-align:center; margin-bottom:14px; }
+    .back-link { position:absolute; left:12px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header id="onlinebar">
+      <div class="left">
+        <a class="cur" href="index.html" style="text-decoration:none;color:var(--gold)">‹ 返回</a>
+        <span id="conn-state" class="bad">连接中…</span>
+      </div>
+      <div class="left">
+        <span id="seatInfo">座位 -/6</span>
+        <span id="blindInfo">50/100</span>
+      </div>
+    </header>
+
+    <main id="table-wrap">
+      <div id="table">
+        <div id="table-felt">
+          <div id="logo-watermark">♠ ROYAL ♠</div>
+          <div id="board"></div>
+          <div id="pot-display"><span class="pot-label">底池</span><span id="pot-amount">0</span></div>
+          <div id="phase-banner"></div>
+        </div>
+        <div id="seats"></div>
+        <div id="dealer-button" class="hidden">D</div>
+        <div id="fx-layer"></div>
+        <div id="timer-wrap"><div id="timer-bar"></div></div>
+      </div>
+    </main>
+
+    <footer id="controls">
+      <div id="message-bar">连接服务器中…</div>
+      <div id="host-area" class="host-ctl hidden">
+        <button id="btn-addbot">+ 机器人</button>
+        <button id="btn-startmp">开始本手</button>
+      </div>
+      <div id="action-area" class="hidden">
+        <div id="raise-controls" class="hidden">
+          <div class="raise-amount">加注到 <span id="raise-value">0</span></div>
+          <input type="range" id="raise-slider" min="0" max="100" value="0" />
+          <div class="quick-bets">
+            <button class="quick" data-q="min">最小</button>
+            <button class="quick" data-q="half">½池</button>
+            <button class="quick" data-q="pot">底池</button>
+            <button class="quick" data-q="allin">全下</button>
+          </div>
+        </div>
+        <div id="action-buttons">
+          <button id="btn-fold" class="act-btn fold">弃牌</button>
+          <button id="btn-check" class="act-btn check">过牌</button>
+          <button id="btn-call" class="act-btn call">跟注</button>
+          <button id="btn-raise" class="act-btn raise">加注</button>
+          <button id="btn-confirm-raise" class="act-btn confirm hidden">确认</button>
+          <button id="btn-cancel-raise" class="act-btn cancel hidden">取消</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <div id="join-overlay">
+    <div id="join-card">
+      <h2>真人对战</h2>
+      <p>同一 Tailnet 的朋友打开本页面即可同桌。<br>不够人时点「+机器人」补位。</p>
+      <input type="text" id="join-name" placeholder="输入你的昵称" maxlength="8" />
+      <button class="big-btn" id="join-go">坐下入桌</button>
+    </div>
+  </div>
+
+  <script src="poker.js"></script>
+  <script src="skins.js"></script>
+  <script src="store.js"></script>
+  <script src="codec.js"></script>
+  <script src="sound.js"></script>
+  <script src="fx.js"></script>
+  <script src="online.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+name: 构建未签名 iOS IPA
+
+# 在 GitHub 网页 Actions 页面点 "Run workflow" 手动触发。
+# 跑完在该次运行的 Artifacts 里下载 royal-holdem-unsigned-ipa。
+# 这是未签名包，下载后用你的工具(爱思/Sideloadly/AltStore)以你的 Apple ID 签名安装。
+
+on:
+  workflow_dispatch:
+    inputs:
+      server:
+        description: '联机服务器主机(留空用默认 Tailscale 地址)'
+        required: false
+        default: 'm5.tail5255b4.ts.net'
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 安装依赖
+        run: npm install
+      - name: 生成 www
+        run: node make-www.js "${{ github.event.inputs.server }}"
+      - name: 添加 iOS 平台
+        run: npx cap add ios
+      - name: 同步
+        run: npx cap sync ios
+      - name: 编译未签名 archive
+        run: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -archivePath "$PWD/build/App.xcarchive" \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO archive
+      - name: 打包 IPA
+        run: |
+          cd ios/App
+          mkdir -p Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -qr royal-holdem-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: royal-holdem-unsigned-ipa
+          path: ios/App/royal-holdem-unsigned.ipa

@@ -1,0 +1,12 @@
+{
+  "appId": "com.royalholdem.app",
+  "appName": "皇室德州",
+  "webDir": "www",
+  "server": {
+    "iosScheme": "royal"
+  },
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0a1410"
+  }
+}

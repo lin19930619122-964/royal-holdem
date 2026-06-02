@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#1aa06a"/>
+      <stop offset="55%" stop-color="#0e6b46"/>
+      <stop offset="100%" stop-color="#05301f"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff6da"/>
+      <stop offset="55%" stop-color="#f5cf6b"/>
+      <stop offset="100%" stop-color="#b8862f"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="20" y="20" width="472" height="472" rx="96" fill="none" stroke="url(#gold)" stroke-width="10" opacity="0.85"/>
+  <!-- 黑桃 -->
+  <g transform="translate(256,250)">
+    <path fill="url(#gold)" d="M0,-150 C70,-70 150,-35 150,35 C150,90 105,128 60,128 C38,128 18,118 6,102 C14,150 34,178 70,196 L-70,196 C-34,178 -14,150 -6,102 C-18,118 -38,128 -60,128 C-105,128 -150,90 -150,35 C-150,-35 -70,-70 0,-150 Z"/>
+  </g>
+  <text x="256" y="468" text-anchor="middle" font-family="Georgia, serif" font-size="46" font-weight="bold" fill="url(#gold)" letter-spacing="6">ROYAL</text>
+</svg>

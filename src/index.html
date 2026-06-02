@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>皇室德州</title>
+  <meta name="theme-color" content="#0a1410" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="皇室德州" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">
+        <span class="brand-mark">♠</span>
+        <span class="brand-name">皇室德州</span>
+      </div>
+      <div class="wallet">
+        <span class="cur coins" id="walletCoins"><i>🪙</i><b id="coinVal">0</b></span>
+        <span class="cur diamonds" id="walletDiamonds"><i>💎</i><b id="diamondVal">0</b></span>
+      </div>
+    </header>
+
+    <nav id="featurebar">
+      <button class="feat" id="btn-checkin"><i>🎁</i><span>签到</span><em id="checkin-dot" class="dot hidden"></em></button>
+      <button class="feat" id="btn-shop"><i>🛒</i><span>商店</span></button>
+      <button class="feat" id="btn-redeem"><i>🎟️</i><span>兑换码</span></button>
+      <button class="feat" id="btn-sound"><i id="sound-icon">🔊</i><span>音效</span></button>
+      <a class="feat" id="btn-online" href="online.html"><i>👥</i><span>真人</span></a>
+      <span class="blind-chip" id="blindInfo">50/100</span>
+      <span class="hand-chip" id="handInfo">第0手</span>
+    </nav>
+
+    <main id="table-wrap">
+      <div id="table">
+        <div id="table-felt">
+          <div id="logo-watermark">♠ ROYAL ♠</div>
+          <div id="board"></div>
+          <div id="pot-display"><span class="pot-label">底池</span><span id="pot-amount">0</span></div>
+          <div id="phase-banner"></div>
+        </div>
+        <div id="seats"></div>
+        <div id="dealer-button" class="hidden">D</div>
+        <div id="fx-layer"></div>
+      </div>
+    </main>
+
+    <footer id="controls">
+      <div id="message-bar">点击「开始」发牌</div>
+      <div id="action-area" class="hidden">
+        <div id="raise-controls" class="hidden">
+          <div class="raise-amount">加注到 <span id="raise-value">0</span></div>
+          <input type="range" id="raise-slider" min="0" max="100" value="0" />
+          <div class="quick-bets">
+            <button class="quick" data-q="min">最小</button>
+            <button class="quick" data-q="half">½池</button>
+            <button class="quick" data-q="pot">底池</button>
+            <button class="quick" data-q="allin">全下</button>
+          </div>
+        </div>
+        <div id="action-buttons">
+          <button id="btn-fold" class="act-btn fold">弃牌</button>
+          <button id="btn-check" class="act-btn check">过牌</button>
+          <button id="btn-call" class="act-btn call">跟注</button>
+          <button id="btn-raise" class="act-btn raise">加注</button>
+          <button id="btn-confirm-raise" class="act-btn confirm hidden">确认</button>
+          <button id="btn-cancel-raise" class="act-btn cancel hidden">取消</button>
+        </div>
+      </div>
+      <div id="start-area">
+        <button id="btn-start" class="big-btn">开始 / 下一手</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 弹窗 -->
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-checkin" class="modal hidden">
+      <div class="modal-head"><span>每日签到</span><button class="modal-close" data-close>✕</button></div>
+      <div class="modal-body" id="checkin-grid"></div>
+      <button class="big-btn" id="checkin-claim">领取今日奖励</button>
+    </div>
+
+    <div id="modal-shop" class="modal hidden">
+      <div class="modal-head"><span>商店</span><button class="modal-close" data-close>✕</button></div>
+      <div class="shop-tabs">
+        <button class="shop-tab active" data-tab="coins">金币</button>
+        <button class="shop-tab" data-tab="backs">牌背</button>
+        <button class="shop-tab" data-tab="felts">桌布</button>
+      </div>
+      <div class="modal-body" id="shop-body"></div>
+    </div>
+
+    <div id="modal-redeem" class="modal hidden">
+      <div class="modal-head"><span>兑换码</span><button class="modal-close" data-close>✕</button></div>
+      <div class="modal-body">
+        <p class="redeem-tip">输入兑换码免费领取金币 / 钻石 / 皮肤。每个码仅可使用一次。</p>
+        <input type="text" id="redeem-input" placeholder="例如 RHD-C.XXXX.X-XXXXX" autocapitalize="characters" />
+        <div id="redeem-msg"></div>
+        <button class="big-btn" id="redeem-submit">领取</button>
+        <div id="gift-codes"></div>
+      </div>
+    </div>
+
+    <div id="modal-toast" class="toast hidden"></div>
+  </div>
+
+  <script src="codec.js"></script>
+  <script src="skins.js"></script>
+  <script src="store.js"></script>
+  <script src="sound.js"></script>
+  <script src="fx.js"></script>
+  <script src="poker.js"></script>
+  <script src="ai.js"></script>
+  <script src="game.js"></script>
+  <script src="ui.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
