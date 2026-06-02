@@ -2,8 +2,8 @@
 (function () {
   const backs = {
     classic: {
-      name: '经典红', price: 0,
-      css: 'repeating-linear-gradient(45deg,#7a1020 0 7px,#5a0b18 7px 14px)',
+      name: '皇室红', price: 0,
+      css: "url('assets/cardback.png') center/cover, #5a0b18",
     },
     ocean: {
       name: '深海蓝', price: 8,
