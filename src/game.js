@@ -405,6 +405,8 @@
         minRaise: this.minRaise,
         bigBlind: this.bigBlind,
         players: this.players,
+        button: this.button,
+        street: this.phase, // preflop/flop/turn/river
       };
     }
   }

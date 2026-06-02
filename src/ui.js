@@ -51,7 +51,7 @@
         <div class="last-action"></div>
         <div class="player-cards"></div>
         <div class="player-box">
-          <div class="avatar"></div>
+          <div class="avatar"><img class="av-img" src="assets/av/${i + 1}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span></div>
           <div class="pinfo"><span class="pname"></span><span class="pchips"></span></div>
         </div>`;
       seatsEl.appendChild(seat);
@@ -95,7 +95,7 @@
     const result = game.result;
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i], el = seatEls[i];
-      el.querySelector('.avatar').textContent = p.out ? '💀' : p.avatar;
+      el.querySelector('.av-emoji').textContent = p.out ? '💀' : p.avatar;
       const pname = el.querySelector('.pname');
       pname.textContent = p.out ? `${p.name}` : p.name;
       pname.classList.toggle('is-human', p.isHuman);
@@ -427,9 +427,9 @@
     $('btn-redeem').addEventListener('click', () => openModal('modal-redeem'));
     $('btn-sound').addEventListener('click', () => {
       const m = !Sfx.isMuted();
-      Sfx.setMuted(m); Store.setMuted(m);
+      Sfx.setMuted(m); Store.setMuted(m); window.Music && Music.setMuted(m);
       $('sound-icon').textContent = m ? '🔇' : '🔊';
-      if (!m) { Sfx.resume(); Sfx.button(); }
+      if (!m) { Sfx.resume(); Sfx.button(); window.Music && Music.start(); }
     });
 
     // 弹窗关闭
@@ -474,7 +474,7 @@
     });
 
     // 首次交互恢复音频
-    document.addEventListener('pointerdown', () => Sfx.resume(), { once: true });
+    document.addEventListener('pointerdown', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); }, { once: true });
   }
 
   function doRedeem() {
@@ -496,9 +496,34 @@
   /* ---------- 初始化 ---------- */
   Skins.apply();
   Sfx.setMuted(Store.get().muted);
+  if (window.Music) Music.setMuted(Store.get().muted);
   $('sound-icon').textContent = Store.get().muted ? '🔇' : '🔊';
   buildSeats();
   setupEvents();
   syncWallet();
   render();
+
+  // 预览模式(仅用于截图调试，?preview)：摆一桌有牌/有注的静态画面，不启动循环
+  if (location.search.indexOf('preview') >= 0) {
+    const holes = [
+      [{ rank: 14, suit: 's' }, { rank: 14, suit: 'h' }],
+      [{ rank: 13, suit: 'd' }, { rank: 12, suit: 'd' }],
+      [{ rank: 9, suit: 'c' }, { rank: 9, suit: 's' }],
+      [{ rank: 7, suit: 'h' }, { rank: 2, suit: 'c' }],
+      [{ rank: 5, suit: 's' }, { rank: 4, suit: 'h' }],
+      [{ rank: 11, suit: 'h' }, { rank: 10, suit: 'h' }],
+    ];
+    const bets = [600, 0, 600, 0, 0, 1200];
+    const acts = ['跟注', '', '跟注', '弃牌', '弃牌', '加注'];
+    game.handNo = 12; game.button = 5; game.phase = 'flop'; game.bettingOpen = true; game.current = 0;
+    game.board = [{ rank: 14, suit: 'd' }, { rank: 13, suit: 's' }, { rank: 7, suit: 'd' }];
+    game.players.forEach((p, i) => {
+      p.out = false; p.folded = (i === 3 || i === 4); p.allIn = false;
+      p.hole = holes[i]; p.chips = [9400, 12000, 8800, 6500, 15000, 7800][i];
+      p.bet = bets[i]; p.totalContribution = bets[i]; p.lastAction = acts[i]; p.winThisHand = 0;
+    });
+    for (let i = 0; i < seatSig.length; i++) seatSig[i] = '';
+    render();
+    enableHumanControls();
+  }
 })();

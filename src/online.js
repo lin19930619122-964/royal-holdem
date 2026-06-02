@@ -26,7 +26,7 @@
         <div class="winner-badge hidden"></div>
         <div class="last-action"></div>
         <div class="player-cards"></div>
-        <div class="player-box"><div class="avatar"></div>
+        <div class="player-box"><div class="avatar"><img class="av-img" src="assets/av/${i + 1}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span></div>
           <div class="pinfo"><span class="pname"></span><span class="pchips"></span></div></div>`;
       seatsEl.appendChild(seat); seatEls.push(seat); seatSig.push(''); prevBet.push(0);
       const bx = pos.x + (50 - pos.x) * 0.34, by = pos.y + (50 - pos.y) * 0.34;
@@ -63,7 +63,7 @@
     for (let i = 0; i < 6; i++) {
       const s = state.seats[i], el = seatEls[i];
       const empty = s.kind === 'empty';
-      el.querySelector('.avatar').textContent = empty ? '➕' : s.avatar;
+      el.querySelector('.av-emoji').textContent = empty ? '➕' : s.avatar;
       const pname = el.querySelector('.pname');
       pname.textContent = empty ? '空位' : s.name + (s.kind === 'bot' ? '🤖' : (s.connected ? '' : '📴'));
       pname.classList.toggle('is-human', i === mySeat);
@@ -256,7 +256,7 @@
       t = Math.max(o.minRaiseTo, Math.min(t, o.maxRaiseTo));
       sl.value = t; $('raise-value').textContent = t.toLocaleString();
     }));
-    document.addEventListener('pointerdown', () => Sfx.resume(), { once: true });
+    document.addEventListener('pointerdown', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); }, { once: true });
   }
 
   Skins.apply();

@@ -1,5 +1,5 @@
-/* 离线缓存：网络优先（联网拿最新，断网才用缓存）— v6 修复白屏 */
-const CACHE = 'royal-holdem-v7';
+/* 离线缓存：添加到主屏幕后无网也能玩 */
+const CACHE = 'royal-holdem-v5';
 const ASSETS = [
   './', './index.html', './online.html', './styles.css',
   './codec.js', './skins.js', './store.js', './sound.js', './fx.js',
@@ -9,12 +9,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  // 单个文件失败不阻断整体安装（用 allSettled 而非 addAll）
-  e.waitUntil(
-    caches.open(CACHE).then((c) =>
-      Promise.allSettled(ASSETS.map((a) => c.add(a)))
-    ).then(() => self.skipWaiting())
-  );
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -27,14 +22,11 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  // 网络优先：联网永远拿最新，成功后顺便更新缓存；失败（断网）才回退缓存
   e.respondWith(
-    fetch(e.request).then((res) => {
+    caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
       return res;
-    }).catch(() =>
-      caches.match(e.request).then((hit) => hit || caches.match('./index.html'))
-    )
+    }).catch(() => caches.match('./index.html')))
   );
 });

@@ -29,9 +29,14 @@ html, body {
   display: flex; flex-direction: column;
   height: 100vh; height: 100dvh;
   padding-top: var(--safe-top); padding-bottom: var(--safe-bottom);
+  /* 有 assets/bg.jpg 用图(豪华场景)，无图回退到氛围渐变 */
   background:
-    radial-gradient(125% 75% at 50% -8%, #234634 0%, #122218 40%, var(--bg-1) 80%),
-    radial-gradient(160% 100% at 50% 118%, #14241b 0%, rgba(0,0,0,0) 55%);
+    radial-gradient(60% 42% at 50% 33%, rgba(46,104,74,.42), rgba(46,104,74,0) 72%),
+    radial-gradient(45% 30% at 14% 10%, rgba(245,207,107,.10), transparent 70%),
+    radial-gradient(45% 30% at 86% 12%, rgba(245,207,107,.09), transparent 70%),
+    linear-gradient(180deg, rgba(10,26,18,.32), rgba(4,8,6,.72)),
+    url('assets/bg.jpg') center center / cover no-repeat;
+  background-color: #06100b;
 }
 
 /* ---------- 顶栏 HUD ---------- */
@@ -82,6 +87,7 @@ html, body {
   position: absolute; inset: 3% 4%;
   border-radius: 48% / 44%;
   background:
+    repeating-radial-gradient(circle at 50% 38%, rgba(0,0,0,0) 0 3px, rgba(0,0,0,.025) 3px 4px),
     radial-gradient(ellipse at 50% 36%, var(--felt-a) 0%, var(--felt) 50%, var(--felt-dark) 100%);
   box-shadow:
     0 0 0 7px #5a3a1c,
@@ -93,15 +99,23 @@ html, body {
     0 24px 54px rgba(0,0,0,.75);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
+/* 桌面光影：顶部聚光 + 边缘压暗 */
+#table-felt::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 32%, rgba(255,255,255,.12), rgba(255,255,255,0) 42%),
+    radial-gradient(circle at 50% 55%, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%);
+}
 /* 内圈下注金线 */
 #table-felt::after {
   content: ''; position: absolute; inset: 11% 9%;
-  border-radius: 46% / 42%; border: 1.5px solid rgba(245,207,107,.2); pointer-events: none;
+  border-radius: 46% / 42%; border: 1.5px solid rgba(245,207,107,.22); pointer-events: none;
+  box-shadow: 0 0 18px rgba(245,207,107,.12), inset 0 0 18px rgba(245,207,107,.08);
 }
 #logo-watermark {
-  position: absolute; top: 27%; left: 50%; transform: translateX(-50%);
-  font-size: 22px; letter-spacing: 5px; font-weight: 900; color: rgba(255,255,255,.07);
-  text-shadow: 0 1px 0 rgba(0,0,0,.3);
+  position: absolute; top: 25%; left: 50%; transform: translateX(-50%);
+  font-size: 17px; letter-spacing: 6px; font-weight: 900;
+  color: rgba(245,207,107,.14); text-shadow: 0 1px 2px rgba(0,0,0,.4);
 }
 #board { display: flex; gap: 5px; margin-bottom: 12px; min-height: 66px; align-items: center; z-index: 1; }
 #pot-display {
@@ -159,10 +173,18 @@ html, body {
 .seat.folded { opacity: .4; filter: grayscale(.4); }
 .seat .avatar {
   width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-  background: radial-gradient(circle at 40% 32%, #4a6e57, #14281d);
+  background: radial-gradient(circle at 40% 30%, #6a8f74, #1c3326 72%);
   display: flex; align-items: center; justify-content: center; font-size: 23px;
-  box-shadow: 0 0 0 2px var(--gold-deep), 0 0 0 4px rgba(0,0,0,.45), inset 0 2px 5px rgba(255,255,255,.18);
+  box-shadow:
+    0 0 0 2px #160d05,
+    0 0 0 4px var(--gold-deep),
+    0 0 0 5px #2a1a0c,
+    inset 0 2px 6px rgba(255,255,255,.22), inset 0 -3px 6px rgba(0,0,0,.4),
+    0 4px 10px rgba(0,0,0,.55);
 }
+.seat .avatar { position: relative; overflow: hidden; }
+.seat .av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 1; }
+.seat .av-emoji { position: relative; z-index: 0; }
 .seat.me .avatar { width: 50px; height: 50px; font-size: 27px; }
 .seat.active .avatar { box-shadow: 0 0 0 2px var(--gold), 0 0 16px var(--gold); animation: avatarPulse 1.2s ease infinite; }
 @keyframes avatarPulse { 0%,100%{ box-shadow:0 0 0 2px var(--gold), 0 0 10px rgba(245,207,107,.6);} 50%{ box-shadow:0 0 0 2px var(--gold), 0 0 22px rgba(245,207,107,1);} }
