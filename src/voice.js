@@ -2,11 +2,12 @@
    3 个嗓音(0婷婷 1美佳 2善怡) × 每动作 2 句变体。可随音效一起静音。 */
 (function () {
   let muted = false;
-  // voiceIdx: 0(辽宁/东北女) 1(男声)；key: fold/check/call/raise/allin/win/taunt
+  const COUNTS = { fold: 12, check: 12, call: 12, raise: 12, allin: 12, win: 12, taunt: 12, think: 6 };
+  // voiceIdx: 0(辽宁/东北女) 1(男声)；key: fold/check/call/raise/allin/win/taunt/think。每类多句随机不重样
   function play(voiceIdx, key) {
     if (muted || !key) return;
     const v = (((voiceIdx | 0) % 2) + 2) % 2;
-    const variant = Math.random() < 0.5 ? 0 : 1;
+    const variant = Math.floor(Math.random() * (COUNTS[key] || 1));
     try {
       const a = new Audio(`assets/voice/v${v}_${key}_${variant}.mp3`);
       a.volume = 1.0;

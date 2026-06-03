@@ -202,7 +202,11 @@ html, body {
 .seat .avatar { position: relative; overflow: hidden; }
 .seat .av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; z-index: 1; }
 .seat .av-emoji { position: relative; z-index: 0; }
-.seat.me .avatar { width: 50px; height: 50px; font-size: 27px; }
+.seat.me .avatar { width: 50px; height: 50px; font-size: 27px; box-shadow: var(--frame, 0 0 0 2px #160d05, 0 0 0 4px var(--gold-deep), 0 0 0 5px #2a1a0c, inset 0 2px 6px rgba(255,255,255,.22), 0 4px 10px rgba(0,0,0,.55)); }
+.seat .ptitle { font-size: 9px; font-weight: 800; line-height: 1; margin-bottom: 1px; white-space: nowrap; }
+/* 载具进场 */
+.vehicle-fx { position: absolute; top: 44%; left: -25%; font-size: 58px; z-index: 33; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.55)); animation: driveAcross 1.7s ease-out forwards; }
+@keyframes driveAcross { 0%{left:-25%;opacity:0;transform:scale(.7)} 14%{opacity:1} 50%{left:36%;transform:scale(1.25)} 85%{opacity:1} 100%{left:125%;opacity:0;transform:scale(1)} }
 .seat.active .avatar { box-shadow: 0 0 0 2px var(--gold), 0 0 16px var(--gold); animation: avatarPulse 1.2s ease infinite; }
 @keyframes avatarPulse { 0%,100%{ box-shadow:0 0 0 2px var(--gold), 0 0 10px rgba(245,207,107,.6);} 50%{ box-shadow:0 0 0 2px var(--gold), 0 0 22px rgba(245,207,107,1);} }
 .seat .pinfo { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
@@ -299,10 +303,14 @@ html, body {
 
 /* 实时"你的牌型"提示 */
 #hand-hint {
-  align-self: center; background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.35));
-  border: 1px solid rgba(245,207,107,.5); border-radius: 14px; padding: 4px 14px;
-  font-size: 13px; font-weight: 800; color: var(--gold); box-shadow: 0 2px 8px rgba(0,0,0,.4);
+  align-self: center; background: linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,.4));
+  border: 1px solid rgba(245,207,107,.5); border-radius: 12px; padding: 5px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.45); text-align: center; max-width: 96%;
 }
+#hand-hint .hh1 { font-size: 13px; font-weight: 800; color: var(--gold); }
+#hand-hint .hh1 b { color: #7fe3a0; font-size: 15px; }
+#hand-hint .hh2 { font-size: 11px; font-weight: 600; color: #cfe7d8; margin-top: 2px; }
+#hand-hint .hh2 em { font-style: normal; color: var(--gold-lt); font-weight: 800; }
 /* 座位牌型标签(摊牌) */
 .seat .hand-name {
   position: absolute; top: -31px; left: 50%; transform: translateX(-50%);
@@ -453,8 +461,8 @@ html, body {
 .ci-cell.claimed::after { content: "✓"; position: absolute; top: 4px; right: 6px; color: #5be08a; font-weight: 800; }
 .ci-cell.today { border-color: var(--gold); box-shadow: 0 0 12px rgba(245,207,107,.5); }
 .ci-cell.big { border-color: #ff9a3c; }
-.shop-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-.shop-tab { flex: 1; background: rgba(255,255,255,.05); border: 1px solid rgba(245,207,107,.25); color: #cfe7d8; border-radius: 10px; padding: 8px; font-weight: 700; font-size: 13px; }
+.shop-tabs { display: flex; gap: 7px; margin-bottom: 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+.shop-tab { flex: 0 0 auto; background: rgba(255,255,255,.05); border: 1px solid rgba(245,207,107,.25); color: #cfe7d8; border-radius: 10px; padding: 8px 12px; font-weight: 700; font-size: 13px; white-space: nowrap; }
 .shop-tab.active { background: rgba(245,207,107,.2); color: var(--gold); border-color: var(--gold); }
 .shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .shop-item { background: rgba(255,255,255,.05); border: 1px solid rgba(245,207,107,.25); border-radius: 12px; padding: 12px 8px; text-align: center; }

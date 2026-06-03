@@ -12,7 +12,11 @@
     ownedFelts: ['imgGreen', 'green'],
     activeBack: 'classic',
     activeFelt: 'imgGreen',
-    activeAvatar: 1,     // 玩家头像(1..12)
+    activeAvatar: 1,     // 玩家头像(1..16)
+    ownedFrames: ['none'], activeFrame: 'none',   // 头像框
+    ownedTitles: ['none'], activeTitle: 'none',   // 称号
+    ownedVehicles: ['none'], activeVehicle: 'none', // 载具(进场特效)
+    ownedWatches: ['none'], activeWatch: 'none',     // 腕表
     redeemed: [],        // 已用兑换码(去重)
     muted: false,
     handsPlayed: 0,
@@ -157,6 +161,18 @@
   }
   function setAvatar(id) { profile.activeAvatar = id; save(); }
 
+  // 通用饰品(头像框/称号/载具/腕表)购买与装备
+  function mkCosmetic(mapName, ownedKey, activeKey) {
+    return {
+      buy(id) { const s = window.Skins[mapName][id]; if (!s || profile[ownedKey].includes(id)) return false; if (!spendDiamonds(s.price)) return false; profile[ownedKey].push(id); save(); return true; },
+      set(id) { const s = window.Skins[mapName][id]; ownFree(profile[ownedKey], id, s); if (profile[ownedKey].includes(id)) { profile[activeKey] = id; save(); } },
+    };
+  }
+  const _frame = mkCosmetic('frames', 'ownedFrames', 'activeFrame');
+  const _title = mkCosmetic('titles', 'ownedTitles', 'activeTitle');
+  const _veh = mkCosmetic('vehicles', 'ownedVehicles', 'activeVehicle');
+  const _watch = mkCosmetic('watches', 'ownedWatches', 'activeWatch');
+
   function setMuted(m) { profile.muted = !!m; save(); }
   function recordHand(won, pot) {
     profile.handsPlayed++;
@@ -203,6 +219,10 @@
     canCheckin, checkinPreview, doCheckin,
     needsRelief, relief, RELIEF_FLOOR,
     redeem, buyCoinPack, buyBack, buyFelt, setBack, setFelt, setAvatar,
+    buyFrame: _frame.buy, setFrame: _frame.set,
+    buyTitle: _title.buy, setTitle: _title.set,
+    buyVehicle: _veh.buy, setVehicle: _veh.set,
+    buyWatch: _watch.buy, setWatch: _watch.set,
     setMuted, recordHand, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
     CHECKIN,

@@ -13,7 +13,7 @@
   let tableConfig = null;     // 当前牌桌规则
   let seatAvatars = [];       // 每个座位用的头像编号(1..12)
   let seatVoice = [];         // 每个座位的方言: 'db'(东北)/'cd'(成都)
-  const AVATAR_COUNT = 12;
+  const AVATAR_COUNT = 16;
   const ACT2VOICE = { 弃牌: 'fold', 过牌: 'check', 跟注: 'call', 加注: 'raise', 下注: 'raise', 全下: 'allin' };
   function maybeVoice(p) {
     if (!p || p.isHuman || !window.Voice) return;
@@ -57,7 +57,22 @@
   const seatEls = [], betEls = [], seatSig = [], prevBet = [];
   let boardCount = -1, lastDecoratedHand = -1, lastSyncedHand = -1, prevPot = -1;
   let humanWinPct = null;
+  let handAnalysis = null;
   const prevLA = [];
+
+  // 听牌/改善张数(outs)：枚举剩余牌，能提升牌型类别的张数
+  function computeOuts(hole, board) {
+    if (board.length < 3 || board.length >= 5) return null;
+    const cur = P.evaluateBest(hole.concat(board)).score;
+    const used = new Set(hole.concat(board).map((c) => c.rank + c.suit));
+    let outs = 0;
+    for (const c of P.createDeck()) {
+      if (used.has(c.rank + c.suit)) continue;
+      const ns = P.evaluateBest(hole.concat(board.concat([c]))).score;
+      if (ns[0] > cur[0]) outs++;
+    }
+    return outs;
+  }
 
   /* ---------- 钱包 ---------- */
   function syncWallet(bump) {
@@ -96,7 +111,7 @@
         <div class="player-cards"></div>
         <div class="player-box">
           <div class="avatar"><img class="av-img" src="assets/av/${seatAvatars[i] || (i + 1)}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span></div>
-          <div class="pinfo"><span class="pname"></span><span class="pchips"></span></div>
+          <div class="pinfo"><span class="ptitle hidden"></span><span class="pname"></span><span class="pchips"></span></div>
         </div>`;
       seatsEl.appendChild(seat);
       seatEls.push(seat); seatSig.push(''); prevBet.push(0);
@@ -144,8 +159,13 @@
       const p = game.players[i], el = seatEls[i];
       el.querySelector('.av-emoji').textContent = p.out ? '💀' : p.avatar;
       const pname = el.querySelector('.pname');
-      pname.textContent = p.out ? `${p.name}` : p.name;
       pname.classList.toggle('is-human', p.isHuman);
+      const ptl = el.querySelector('.ptitle');
+      if (p.isHuman) {
+        const sp = Store.get(), wq = Skins.watches[sp.activeWatch], tt = Skins.titles[sp.activeTitle];
+        pname.textContent = (wq && wq.icon ? wq.icon + ' ' : '') + p.name;
+        if (tt && tt.text) { ptl.textContent = tt.text; ptl.style.color = tt.color; ptl.classList.remove('hidden'); } else ptl.classList.add('hidden');
+      } else { pname.textContent = p.name; ptl.classList.add('hidden'); }
       el.querySelector('.pchips').textContent = p.out ? '—' : fmtChips(p.chips);
       el.classList.toggle('folded', p.folded && !p.out);
       el.classList.toggle('active', game.current === i && game.bettingOpen);
@@ -203,12 +223,14 @@
 
     // 实时"你的牌型"(翻牌后，帮助练牌)
     const hh = $('hand-hint'), me = game.players[0];
-    if (me && me.hole.length === 2 && !me.folded && !me.out && game.phase !== 'idle' && game.phase !== 'gameover') {
-      let txt = '';
-      if (game.board.length >= 3) txt = '你的牌型 · ' + P.handName(P.evaluateBest(me.hole.concat(game.board)).score);
-      if (humanWinPct != null) txt += (txt ? ' · ' : '') + '胜率 ' + humanWinPct + '%';
-      if (txt) { hh.innerHTML = txt.replace(/胜率 (\d+)%/, '胜率 <b style="color:#7fe3a0">$1%</b>'); hh.classList.remove('hidden'); }
-      else hh.classList.add('hidden');
+    if (me && me.hole.length === 2 && !me.folded && !me.out && handAnalysis && game.phase !== 'idle' && game.phase !== 'gameover') {
+      const a = handAnalysis;
+      const draw = (a.outs && a.outs > 0) ? `听牌 ${a.outs} outs · ` : '';
+      const odds = a.po != null ? `底池赔率 ${a.po}% · ` : '';
+      hh.innerHTML =
+        `<div class="hh1">你的牌型 · ${a.name} · 胜率 <b>${a.winPct}%</b></div>` +
+        `<div class="hh2">赢${a.winPct} 平${a.tiePct} 输${a.losePct}% · ${draw}${odds}${a.opp}人 · <em>${a.rec}</em></div>`;
+      hh.classList.remove('hidden');
     } else hh.classList.add('hidden');
 
     updateMessage();
@@ -219,6 +241,13 @@
     f.classList.remove('hidden'); f.style.animation = 'none'; void f.offsetWidth; f.style.animation = '';
     if (window.Sfx) Sfx.bet();
     setTimeout(() => f.classList.add('hidden'), 1000);
+  }
+  // 载具进场特效：你的座驾从画面驶过
+  function playVehicleEntrance() {
+    const id = Store.get().activeVehicle, v = Skins.vehicles[id];
+    if (!v || !v.icon || id === 'none') return;
+    const el = document.createElement('div'); el.className = 'vehicle-fx'; el.textContent = v.icon;
+    fxLayer.appendChild(el); setTimeout(() => el.remove(), 1800);
   }
 
   function updateMessage() {
@@ -330,7 +359,7 @@
 
   function nextHand() {
     raiseMode = false;
-    humanWinPct = null;
+    humanWinPct = null; handAnalysis = null;
     Sfx.resume();
     $('result-banner').classList.add('hidden');
     // 破产救济（免费）
@@ -358,11 +387,21 @@
     $('start-area').classList.add('hidden');
     $('action-area').classList.remove('hidden');
     exitRaiseMode();
-    // 教学助手：算出你这手的实时胜率
+    // 教学助手：高精度蒙特卡洛 + 详细分析
     const meP = game.players[0];
     if (meP && !meP.folded && meP.hole.length === 2) {
       const opp = game.players.filter((p) => !p.folded && !p.out && p !== meP).length || 1;
-      humanWinPct = Math.round(AI.equity(meP.hole, game.board, Math.min(opp, 6), 240) * 100);
+      const ef = AI.equityFull(meP.hole, game.board, Math.min(opp, 6), 2500);
+      const eq = ef.win + ef.tie / 2;
+      const winPct = Math.round(ef.win * 100), tiePct = Math.round(ef.tie * 100), losePct = Math.round(ef.lose * 100);
+      const name = game.board.length >= 3 ? P.handName(P.evaluateBest(meP.hole.concat(game.board)).score) : '翻牌前';
+      const outs = computeOuts(meP.hole, game.board);
+      const toCall = Math.max(0, game.currentBet - meP.bet), pot = game.pot;
+      let rec, po = null;
+      if (toCall === 0) rec = eq > 0.6 ? '强牌 · 下注要价值' : eq > 0.45 ? '中等 · 可过牌或小注' : '偏弱 · 过牌为主';
+      else { po = Math.round(toCall / (pot + toCall) * 100); rec = eq * 100 > po + 12 ? '有利 · 跟注，强可加注' : eq * 100 > po ? '勉强 · 便宜可跟' : '不利 · 建议弃牌'; }
+      handAnalysis = { winPct, tiePct, losePct, name, outs, po, rec, opp };
+      humanWinPct = winPct;
       render();
     }
     const o = game.actionOptions();
@@ -489,6 +528,22 @@
           <div class="si-title">${active ? '使用中' : '头像 ' + n}</div></div>`;
       }
       body.innerHTML = h + '</div>';
+    } else if (tab === 'frames' || tab === 'titles' || tab === 'vehicles' || tab === 'watches') {
+      const ownedKey = { frames: 'ownedFrames', titles: 'ownedTitles', vehicles: 'ownedVehicles', watches: 'ownedWatches' }[tab];
+      const activeKey = { frames: 'activeFrame', titles: 'activeTitle', vehicles: 'activeVehicle', watches: 'activeWatch' }[tab];
+      const preview = (s) => {
+        if (tab === 'frames') return `<div class="si-preview" style="border-radius:50%;width:50px;height:50px;box-shadow:${s.css};background:radial-gradient(circle at 40% 30%,#4a6e57,#14281d)"></div>`;
+        if (tab === 'titles') return `<div class="si-felt" style="display:flex;align-items:center;justify-content:center;color:${s.color};font-weight:800;font-size:14px">${s.text || '无称号'}</div>`;
+        return `<div class="si-felt" style="display:flex;align-items:center;justify-content:center;font-size:34px">${s.icon || '—'}</div>`;
+      };
+      body.innerHTML = `<div class="shop-grid">` + Object.entries(Skins[tab]).map(([id, s]) => {
+        const owned = pr[ownedKey].includes(id) || s.price === 0, active = pr[activeKey] === id;
+        return `<div class="shop-item">
+          <div class="si-title">${s.name}</div>${preview(s)}
+          ${owned ? `<button class="buy-btn ${active ? 'active-skin' : 'owned'}" data-cos="${tab}:${id}">${active ? '使用中' : '装备'}</button>`
+            : `<div class="si-price">💎 ${s.price}</div><button class="buy-btn" data-cosbuy="${tab}:${id}" ${pr.diamonds < s.price ? 'disabled' : ''}>购买</button>`}
+        </div>`;
+      }).join('') + `</div>`;
     } else {
       body.innerHTML = `<div class="shop-grid">` + Object.entries(Skins.felts).map(([id, s]) => {
         const owned = pr.ownedFelts.includes(id), active = pr.activeFelt === id;
@@ -620,9 +675,9 @@
     $('btn-start').textContent = '开始发牌';
     hideHumanControls();
     render();
-    // 入场特效：牌桌放大 + 发牌音
+    // 入场特效：牌桌放大 + 座驾驶过 + 发牌音
     const tf = $('table-felt'); tf.classList.remove('enter'); void tf.offsetWidth; tf.classList.add('enter');
-    Sfx.resume(); setTimeout(() => Sfx.deal(), 120);
+    Sfx.resume(); playVehicleEntrance(); setTimeout(() => Sfx.deal(), 120);
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -713,6 +768,16 @@
         if (Store.buyFelt(b.dataset.buyfelt)) { Sfx.reward(); toast('购买成功'); syncWallet(); renderShop('felts'); }
       } else if (b.dataset.felt) {
         Store.setFelt(b.dataset.felt); Skins.apply(); Sfx.button(); renderShop('felts');
+      } else if (b.dataset.cosbuy) {
+        const [m, id] = b.dataset.cosbuy.split(':');
+        const fn = { frames: 'buyFrame', titles: 'buyTitle', vehicles: 'buyVehicle', watches: 'buyWatch' }[m];
+        if (Store[fn](id)) { Sfx.reward(); toast('购买成功'); syncWallet(); renderShop(m); }
+      } else if (b.dataset.cos) {
+        const [m, id] = b.dataset.cos.split(':');
+        const fn = { frames: 'setFrame', titles: 'setTitle', vehicles: 'setVehicle', watches: 'setWatch' }[m];
+        Store[fn](id); Skins.apply(); Sfx.button(); renderShop(m);
+        if (game) render();
+        if (m === 'vehicles' && id !== 'none') playVehicleEntrance();
       }
     });
 

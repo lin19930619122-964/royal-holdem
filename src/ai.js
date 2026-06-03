@@ -33,6 +33,30 @@
     return (win + tie * 0.5) / sims;
   }
 
+  // 详细胜率：返回 {win, tie, lose} 占比(用于教学分析)
+  function equityFull(hole, board, numOpp, sims) {
+    numOpp = Math.max(1, numOpp); sims = sims || 1500;
+    const used = new Set(hole.concat(board).map(ckey));
+    const rem = P.createDeck().filter((c) => !used.has(ckey(c)));
+    const need = 5 - board.length, draw = numOpp * 2 + need;
+    if (draw > rem.length) return { win: 0.5, tie: 0, lose: 0.5 };
+    let win = 0, tie = 0, lose = 0;
+    for (let s = 0; s < sims; s++) {
+      const d = rem.slice();
+      for (let i = 0; i < draw; i++) { const j = i + Math.floor(Math.random() * (d.length - i)); const t = d[i]; d[i] = d[j]; d[j] = t; }
+      const full = need ? board.concat(d.slice(0, need)) : board;
+      const my = P.evaluateBest(hole.concat(full)).score;
+      let best = true, tied = false, idx = need;
+      for (let o = 0; o < numOpp; o++) {
+        const os = P.evaluateBest([d[idx++], d[idx++]].concat(full)).score;
+        const cmp = P.compareScores(my, os);
+        if (cmp < 0) { best = false; break; } if (cmp === 0) tied = true;
+      }
+      if (!best) lose++; else if (tied) tie++; else win++;
+    }
+    return { win: win / sims, tie: tie / sims, lose: lose / sims };
+  }
+
   function boardWetness(board) {
     const suits = {}; board.forEach((c) => suits[c.suit] = (suits[c.suit] || 0) + 1);
     const maxSuit = Math.max(0, ...Object.values(suits));
@@ -156,5 +180,5 @@
   }
   function setSims(n) { SIMS = Math.max(10, n | 0); }
 
-  window.PokerAI = { decide, makePersona, equity, setSims };
+  window.PokerAI = { decide, makePersona, equity, equityFull, setSims };
 })();
