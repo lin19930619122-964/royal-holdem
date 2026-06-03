@@ -87,6 +87,7 @@ html, body {
   position: absolute; inset: 3% 4%;
   border-radius: 48% / 44%;
   background:
+    var(--felt-img, none) center center / cover no-repeat,
     repeating-radial-gradient(circle at 50% 38%, rgba(0,0,0,0) 0 3px, rgba(0,0,0,.025) 3px 4px),
     radial-gradient(ellipse at 50% 36%, var(--felt-a) 0%, var(--felt) 50%, var(--felt-dark) 100%);
   box-shadow:
@@ -360,7 +361,11 @@ html, body {
 .shop-item { background: rgba(255,255,255,.05); border: 1px solid rgba(245,207,107,.25); border-radius: 12px; padding: 12px 8px; text-align: center; }
 .shop-item .si-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
 .shop-item .si-preview { height: 56px; border-radius: 8px; margin: 0 auto 8px; width: 42px; border: 2px solid #fff; }
-.shop-item .si-felt { height: 40px; border-radius: 8px; margin-bottom: 8px; }
+.shop-item .si-felt { height: 40px; border-radius: 8px; margin-bottom: 8px; background-size: cover; }
+.avatar-grid { grid-template-columns: repeat(3, 1fr); }
+.shop-item .av-pick { width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 6px; background-size: cover; background-position: center; border: 2px solid var(--gold-deep); }
+.shop-item.on { border-color: var(--gold); box-shadow: 0 0 12px rgba(245,207,107,.5); }
+.shop-item.on .av-pick { border-color: var(--gold); }
 .shop-item .si-coins { font-size: 16px; font-weight: 800; color: var(--gold); margin-bottom: 8px; }
 .buy-btn { width: 100%; padding: 9px; border: none; border-radius: 9px; font-weight: 800; font-size: 13px; background: linear-gradient(180deg, var(--gold), var(--gold-deep)); color: #3a2400; }
 .buy-btn.owned { background: rgba(255,255,255,.1); color: #9fe; }

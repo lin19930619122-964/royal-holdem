@@ -24,19 +24,24 @@
   };
 
   const felts = {
-    green: { name: '翡翠绿', price: 0, a: '#15835a', b: '#0e6b46', c: '#084f33' },
+    // AI 生成的高清绒布(可切换)
+    imgGreen: { name: '翡翠绒', price: 0, img: 'assets/felts/green.png', a: '#15835a', b: '#0e6b46', c: '#084f33' },
+    imgBlue: { name: '宝蓝绒', price: 10, img: 'assets/felts/blue.png', a: '#1c5aa0', b: '#123f72', c: '#0a2748' },
+    imgCrimson: { name: '红钻绒', price: 15, img: 'assets/felts/crimson.png', a: '#8a2330', b: '#5e1620', c: '#380c12' },
+    imgPurple: { name: '紫晶绒', price: 18, img: 'assets/felts/purple.png', a: '#3a2c66', b: '#241a4a', c: '#140d2e' },
+    // 纯色经典
+    green: { name: '经典绿', price: 0, a: '#15835a', b: '#0e6b46', c: '#084f33' },
     night: { name: '午夜紫', price: 12, a: '#3a2c66', b: '#241a4a', c: '#140d2e' },
-    crimson: { name: '红钻', price: 18, a: '#8a2330', b: '#5e1620', c: '#380c12' },
-    classic: { name: '经典蓝', price: 10, a: '#1c5aa0', b: '#123f72', c: '#0a2748' },
-    obsidian: { name: '曜石黑', price: 25, a: '#2a3138', b: '#1a2026', c: '#0c1014' },
+    obsidian: { name: '曜石黑', price: 20, a: '#2a3138', b: '#1a2026', c: '#0c1014' },
   };
 
   function apply() {
     const p = window.Store.get();
     const back = backs[p.activeBack] || backs.classic;
-    const felt = felts[p.activeFelt] || felts.green;
+    const felt = felts[p.activeFelt] || felts.imgGreen;
     const root = document.documentElement.style;
     root.setProperty('--card-back', back.css);
+    root.setProperty('--felt-img', felt.img ? `url('${felt.img}')` : 'none');
     root.setProperty('--felt-a', felt.a);
     root.setProperty('--felt', felt.b);
     root.setProperty('--felt-dark', felt.c);

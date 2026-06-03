@@ -9,9 +9,10 @@
     lastCheckin: null,   // 'YYYY-MM-DD'
     checkinStreak: 0,
     ownedBacks: ['classic'],
-    ownedFelts: ['green'],
+    ownedFelts: ['imgGreen', 'green'],
     activeBack: 'classic',
-    activeFelt: 'green',
+    activeFelt: 'imgGreen',
+    activeAvatar: 1,     // 玩家头像(1..12)
     redeemed: [],        // 已用兑换码(去重)
     muted: false,
     handsPlayed: 0,
@@ -141,8 +142,16 @@
     if (!spendDiamonds(s.price)) return false;
     profile.ownedFelts.push(id); save(); return true;
   }
-  function setBack(id) { if (profile.ownedBacks.includes(id)) { profile.activeBack = id; save(); } }
-  function setFelt(id) { if (profile.ownedFelts.includes(id)) { profile.activeFelt = id; save(); } }
+  function ownFree(arr, id, skin) { if (skin && skin.price === 0 && !arr.includes(id)) arr.push(id); }
+  function setBack(id) {
+    ownFree(profile.ownedBacks, id, window.Skins.backs[id]);
+    if (profile.ownedBacks.includes(id)) { profile.activeBack = id; save(); }
+  }
+  function setFelt(id) {
+    ownFree(profile.ownedFelts, id, window.Skins.felts[id]);
+    if (profile.ownedFelts.includes(id)) { profile.activeFelt = id; save(); }
+  }
+  function setAvatar(id) { profile.activeAvatar = id; save(); }
 
   function setMuted(m) { profile.muted = !!m; save(); }
   function recordHand(won, pot) {
@@ -156,7 +165,7 @@
     get, save, addCoins, addDiamonds, spendDiamonds,
     canCheckin, checkinPreview, doCheckin,
     needsRelief, relief, RELIEF_FLOOR,
-    redeem, buyCoinPack, buyBack, buyFelt, setBack, setFelt,
+    redeem, buyCoinPack, buyBack, buyFelt, setBack, setFelt, setAvatar,
     setMuted, recordHand,
     CHECKIN,
   };

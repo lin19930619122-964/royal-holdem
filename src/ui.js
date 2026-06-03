@@ -11,6 +11,8 @@
   let game = null;            // 进入牌桌时按配置创建
   let SEAT_POS = [];          // 当前桌的座位坐标(按人数)
   let tableConfig = null;     // 当前牌桌规则
+  let seatAvatars = [];       // 每个座位用的头像编号(1..12)
+  const AVATAR_COUNT = 12;
 
   // 不同人数的座位布局(人类固定底部正中)
   const SEAT_LAYOUTS = {
@@ -20,6 +22,23 @@
         { x: 66, y: 11 }, { x: 87, y: 28 }, { x: 93, y: 55 }, { x: 84, y: 80 }],
   };
   const PHASE_LABEL = { flop: '翻 牌', turn: '转 牌', river: '河 牌', ended: '摊 牌' };
+
+  // 对手建模：统计你的弃牌率/激进度，AI 据此剥削你
+  window.OppModel = {
+    acts: 0, aggr: 0, betsFaced: 0, folds: 0,
+    record(action, facingBet) {
+      this.acts++;
+      if (action === 'raise') this.aggr++;
+      if (facingBet) { this.betsFaced++; if (action === 'fold') this.folds++; }
+    },
+    exploit() {
+      return {
+        fold: this.betsFaced > 4 ? this.folds / this.betsFaced : 0.45,
+        aggr: this.acts > 6 ? this.aggr / this.acts : 0.18,
+        samples: this.acts,
+      };
+    },
+  };
 
   const $ = (id) => document.getElementById(id);
   const seatsEl = $('seats'), boardEl = $('board'), dealerBtn = $('dealer-button');
@@ -54,7 +73,7 @@
         <div class="last-action"></div>
         <div class="player-cards"></div>
         <div class="player-box">
-          <div class="avatar"><img class="av-img" src="assets/av/${i + 1}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span></div>
+          <div class="avatar"><img class="av-img" src="assets/av/${seatAvatars[i] || (i + 1)}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span></div>
           <div class="pinfo"><span class="pname"></span><span class="pchips"></span></div>
         </div>`;
       seatsEl.appendChild(seat);
@@ -295,6 +314,8 @@
 
   function humanAct(action, amount) {
     const p = game.players[0];
+    const facing = (game.currentBet - p.bet) > 0;
+    window.OppModel.record(action, facing);
     game.act(action, amount);
     actSound(p);
     tick();
@@ -369,12 +390,22 @@
             : `<div class="si-price">💎 ${s.price}</div><button class="buy-btn" data-buyback="${id}" ${pr.diamonds < s.price ? 'disabled' : ''}>购买</button>`}
         </div>`;
       }).join('') + `</div>`;
+    } else if (tab === 'avatars') {
+      let h = '<div class="shop-grid avatar-grid">';
+      for (let n = 1; n <= AVATAR_COUNT; n++) {
+        const active = pr.activeAvatar === n;
+        h += `<div class="shop-item ${active ? 'on' : ''}" data-avatar="${n}">
+          <div class="av-pick" style="background-image:url('assets/av/${n}.png')"></div>
+          <div class="si-title">${active ? '使用中' : '头像 ' + n}</div></div>`;
+      }
+      body.innerHTML = h + '</div>';
     } else {
       body.innerHTML = `<div class="shop-grid">` + Object.entries(Skins.felts).map(([id, s]) => {
         const owned = pr.ownedFelts.includes(id), active = pr.activeFelt === id;
+        const prev = s.img ? `background:url('${s.img}') center/cover` : `background:radial-gradient(ellipse at 50% 40%,${s.a},${s.b} 60%,${s.c})`;
         return `<div class="shop-item">
           <div class="si-title">${s.name}</div>
-          <div class="si-felt" style="background:radial-gradient(ellipse at 50% 40%,${s.a},${s.b} 60%,${s.c})"></div>
+          <div class="si-felt" style="${prev}"></div>
           ${owned ? `<button class="buy-btn ${active ? 'active-skin' : 'owned'}" data-felt="${id}">${active ? '使用中' : '装备'}</button>`
             : `<div class="si-price">💎 ${s.price}</div><button class="buy-btn" data-buyfelt="${id}" ${pr.diamonds < s.price ? 'disabled' : ''}>购买</button>`}
         </div>`;
@@ -412,7 +443,8 @@
     { ic: '💎', name: '高额场', desc: '盲注 1000/2000 · 6人 · 买入 20万', sb: 1000, bb: 2000, players: 6, buyin: 200000, ante: 0 },
     { ic: '⚔️', name: '单挑', desc: '盲注 100/200 · 2人 · 买入 2万', sb: 100, bb: 200, players: 2, buyin: 20000, ante: 0 },
     { ic: '👑', name: '九人桌', desc: '盲注 100/200 · 9人 · 买入 3万 · 含前注', sb: 100, bb: 200, players: 9, buyin: 30000, ante: 20 },
-    { ic: '🎲', name: '极速锦标', desc: '盲注 300/600 · 6人 · 含前注 50', sb: 300, bb: 600, players: 6, buyin: 30000, ante: 50 },
+    { ic: '🦈', name: '高手场', desc: '紧凶鲨鱼 · 会读你打法 · 200/400 · 6人', sb: 200, bb: 400, players: 6, buyin: 60000, ante: 0, level: 'hard' },
+    { ic: '🏆', name: '大师场', desc: '最强 AI · 极限剥削 · 500/1000 · 6人', sb: 500, bb: 1000, players: 6, buyin: 150000, ante: 50, level: 'master' },
   ];
   function renderRooms() {
     $('room-list').innerHTML = ROOMS.map((r, i) =>
@@ -446,6 +478,14 @@
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
     game = new window.Game({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
+    // 按难度配置 AI：高手/大师=鲨鱼，更准的模拟
+    game.players.forEach((pl) => { if (!pl.isHuman) pl.ai = AI.makePersona(cfg.level); });
+    AI.setSims(cfg.level === 'master' ? 260 : cfg.level === 'hard' ? 220 : 170);
+    // 头像分配：你用所选头像，机器人用不重复的随机头像
+    const me = Store.get().activeAvatar || 1;
+    const pool = []; for (let k = 1; k <= AVATAR_COUNT; k++) if (k !== me) pool.push(k);
+    for (let k = pool.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); const t = pool[k]; pool[k] = pool[j]; pool[j] = t; }
+    seatAvatars = [me, ...pool];
     boardCount = -1; lastDecoratedHand = -1; lastSyncedHand = -1; raiseMode = false;
     buildSeats();
     showScreen('table');
@@ -527,6 +567,8 @@
     // 商店 tab + 购买
     document.querySelectorAll('.shop-tab').forEach((t) => t.addEventListener('click', () => { Sfx.button(); renderShop(t.dataset.tab); }));
     $('shop-body').addEventListener('click', (e) => {
+      const av = e.target.closest('[data-avatar]');
+      if (av) { Store.setAvatar(+av.dataset.avatar); Sfx.button(); renderShop('avatars'); return; }
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.pack !== undefined) {
         const pk = COIN_PACKS[+b.dataset.pack];

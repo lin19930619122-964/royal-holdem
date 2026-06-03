@@ -1,5 +1,5 @@
 /* 离线缓存：网络优先（联网拿最新，断网才用缓存）— v6 修复白屏 */
-const CACHE = 'royal-holdem-v9';
+const CACHE = 'royal-holdem-v10';
 const ASSETS = [
   './', './index.html', './online.html', './styles.css',
   './codec.js', './skins.js', './store.js', './sound.js', './fx.js',
