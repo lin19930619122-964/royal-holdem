@@ -8,13 +8,17 @@
   const Skins = window.Skins;
   const Codec = window.Codec;
 
-  const SB = 50, BB = 100;
-  const game = new window.Game({ smallBlind: SB, bigBlind: BB, startChips: 10000, bots: 5 });
+  let game = null;            // 进入牌桌时按配置创建
+  let SEAT_POS = [];          // 当前桌的座位坐标(按人数)
+  let tableConfig = null;     // 当前牌桌规则
 
-  const SEAT_POS = [
-    { x: 50, y: 90 }, { x: 11, y: 60 }, { x: 18, y: 22 },
-    { x: 50, y: 10 }, { x: 82, y: 22 }, { x: 89, y: 60 },
-  ];
+  // 不同人数的座位布局(人类固定底部正中)
+  const SEAT_LAYOUTS = {
+    2: [{ x: 50, y: 88 }, { x: 50, y: 12 }],
+    6: [{ x: 50, y: 90 }, { x: 11, y: 60 }, { x: 18, y: 22 }, { x: 50, y: 10 }, { x: 82, y: 22 }, { x: 89, y: 60 }],
+    9: [{ x: 50, y: 91 }, { x: 16, y: 80 }, { x: 7, y: 55 }, { x: 13, y: 28 }, { x: 34, y: 11 },
+        { x: 66, y: 11 }, { x: 87, y: 28 }, { x: 93, y: 55 }, { x: 84, y: 80 }],
+  };
   const PHASE_LABEL = { flop: '翻 牌', turn: '转 牌', river: '河 牌', ended: '摊 牌' };
 
   const $ = (id) => document.getElementById(id);
@@ -28,18 +32,17 @@
   /* ---------- 钱包 ---------- */
   function syncWallet(bump) {
     const p = Store.get();
-    $('coinVal').textContent = p.coins.toLocaleString();
-    $('diamondVal').textContent = p.diamonds.toLocaleString();
-    $('checkin-dot').classList.toggle('hidden', !Store.canCheckin());
-    if (bump) {
-      $('walletCoins').classList.remove('bump'); void $('walletCoins').offsetWidth;
-      $('walletCoins').classList.add('bump');
-    }
+    document.querySelectorAll('.coin-val').forEach((e) => { e.textContent = p.coins.toLocaleString(); });
+    document.querySelectorAll('.diamond-val').forEach((e) => { e.textContent = p.diamonds.toLocaleString(); });
+    const dot = $('checkin-dot'); if (dot) dot.classList.toggle('hidden', !Store.canCheckin());
+    if (bump) document.querySelectorAll('.cur.coins').forEach((e) => { e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); });
   }
 
   /* ---------- 座位 ---------- */
   function buildSeats() {
     seatsEl.innerHTML = '';
+    seatEls.length = 0; betEls.length = 0; seatSig.length = 0; prevBet.length = 0;
+    boardCount = -1;
     for (let i = 0; i < game.N; i++) {
       const pos = SEAT_POS[i] || { x: 50, y: 50 };
       const seat = document.createElement('div');
@@ -298,22 +301,23 @@
   }
 
   /* ---------- 弹窗 ---------- */
+  const MODALS = ['modal-checkin', 'modal-shop', 'modal-redeem', 'modal-custom'];
   function openModal(id) {
     Sfx.button();
     $('modal-overlay').classList.remove('hidden');
-    ['modal-checkin', 'modal-shop', 'modal-redeem'].forEach((m) => $(m).classList.toggle('hidden', m !== id));
+    MODALS.forEach((m) => $(m).classList.toggle('hidden', m !== id));
     if (id === 'modal-checkin') renderCheckin();
     if (id === 'modal-shop') renderShop(currentShopTab);
     if (id === 'modal-redeem') renderGiftCodes();
   }
   function closeModal() {
     $('modal-overlay').classList.add('hidden');
-    ['modal-checkin', 'modal-shop', 'modal-redeem'].forEach((m) => $(m).classList.add('hidden'));
+    MODALS.forEach((m) => $(m).classList.add('hidden'));
   }
   function toast(text) {
     const t = $('modal-toast');
     $('modal-overlay').classList.remove('hidden');
-    ['modal-checkin', 'modal-shop', 'modal-redeem'].forEach((m) => $(m).classList.add('hidden'));
+    MODALS.forEach((m) => $(m).classList.add('hidden'));
     t.textContent = text; t.classList.remove('hidden');
     setTimeout(() => { t.classList.add('hidden'); if ([...$('modal-overlay').children].every((c) => c.classList.contains('hidden'))) $('modal-overlay').classList.add('hidden'); }, 1700);
   }
@@ -396,8 +400,82 @@
       }).join('');
   }
 
+  /* ---------- 多屏路由 ---------- */
+  function showScreen(name) {
+    ['home', 'select', 'table'].forEach((s) => $('screen-' + s).classList.toggle('hidden', s !== name));
+  }
+
+  // 场次（不同规则）
+  const ROOMS = [
+    { ic: '🌱', name: '新手场', desc: '盲注 50/100 · 6人 · 买入 1万', sb: 50, bb: 100, players: 6, buyin: 10000, ante: 0 },
+    { ic: '🔥', name: '进阶场', desc: '盲注 200/400 · 6人 · 买入 5万', sb: 200, bb: 400, players: 6, buyin: 50000, ante: 0 },
+    { ic: '💎', name: '高额场', desc: '盲注 1000/2000 · 6人 · 买入 20万', sb: 1000, bb: 2000, players: 6, buyin: 200000, ante: 0 },
+    { ic: '⚔️', name: '单挑', desc: '盲注 100/200 · 2人 · 买入 2万', sb: 100, bb: 200, players: 2, buyin: 20000, ante: 0 },
+    { ic: '👑', name: '九人桌', desc: '盲注 100/200 · 9人 · 买入 3万 · 含前注', sb: 100, bb: 200, players: 9, buyin: 30000, ante: 20 },
+    { ic: '🎲', name: '极速锦标', desc: '盲注 300/600 · 6人 · 含前注 50', sb: 300, bb: 600, players: 6, buyin: 30000, ante: 50 },
+  ];
+  function renderRooms() {
+    $('room-list').innerHTML = ROOMS.map((r, i) =>
+      `<div class="room-card" data-room="${i}"><div class="room-ic">${r.ic}</div>
+        <div class="room-info"><div class="room-name">${r.name}</div><div class="room-desc">${r.desc}</div></div>
+        <button class="room-go">进入</button></div>`
+    ).join('') +
+      `<div class="room-card custom" data-custom="1"><div class="room-ic">🛠️</div>
+        <div class="room-info"><div class="room-name">自定义牌桌</div><div class="room-desc">自己设盲注 / 人数 / 前注</div></div>
+        <button class="room-go">设置</button></div>`;
+  }
+
+  // 自定义配置
+  const custom = { bb: 100, players: 6, ante: 0 };
+  function renderCustom() {
+    const blinds = [[50, 100], [100, 200], [500, 1000], [1000, 2000]];
+    const seats = [2, 6, 9];
+    const antes = [0, 20, 50, 100];
+    const seg = (label, opts, cur, key, fmt) =>
+      `<div class="cf-row"><span>${label}</span><div class="cf-opts">${opts.map((o) =>
+        `<button class="cf-opt ${(''+(fmt?fmt(o):o))===(''+cur)?'on':''}" data-k="${key}" data-v="${Array.isArray(o)?o[1]:o}">${fmt?fmt(o):o}</button>`).join('')}</div></div>`;
+    $('custom-body').innerHTML =
+      seg('盲注', blinds, custom.bb, 'bb', (o) => `${o[0]}/${o[1]}`) +
+      seg('人数', seats, custom.players, 'players', (o) => o + '人') +
+      seg('前注', antes, custom.ante, 'ante', (o) => o === 0 ? '无' : o);
+  }
+
+  /* ---------- 进入牌桌 ---------- */
+  function startTable(cfg) {
+    if (scheduled) { clearTimeout(scheduled); scheduled = null; }
+    tableConfig = cfg;
+    SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
+    game = new window.Game({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
+    boardCount = -1; lastDecoratedHand = -1; lastSyncedHand = -1; raiseMode = false;
+    buildSeats();
+    showScreen('table');
+    $('start-area').classList.remove('hidden');
+    $('btn-start').textContent = '开始发牌';
+    hideHumanControls();
+    render();
+  }
+
   /* ---------- 事件绑定 ---------- */
   function setupEvents() {
+    // 路由
+    $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); renderRooms(); showScreen('select'); });
+    $('btn-select-back').addEventListener('click', () => { Sfx.button(); showScreen('home'); });
+    $('btn-table-back').addEventListener('click', () => { if (scheduled) { clearTimeout(scheduled); scheduled = null; } Sfx.button(); showScreen('home'); syncWallet(); });
+    $('room-list').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-room],[data-custom]'); if (!card) return;
+      Sfx.button();
+      if (card.dataset.custom) { renderCustom(); openModal('modal-custom'); }
+      else startTable(ROOMS[+card.dataset.room]);
+    });
+    $('custom-body').addEventListener('click', (e) => {
+      const b = e.target.closest('.cf-opt'); if (!b) return;
+      custom[b.dataset.k] = +b.dataset.v; renderCustom();
+    });
+    $('custom-start').addEventListener('click', () => {
+      closeModal();
+      startTable({ sb: Math.round(custom.bb / 2), bb: custom.bb, players: custom.players, ante: custom.ante, buyin: Math.max(20000, custom.bb * 100) });
+    });
+
     $('btn-start').addEventListener('click', () => { Sfx.resume(); nextHand(); });
     $('btn-fold').addEventListener('click', () => humanAct('fold'));
     $('btn-check').addEventListener('click', () => humanAct('check'));
@@ -498,13 +576,13 @@
   Sfx.setMuted(Store.get().muted);
   if (window.Music) Music.setMuted(Store.get().muted);
   $('sound-icon').textContent = Store.get().muted ? '🔇' : '🔊';
-  buildSeats();
   setupEvents();
   syncWallet();
-  render();
+  showScreen('home');
 
-  // 预览模式(仅用于截图调试，?preview)：摆一桌有牌/有注的静态画面，不启动循环
+  // 预览模式(仅用于截图调试，?preview)：进牌桌摆一桌有牌/有注的静态画面，不启动循环
   if (location.search.indexOf('preview') >= 0) {
+    startTable(ROOMS[0]);
     const holes = [
       [{ rank: 14, suit: 's' }, { rank: 14, suit: 'h' }],
       [{ rank: 13, suit: 'd' }, { rank: 12, suit: 'd' }],

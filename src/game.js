@@ -7,9 +7,10 @@
     constructor(opts = {}) {
       this.smallBlind = opts.smallBlind || 50;
       this.bigBlind = opts.bigBlind || 100;
+      this.ante = opts.ante || 0;
       const startChips = opts.startChips || 10000;
-      const botNames = ['老李', '阿强', '小敏', '财神', '黑桃J'];
-      const avatars = ['🧑', '🤠', '👩', '🧓', '🕵️'];
+      const botNames = ['老李', '阿强', '小敏', '财神', '黑桃J', '大壮', '丽莎', '老K', '阿杰'];
+      const avatars = ['🧑', '🤠', '👩', '🧓', '🕵️', '🧔', '👱‍♀️', '👴', '🧑‍🦱'];
 
       this.players = [];
       this.players.push({
@@ -125,6 +126,15 @@
       this.sbIdx = sbIdx;
       this.bbIdx = bbIdx;
 
+      // 前注(ante)：死钱进池，不计入本轮下注
+      if (this.ante > 0) {
+        for (const p of this.players) {
+          if (p.out) continue;
+          const a = Math.min(this.ante, p.chips);
+          p.chips -= a; p.totalContribution += a;
+          if (p.chips === 0) p.allIn = true;
+        }
+      }
       this.commit(this.players[sbIdx], this.smallBlind);
       this.players[sbIdx].lastAction = '小盲';
       this.commit(this.players[bbIdx], this.bigBlind);

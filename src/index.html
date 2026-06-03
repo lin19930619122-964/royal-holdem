@@ -14,67 +14,94 @@
 </head>
 <body>
   <div id="app">
-    <header id="topbar">
-      <div class="brand">
-        <span class="brand-mark">♠</span>
-        <span class="brand-name">皇室德州</span>
-      </div>
-      <div class="wallet">
-        <span class="cur coins" id="walletCoins"><i>🪙</i><b id="coinVal">0</b></span>
-        <span class="cur diamonds" id="walletDiamonds"><i>💎</i><b id="diamondVal">0</b></span>
-      </div>
-    </header>
 
-    <nav id="featurebar">
-      <button class="feat" id="btn-checkin"><i>🎁</i><span>签到</span><em id="checkin-dot" class="dot hidden"></em></button>
-      <button class="feat" id="btn-shop"><i>🛒</i><span>商店</span></button>
-      <button class="feat" id="btn-redeem"><i>🎟️</i><span>兑换码</span></button>
-      <button class="feat" id="btn-sound"><i id="sound-icon">🔊</i><span>音效</span></button>
-      <a class="feat" id="btn-online" href="online.html"><i>👥</i><span>真人</span></a>
-      <span class="blind-chip" id="blindInfo">50/100</span>
-      <span class="hand-chip" id="handInfo">第0手</span>
-    </nav>
-
-    <main id="table-wrap">
-      <div id="table">
-        <div id="table-felt">
-          <div id="logo-watermark">♠ ROYAL ♠</div>
-          <div id="board"></div>
-          <div id="pot-display"><span class="pot-label">底池</span><span id="pot-amount">0</span></div>
-          <div id="phase-banner"></div>
+    <!-- ===== 大厅主页 ===== -->
+    <section id="screen-home" class="screen">
+      <header class="lobby-top">
+        <div class="brand"><span class="brand-mark">♠</span><span class="brand-name">皇室德州</span></div>
+        <div class="wallet">
+          <span class="cur coins"><i>🪙</i><b class="coin-val">0</b></span>
+          <span class="cur diamonds"><i>💎</i><b class="diamond-val">0</b></span>
         </div>
-        <div id="seats"></div>
-        <div id="dealer-button" class="hidden">D</div>
-        <div id="fx-layer"></div>
+      </header>
+      <div class="hero">
+        <div class="hero-logo">♠</div>
+        <div class="hero-title">皇室德州</div>
+        <div class="hero-sub">ROYAL HOLD'EM</div>
+        <button class="big-btn play-btn" id="btn-play">开始游戏</button>
+        <a class="big-btn online-btn" id="btn-online" href="online.html">👥 真人对战</a>
       </div>
-    </main>
+      <nav class="lobby-feats">
+        <button class="feat" id="btn-checkin"><i>🎁</i><span>签到</span><em id="checkin-dot" class="dot hidden"></em></button>
+        <button class="feat" id="btn-shop"><i>🛒</i><span>商店</span></button>
+        <button class="feat" id="btn-redeem"><i>🎟️</i><span>兑换码</span></button>
+        <button class="feat" id="btn-sound"><i id="sound-icon">🔊</i><span>音效</span></button>
+      </nav>
+    </section>
 
-    <footer id="controls">
-      <div id="message-bar">点击「开始」发牌</div>
-      <div id="action-area" class="hidden">
-        <div id="raise-controls" class="hidden">
-          <div class="raise-amount">加注到 <span id="raise-value">0</span></div>
-          <input type="range" id="raise-slider" min="0" max="100" value="0" />
-          <div class="quick-bets">
-            <button class="quick" data-q="min">最小</button>
-            <button class="quick" data-q="half">½池</button>
-            <button class="quick" data-q="pot">底池</button>
-            <button class="quick" data-q="allin">全下</button>
+    <!-- ===== 选桌 / 选规则 ===== -->
+    <section id="screen-select" class="screen hidden">
+      <header class="sub-top">
+        <button class="back-btn" id="btn-select-back">‹ 返回</button>
+        <span class="sub-title">选择牌桌</span>
+        <div class="wallet"><span class="cur coins"><i>🪙</i><b class="coin-val">0</b></span></div>
+      </header>
+      <div class="room-list" id="room-list"></div>
+    </section>
+
+    <!-- ===== 牌桌 ===== -->
+    <section id="screen-table" class="screen hidden">
+      <header id="topbar">
+        <button class="back-btn" id="btn-table-back">‹ 大厅</button>
+        <div class="wallet">
+          <span class="cur coins"><i>🪙</i><b class="coin-val">0</b></span>
+          <span class="cur diamonds"><i>💎</i><b class="diamond-val">0</b></span>
+        </div>
+        <div class="table-meta"><span class="blind-chip" id="blindInfo">50/100</span><span class="hand-chip" id="handInfo">第0手</span></div>
+      </header>
+
+      <main id="table-wrap">
+        <div id="table">
+          <div id="table-felt">
+            <div id="logo-watermark">♠ ROYAL ♠</div>
+            <div id="board"></div>
+            <div id="pot-display"><span class="pot-label">底池</span><span id="pot-amount">0</span></div>
+            <div id="phase-banner"></div>
+          </div>
+          <div id="seats"></div>
+          <div id="dealer-button" class="hidden">D</div>
+          <div id="fx-layer"></div>
+        </div>
+      </main>
+
+      <footer id="controls">
+        <div id="message-bar">点击「开始」发牌</div>
+        <div id="action-area" class="hidden">
+          <div id="raise-controls" class="hidden">
+            <div class="raise-amount">加注到 <span id="raise-value">0</span></div>
+            <input type="range" id="raise-slider" min="0" max="100" value="0" />
+            <div class="quick-bets">
+              <button class="quick" data-q="min">最小</button>
+              <button class="quick" data-q="half">½池</button>
+              <button class="quick" data-q="pot">底池</button>
+              <button class="quick" data-q="allin">全下</button>
+            </div>
+          </div>
+          <div id="action-buttons">
+            <button id="btn-fold" class="act-btn fold">弃牌</button>
+            <button id="btn-check" class="act-btn check">过牌</button>
+            <button id="btn-call" class="act-btn call">跟注</button>
+            <button id="btn-raise" class="act-btn raise">加注</button>
+            <button id="btn-confirm-raise" class="act-btn confirm hidden">确认</button>
+            <button id="btn-cancel-raise" class="act-btn cancel hidden">取消</button>
           </div>
         </div>
-        <div id="action-buttons">
-          <button id="btn-fold" class="act-btn fold">弃牌</button>
-          <button id="btn-check" class="act-btn check">过牌</button>
-          <button id="btn-call" class="act-btn call">跟注</button>
-          <button id="btn-raise" class="act-btn raise">加注</button>
-          <button id="btn-confirm-raise" class="act-btn confirm hidden">确认</button>
-          <button id="btn-cancel-raise" class="act-btn cancel hidden">取消</button>
+        <div id="start-area">
+          <button id="btn-start" class="big-btn">开始 / 下一手</button>
         </div>
-      </div>
-      <div id="start-area">
-        <button id="btn-start" class="big-btn">开始 / 下一手</button>
-      </div>
-    </footer>
+      </footer>
+    </section>
+
   </div>
 
   <!-- 弹窗 -->
@@ -84,7 +111,6 @@
       <div class="modal-body" id="checkin-grid"></div>
       <button class="big-btn" id="checkin-claim">领取今日奖励</button>
     </div>
-
     <div id="modal-shop" class="modal hidden">
       <div class="modal-head"><span>商店</span><button class="modal-close" data-close>✕</button></div>
       <div class="shop-tabs">
@@ -94,7 +120,6 @@
       </div>
       <div class="modal-body" id="shop-body"></div>
     </div>
-
     <div id="modal-redeem" class="modal hidden">
       <div class="modal-head"><span>兑换码</span><button class="modal-close" data-close>✕</button></div>
       <div class="modal-body">
@@ -105,7 +130,11 @@
         <div id="gift-codes"></div>
       </div>
     </div>
-
+    <div id="modal-custom" class="modal hidden">
+      <div class="modal-head"><span>自定义牌桌</span><button class="modal-close" data-close>✕</button></div>
+      <div class="modal-body" id="custom-body"></div>
+      <button class="big-btn" id="custom-start">进入牌桌</button>
+    </div>
     <div id="modal-toast" class="toast hidden"></div>
   </div>
 
