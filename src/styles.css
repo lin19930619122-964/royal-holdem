@@ -170,16 +170,22 @@ html, body {
 
 /* ---------- 座位 ---------- */
 #seats { position: absolute; inset: 0; z-index: 3; }
-.seat { position: absolute; width: 90px; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; }
-.seat.me { width: 116px; }
+.seat { position: absolute; width: auto; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .seat .player-cards { display: flex; gap: 3px; height: 50px; }
 .seat.me .player-cards { height: 67px; }
 .seat .player-box {
-  display: flex; align-items: center; gap: 7px; width: 100%;
+  display: flex; align-items: center; gap: 7px; width: max-content; max-width: 130px; margin: 0 auto;
   background: linear-gradient(180deg, rgba(14,34,25,.97), rgba(5,14,10,.97));
-  border: 1px solid rgba(245,207,107,.4); border-radius: 13px; padding: 4px 9px 4px 4px;
+  border: 1px solid rgba(245,207,107,.4); border-radius: 13px; padding: 4px 11px 4px 4px;
   box-shadow: 0 5px 13px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07);
 }
+/* 9人桌：座位缩小，避免出屏 */
+#seats.many .seat .avatar { width: 36px; height: 36px; font-size: 18px; }
+#seats.many .seat .player-box { padding: 3px 8px 3px 3px; max-width: 110px; }
+#seats.many .seat .pname { font-size: 10px; } #seats.many .seat .pchips { font-size: 11px; }
+#seats.many .seat .player-cards { height: 40px; }
+#seats.many .card.small { width: 28px; height: 40px; }
+#seats.many .card.small .cmini b { font-size: 15px; } #seats.many .card.small .cmini i { font-size: 14px; }
 .seat.active .player-box { border-color: var(--gold); box-shadow: 0 0 16px rgba(245,207,107,.6), inset 0 1px 0 rgba(255,255,255,.1); }
 .seat.folded { opacity: .4; filter: grayscale(.4); }
 .seat .avatar {
@@ -304,6 +310,18 @@ html, body {
   font-size: 10px; font-weight: 800; padding: 1px 8px; border-radius: 9px; white-space: nowrap; z-index: 7;
   animation: pop .35s ease;
 }
+
+/* 牌型特效横幅(越大越炫) */
+.hand-cele { position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); z-index:32; pointer-events:none; font-weight:900; white-space:nowrap; animation: celeBanner 2.2s ease forwards; }
+.hand-cele.tier1, .hand-cele.tier2 { font-size:24px; color:#dff3e7; text-shadow:0 2px 8px #000; }
+.hand-cele.tier3, .hand-cele.tier4 { font-size:32px; color:var(--gold); text-shadow:0 0 18px rgba(245,207,107,.8); }
+.hand-cele.tier5, .hand-cele.tier6 { font-size:42px; color:var(--gold-lt); -webkit-text-stroke:1px var(--gold-deep); text-shadow:0 0 30px var(--gold); }
+.hand-cele.tier7, .hand-cele.tier8, .hand-cele.tier9 { font-size:54px; background:linear-gradient(180deg,#fff,var(--gold) 50%,#ffec8b); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 26px var(--gold)); }
+@keyframes celeBanner { 0%{opacity:0;transform:translate(-50%,-50%) scale(.3)} 22%{opacity:1;transform:translate(-50%,-50%) scale(1.18)} 38%{transform:translate(-50%,-50%) scale(1)} 80%{opacity:1} 100%{opacity:0;transform:translate(-50%,-92%) scale(1)} }
+.cele-particle { position:absolute; pointer-events:none; z-index:32; will-change:transform; }
+@keyframes celeFly { 0%{opacity:0;transform:translate(-50%,-50%) scale(.4)} 18%{opacity:1} 100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.25) rotate(200deg)} }
+.shaking { animation: screenShake .5s ease; }
+@keyframes screenShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(var(--shake),0)} 30%{transform:translate(calc(var(--shake)*-1),2px)} 45%{transform:translate(0,var(--shake))} 60%{transform:translate(calc(var(--shake)*-1),0)} 80%{transform:translate(var(--shake),-2px)} }
 
 .coin-burst { position:absolute; width:16px; height:16px; border-radius:50%; margin:-8px; pointer-events:none; z-index:21;
   background:radial-gradient(circle at 38% 32%,#fff 0 3px,var(--gold) 4px 100%); border:1.5px solid #fff8; }

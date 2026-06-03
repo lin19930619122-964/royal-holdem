@@ -12,14 +12,23 @@
   let SEAT_POS = [];          // 当前桌的座位坐标(按人数)
   let tableConfig = null;     // 当前牌桌规则
   let seatAvatars = [];       // 每个座位用的头像编号(1..12)
+  let seatVoice = [];         // 每个座位的方言: 'db'(东北)/'cd'(成都)
   const AVATAR_COUNT = 12;
+  const ACT2VOICE = { 弃牌: 'fold', 过牌: 'check', 跟注: 'call', 加注: 'raise', 下注: 'raise', 全下: 'allin' };
+  function maybeVoice(p) {
+    if (!p || p.isHuman || !window.Voice) return;
+    let key = ACT2VOICE[p.lastAction];
+    if (!key) return;
+    if ((key === 'raise' || key === 'allin') && Math.random() < 0.4) key = 'taunt'; // 加注/全下时偶尔挑衅
+    if (Math.random() < 0.66) Voice.play(seatVoice[p.id] || 'db', key);
+  }
 
   // 不同人数的座位布局(人类固定底部正中)
   const SEAT_LAYOUTS = {
     2: [{ x: 50, y: 88 }, { x: 50, y: 12 }],
     6: [{ x: 50, y: 90 }, { x: 11, y: 60 }, { x: 18, y: 22 }, { x: 50, y: 10 }, { x: 82, y: 22 }, { x: 89, y: 60 }],
-    9: [{ x: 50, y: 91 }, { x: 16, y: 80 }, { x: 7, y: 55 }, { x: 13, y: 28 }, { x: 34, y: 11 },
-        { x: 66, y: 11 }, { x: 87, y: 28 }, { x: 93, y: 55 }, { x: 84, y: 80 }],
+    9: [{ x: 50, y: 91 }, { x: 16, y: 79 }, { x: 12, y: 51 }, { x: 18, y: 25 }, { x: 38, y: 12 },
+        { x: 62, y: 12 }, { x: 82, y: 25 }, { x: 88, y: 51 }, { x: 84, y: 79 }],
   };
   const PHASE_LABEL = { flop: '翻 牌', turn: '转 牌', river: '河 牌', ended: '摊 牌' };
 
@@ -58,9 +67,18 @@
     if (bump) document.querySelectorAll('.cur.coins').forEach((e) => { e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); });
   }
 
+  // 紧凑金额：1.5万 / 1.2亿，避免大额撑出座位框
+  function fmtChips(n) {
+    n = Math.round(n || 0);
+    if (n >= 1e8) return (n / 1e8).toFixed(2).replace(/\.?0+$/, '') + '亿';
+    if (n >= 1e4) return (n / 1e4).toFixed(1).replace(/\.0$/, '') + '万';
+    return n.toLocaleString();
+  }
+
   /* ---------- 座位 ---------- */
   function buildSeats() {
     seatsEl.innerHTML = '';
+    seatsEl.className = game.N >= 8 ? 'many' : '';
     seatEls.length = 0; betEls.length = 0; seatSig.length = 0; prevBet.length = 0; prevLA.length = 0;
     boardCount = -1; prevPot = -1;
     for (let i = 0; i < game.N; i++) {
@@ -103,7 +121,7 @@
     $('blindInfo').textContent = `${game.smallBlind}/${game.bigBlind}`;
     $('handInfo').textContent = `第${game.handNo}手`;
     const potNow = game.pot;
-    $('pot-amount').textContent = potNow.toLocaleString();
+    $('pot-amount').textContent = fmtChips(potNow);
     if (potNow > prevPot && prevPot >= 0) { potEl.classList.remove('pulse'); void potEl.offsetWidth; potEl.classList.add('pulse'); }
     prevPot = potNow;
 
@@ -126,7 +144,7 @@
       const pname = el.querySelector('.pname');
       pname.textContent = p.out ? `${p.name}` : p.name;
       pname.classList.toggle('is-human', p.isHuman);
-      el.querySelector('.pchips').textContent = p.out ? '—' : p.chips.toLocaleString();
+      el.querySelector('.pchips').textContent = p.out ? '—' : fmtChips(p.chips);
       el.classList.toggle('folded', p.folded && !p.out);
       el.classList.toggle('active', game.current === i && game.bettingOpen);
 
@@ -148,7 +166,7 @@
       const betEl = betEls[i];
       if (p.bet > 0 && !p.out) {
         betEl.classList.remove('hidden');
-        betEl.innerHTML = `<span class="chip-dot"></span>${p.bet.toLocaleString()}`;
+        betEl.innerHTML = `<span class="chip-dot"></span>${fmtChips(p.bet)}`;
       } else betEl.classList.add('hidden');
 
       const revealed = p.isHuman || (result && result.reveal && result.reveal.includes(p.id));
@@ -164,7 +182,7 @@
 
       const badge = el.querySelector('.winner-badge');
       if (result && p.winThisHand > 0) {
-        badge.classList.remove('hidden'); badge.textContent = `+${p.winThisHand.toLocaleString()}`;
+        badge.classList.remove('hidden'); badge.textContent = `+${fmtChips(p.winThisHand)}`;
       } else badge.classList.add('hidden');
 
       // 摊牌：座位上方显示牌型
@@ -231,14 +249,30 @@
       const p = game.players[i];
       if (p.winThisHand > 0) {
         Fx.flyChip(potEl, seatEls[i], fxLayer, { count: 4 });
-        Fx.floatText(seatEls[i], `+${p.winThisHand.toLocaleString()}`, fxLayer);
+        Fx.floatText(seatEls[i], `+${fmtChips(p.winThisHand)}`, fxLayer);
         Fx.pulseWin(seatEls[i]);
         Fx.coinBurst(seatEls[i], fxLayer, 12);
         if (p.isHuman) humanWon = true;
+        else if (window.Voice && Math.random() < 0.7) Voice.play(seatVoice[p.id] || 'db', 'win');
       }
     }
     if (humanWon) { Sfx.win(); Fx.vibrate(60); }
     else { Sfx.lose(); }
+
+    // 牌型特效：摊牌时按牌型等级炸场(对子小、同花顺最炸)。优先展示你的牌型
+    if (result.showdown && result.handScores) {
+      const me = game.players[0];
+      let id = (!me.folded && !me.out && result.handScores[0]) ? 0 : null;
+      if (id === null) {
+        const top = game.players.filter((p) => p.winThisHand > 0).sort((a, b) => b.winThisHand - a.winThisHand)[0];
+        id = top ? top.id : null;
+      }
+      if (id !== null && result.handScores[id]) {
+        const tier = result.handScores[id][0] + 1; // 1..9
+        Fx.handCelebration(fxLayer, tier, (result.handNames[id] || '') + '!');
+        if (tier >= 6) { Fx.shake($('table-wrap'), tier >= 8 ? 11 : 7); Fx.vibrate(tier >= 8 ? [70, 40, 90] : 45); }
+      }
+    }
   }
 
   /* ---------- 游戏循环 ---------- */
@@ -277,6 +311,7 @@
         const d = AI.decide(p, game.aiContext());
         game.act(d.action, d.amount);
         actSound(p);
+        maybeVoice(p);
         tick();
       }, delay);
     }
@@ -521,6 +556,7 @@
     const pool = []; for (let k = 1; k <= AVATAR_COUNT; k++) if (k !== me) pool.push(k);
     for (let k = pool.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); const t = pool[k]; pool[k] = pool[j]; pool[j] = t; }
     seatAvatars = [me, ...pool];
+    seatVoice = game.players.map((_, i) => (i % 2 === 0 ? 'db' : 'cd')); // 东北/成都错开
     boardCount = -1; lastDecoratedHand = -1; lastSyncedHand = -1; raiseMode = false;
     buildSeats();
     showScreen('table');
@@ -580,7 +616,7 @@
     $('btn-redeem').addEventListener('click', () => openModal('modal-redeem'));
     $('btn-sound').addEventListener('click', () => {
       const m = !Sfx.isMuted();
-      Sfx.setMuted(m); Store.setMuted(m); window.Music && Music.setMuted(m);
+      Sfx.setMuted(m); Store.setMuted(m); window.Music && Music.setMuted(m); window.Voice && Voice.setMuted(m);
       $('sound-icon').textContent = m ? '🔇' : '🔊';
       if (!m) { Sfx.resume(); Sfx.button(); window.Music && Music.start(); }
     });
@@ -652,30 +688,25 @@
   Skins.apply();
   Sfx.setMuted(Store.get().muted);
   if (window.Music) Music.setMuted(Store.get().muted);
+  if (window.Voice) Voice.setMuted(Store.get().muted);
   $('sound-icon').textContent = Store.get().muted ? '🔇' : '🔊';
   setupEvents();
   syncWallet();
   showScreen('home');
 
-  // 预览模式(仅用于截图调试，?preview)：进牌桌摆一桌有牌/有注的静态画面，不启动循环
-  if (location.search.indexOf('preview') >= 0) {
-    startTable(ROOMS[0]);
-    const holes = [
-      [{ rank: 14, suit: 's' }, { rank: 14, suit: 'h' }],
-      [{ rank: 13, suit: 'd' }, { rank: 12, suit: 'd' }],
-      [{ rank: 9, suit: 'c' }, { rank: 9, suit: 's' }],
-      [{ rank: 7, suit: 'h' }, { rank: 2, suit: 'c' }],
-      [{ rank: 5, suit: 's' }, { rank: 4, suit: 'h' }],
-      [{ rank: 11, suit: 'h' }, { rank: 10, suit: 'h' }],
-    ];
-    const bets = [600, 0, 600, 0, 0, 1200];
-    const acts = ['跟注', '', '跟注', '弃牌', '弃牌', '加注'];
-    game.handNo = 12; game.button = 5; game.phase = 'flop'; game.bettingOpen = true; game.current = 0;
-    game.board = [{ rank: 14, suit: 'd' }, { rank: 13, suit: 's' }, { rank: 7, suit: 'd' }];
+  // 预览模式(仅用于截图调试，?preview 或 ?preview=4 指定场次)：摆静态演示局，不启动循环
+  const pv = location.search.match(/preview=?(\d+)?/);
+  if (pv) {
+    startTable(ROOMS[pv[1] ? +pv[1] : 0]);
+    const deck = P.shuffle(P.createDeck());
+    game.handNo = 12; game.button = game.N - 1; game.phase = 'flop'; game.bettingOpen = true; game.current = 0;
+    game.players[0].hole = [{ rank: 14, suit: 's' }, { rank: 14, suit: 'h' }]; // 你拿一对A，演示牌型提示
+    game.board = [deck.pop(), deck.pop(), deck.pop()];
     game.players.forEach((p, i) => {
-      p.out = false; p.folded = (i === 3 || i === 4); p.allIn = false;
-      p.hole = holes[i]; p.chips = [9400, 12000, 8800, 6500, 15000, 7800][i];
-      p.bet = bets[i]; p.totalContribution = bets[i]; p.lastAction = acts[i]; p.winThisHand = 0;
+      p.out = false; p.folded = (i % 4 === 3); p.allIn = false;
+      if (i > 0) p.hole = [deck.pop(), deck.pop()];
+      p.bet = i === 0 ? 600 : (i % 3 === 0 ? 0 : 600);
+      p.totalContribution = p.bet; p.lastAction = p.folded ? '弃牌' : (p.bet ? '跟注' : ''); p.winThisHand = 0;
     });
     for (let i = 0; i < seatSig.length; i++) seatSig[i] = '';
     render();

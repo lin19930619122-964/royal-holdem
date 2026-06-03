@@ -68,5 +68,38 @@
     }
   }
 
-  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst };
+  // 牌型特效：tier 1(高牌)..9(皇家同花顺)，越大越炫
+  function handCelebration(layer, tier, label) {
+    if (!layer) return;
+    const b = document.createElement('div');
+    b.className = 'hand-cele tier' + Math.min(9, tier);
+    b.textContent = label;
+    layer.appendChild(b);
+    setTimeout(() => b.remove(), 2200);
+    const n = 5 + tier * 5;
+    const set = tier >= 8 ? ['👑', '💎', '⭐', '🪙'] : tier >= 6 ? ['💎', '⭐', '🪙'] : tier >= 4 ? ['⭐', '🪙'] : ['✨', '⭐'];
+    const r = layer.getBoundingClientRect();
+    const cx = r.width / 2, cy = r.height * 0.4;
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement('div');
+      p.className = 'cele-particle';
+      p.textContent = set[i % set.length];
+      const ang = Math.random() * Math.PI * 2, dist = 50 + Math.random() * (70 + tier * 22);
+      p.style.left = cx + 'px'; p.style.top = cy + 'px';
+      p.style.fontSize = (11 + tier * 1.6) + 'px';
+      p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+      p.style.setProperty('--dy', (Math.sin(ang) * dist - 20) + 'px');
+      p.style.animation = `celeFly ${0.8 + Math.random() * 0.7}s ease-out ${i * 0.018}s forwards`;
+      layer.appendChild(p);
+      setTimeout(() => p.remove(), 1700);
+    }
+  }
+  function shake(el, intensity) {
+    if (!el) return;
+    el.style.setProperty('--shake', (intensity || 6) + 'px');
+    el.classList.remove('shaking'); void el.offsetWidth; el.classList.add('shaking');
+    setTimeout(() => el.classList.remove('shaking'), 600);
+  }
+
+  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake };
 })();
