@@ -20,7 +20,7 @@
     let key = ACT2VOICE[p.lastAction];
     if (!key) return;
     if ((key === 'raise' || key === 'allin') && Math.random() < 0.4) key = 'taunt'; // 加注/全下时偶尔挑衅
-    if (Math.random() < 0.66) Voice.play(seatVoice[p.id] || 'db', key);
+    if (Math.random() < 0.66) Voice.play(seatVoice[p.id] || 0, key);
   }
 
   // 不同人数的座位布局(人类固定底部正中)
@@ -233,7 +233,8 @@
       case '弃牌': Sfx.fold(); break;
       case '过牌': Sfx.check(); break;
       case '跟注': Sfx.chip(); break;
-      case '加注': case '下注': case '全下': Sfx.bet(); break;
+      case '加注': case '下注': Sfx.bet(); break;
+      case '全下': Sfx.allin(); break;
     }
   }
 
@@ -253,7 +254,7 @@
         Fx.pulseWin(seatEls[i]);
         Fx.coinBurst(seatEls[i], fxLayer, 12);
         if (p.isHuman) humanWon = true;
-        else if (window.Voice && Math.random() < 0.7) Voice.play(seatVoice[p.id] || 'db', 'win');
+        else if (window.Voice && Math.random() < 0.7) Voice.play(seatVoice[p.id] || 0, 'win');
       }
     }
     if (humanWon) { Sfx.win(); Fx.vibrate(60); }
@@ -556,7 +557,7 @@
     const pool = []; for (let k = 1; k <= AVATAR_COUNT; k++) if (k !== me) pool.push(k);
     for (let k = pool.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); const t = pool[k]; pool[k] = pool[j]; pool[j] = t; }
     seatAvatars = [me, ...pool];
-    seatVoice = game.players.map((_, i) => (i % 2 === 0 ? 'db' : 'cd')); // 东北/成都错开
+    seatVoice = game.players.map((_, i) => i % 2); // 0辽宁东北女 / 1男声 错开
     boardCount = -1; lastDecoratedHand = -1; lastSyncedHand = -1; raiseMode = false;
     buildSeats();
     showScreen('table');
@@ -564,6 +565,9 @@
     $('btn-start').textContent = '开始发牌';
     hideHumanControls();
     render();
+    // 入场特效：牌桌放大 + 发牌音
+    const tf = $('table-felt'); tf.classList.remove('enter'); void tf.offsetWidth; tf.classList.add('enter');
+    Sfx.resume(); setTimeout(() => Sfx.deal(), 120);
   }
 
   /* ---------- 事件绑定 ---------- */

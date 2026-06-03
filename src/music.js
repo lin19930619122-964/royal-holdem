@@ -1,50 +1,52 @@
-/* 背景音乐 —— WebAudio 实时合成的轻爵士/休闲循环，原创无版权，可静音。低音量不扰人。 */
+/* 背景音乐 —— WebAudio 合成的温暖大调休闲循环(钢琴/竖琴风)，柔和不扰人、不渗人。可静音。 */
 (function () {
-  let ctx = null, timer = null, master = null, playing = false, muted = false;
-  // 一段舒缓的和弦进行（半音值，相对根音），循环：i - VI - III - VII 风格
-  const CHORDS = [
-    [0, 3, 7, 10],   // Cm7
-    [-4, 0, 3, 7],   // AbMaj7-ish
-    [-1, 2, 5, 9],   // Bb..
-    [2, 5, 9, 12],
+  let ctx = null, timer = null, master = null, playing = false, muted = false, bar = 0;
+
+  // C 大调暖色进行 I–vi–IV–V，每个和弦的音(相对 C 的半音)
+  const PROG = [
+    { root: -12, notes: [0, 4, 7, 12] },   // C
+    { root: -15, notes: [-3, 0, 4, 9] },   // Am
+    { root: -7, notes: [5, 9, 12, 17] },   // F
+    { root: -5, notes: [7, 11, 14, 19] },  // G
   ];
-  const ROOT = 130.81; // C3
-  let step = 0;
+  const BASE = 261.63; // C4
+  const freq = (s) => BASE * Math.pow(2, s / 12);
 
   function ac() {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       ctx = new AC();
-      master = ctx.createGain();
-      master.gain.value = 0.0;
-      master.connect(ctx.destination);
+      master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
-  function freq(semi) { return ROOT * Math.pow(2, semi / 12); }
 
-  function voice(f, t0, dur, gain, type) {
+  // 柔和音符：正弦+轻微泛音，慢起慢落(竖琴/钢琴感)
+  function note(f, t0, dur, gain, type) {
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type || 'sine'; o.frequency.value = f;
+    o.type = type || 'triangle'; o.frequency.value = f;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.3);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.04);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(master); o.start(t0); o.stop(t0 + dur + 0.1);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0 + dur + 0.05);
   }
 
   function schedule() {
     const c = ac(); if (!c) return;
-    const t0 = c.currentTime + 0.05;
-    const chord = CHORDS[step % CHORDS.length];
+    const t0 = c.currentTime + 0.04;
+    const ch = PROG[bar % PROG.length];
     // 柔和铺底和弦
-    chord.forEach((s, i) => voice(freq(s), t0, 3.4, 0.06, 'sine'));
-    // 低音
-    voice(freq(chord[0] - 12), t0, 3.2, 0.10, 'triangle');
-    // 偶尔一个高音点缀
-    if (step % 2 === 0) voice(freq(chord[3] + 12), t0 + 1.6, 1.0, 0.04, 'triangle');
-    step++;
+    ch.notes.forEach((s) => note(freq(s), t0, 3.0, 0.045, 'sine'));
+    // 低音根音
+    note(freq(ch.root), t0, 2.8, 0.07, 'triangle');
+    // 轻拨旋律：在和弦音里挑两三个，错开时间，像竖琴
+    const mel = ch.notes.slice().sort(() => Math.random() - 0.5);
+    note(freq(mel[0] + 12), t0 + 0.5, 0.9, 0.05, 'triangle');
+    note(freq(mel[1] + 12), t0 + 1.3, 0.9, 0.045, 'triangle');
+    if (Math.random() < 0.6) note(freq(mel[2] + 12), t0 + 2.1, 0.8, 0.04, 'triangle');
+    bar++;
   }
 
   const Music = {
@@ -52,12 +54,11 @@
       if (playing) return; const c = ac(); if (!c) return;
       playing = true;
       master.gain.cancelScheduledValues(c.currentTime);
-      master.gain.linearRampToValueAtTime(muted ? 0 : 0.5, c.currentTime + 1.2);
-      schedule();
-      timer = setInterval(schedule, 3200);
+      master.gain.linearRampToValueAtTime(muted ? 0 : 0.6, c.currentTime + 1.5);
+      schedule(); timer = setInterval(schedule, 2600);
     },
     stop() { if (timer) clearInterval(timer); timer = null; playing = false; if (master && ctx) master.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.4); },
-    setMuted(m) { muted = !!m; if (master && ctx) master.gain.linearRampToValueAtTime(muted ? 0 : 0.5, ctx.currentTime + 0.3); },
+    setMuted(m) { muted = !!m; if (master && ctx) master.gain.linearRampToValueAtTime(muted ? 0 : 0.6, ctx.currentTime + 0.3); },
     isPlaying() { return playing; },
   };
   window.Music = Music;
