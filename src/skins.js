@@ -71,6 +71,21 @@
   ];
   FPAL.forEach(([nm, a, b, c], i) => { felts['gf' + i] = { name: nm, price: 8 + (i % 4) * 4, a, b, c }; });
 
+  // 精绘牌背(AI 图)
+  backs.imgGold = { name: '黄金艺术', price: 20, css: "url('assets/backs/gold.png') center/cover, #5a0b18" };
+  backs.imgRoyal = { name: '皇家蓝', price: 22, css: "url('assets/backs/royal.png') center/cover, #123f72" };
+  backs.imgDragon = { name: '盘龙', price: 28, css: "url('assets/backs/dragon.png') center/cover, #0e6b46" };
+  backs.imgPhoenix = { name: '凤凰', price: 30, css: "url('assets/backs/phoenix.png') center/cover, #311049" };
+
+  // 场景主题(整体背景)
+  const scenes = {
+    vip: { name: 'VIP包厢', price: 0, img: 'assets/scenes/vip.png' },
+    palace: { name: '皇宫大殿', price: 15, img: 'assets/scenes/palace.png' },
+    yacht: { name: '豪华游艇', price: 20, img: 'assets/scenes/yacht.png' },
+    vegas: { name: '拉斯维加斯', price: 25, img: 'assets/scenes/vegas.png' },
+    macau: { name: '澳门金殿', price: 30, img: 'assets/scenes/macau.png' },
+  };
+
   const DEFAULT_RING = '0 0 0 2px #160d05,0 0 0 4px #b8862f,0 0 0 5px #2a1a0c,inset 0 2px 6px rgba(255,255,255,.22),inset 0 -3px 6px rgba(0,0,0,.4),0 4px 10px rgba(0,0,0,.55)';
   // 头像框(戴在你头像外圈)
   const frames = {
@@ -135,7 +150,9 @@
     root.setProperty('--felt', felt.b);
     root.setProperty('--felt-dark', felt.c);
     root.setProperty('--frame', frame.css);
+    const scene = scenes[p.activeScene] || scenes.vip;
+    root.setProperty('--scene-bg', `url('${scene.img}')`);
   }
 
-  window.Skins = { backs, felts, frames, titles, vehicles, watches, apply };
+  window.Skins = { backs, felts, frames, titles, vehicles, watches, scenes, apply };
 })();

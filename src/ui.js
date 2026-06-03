@@ -13,7 +13,7 @@
   let tableConfig = null;     // 当前牌桌规则
   let seatAvatars = [];       // 每个座位用的头像编号(1..12)
   let seatVoice = [];         // 每个座位的方言: 'db'(东北)/'cd'(成都)
-  const AVATAR_COUNT = 16;
+  const AVATAR_COUNT = 24;
   const ACT2VOICE = { 弃牌: 'fold', 过牌: 'check', 跟注: 'call', 加注: 'raise', 下注: 'raise', 全下: 'allin' };
   function maybeVoice(p) {
     if (!p || p.isHuman || !window.Voice) return;
@@ -528,12 +528,13 @@
           <div class="si-title">${active ? '使用中' : '头像 ' + n}</div></div>`;
       }
       body.innerHTML = h + '</div>';
-    } else if (tab === 'frames' || tab === 'titles' || tab === 'vehicles' || tab === 'watches') {
-      const ownedKey = { frames: 'ownedFrames', titles: 'ownedTitles', vehicles: 'ownedVehicles', watches: 'ownedWatches' }[tab];
-      const activeKey = { frames: 'activeFrame', titles: 'activeTitle', vehicles: 'activeVehicle', watches: 'activeWatch' }[tab];
+    } else if (tab === 'frames' || tab === 'titles' || tab === 'vehicles' || tab === 'watches' || tab === 'scenes') {
+      const ownedKey = { frames: 'ownedFrames', titles: 'ownedTitles', vehicles: 'ownedVehicles', watches: 'ownedWatches', scenes: 'ownedScenes' }[tab];
+      const activeKey = { frames: 'activeFrame', titles: 'activeTitle', vehicles: 'activeVehicle', watches: 'activeWatch', scenes: 'activeScene' }[tab];
       const preview = (s) => {
         if (tab === 'frames') return `<div class="si-preview" style="border-radius:50%;width:50px;height:50px;box-shadow:${s.css};background:radial-gradient(circle at 40% 30%,#4a6e57,#14281d)"></div>`;
         if (tab === 'titles') return `<div class="si-felt" style="display:flex;align-items:center;justify-content:center;color:${s.color};font-weight:800;font-size:14px">${s.text || '无称号'}</div>`;
+        if (tab === 'scenes') return `<div class="si-felt" style="height:64px;background:url('${s.img}') center/cover"></div>`;
         return `<div class="si-felt" style="display:flex;align-items:center;justify-content:center;font-size:34px">${s.icon || '—'}</div>`;
       };
       body.innerHTML = `<div class="shop-grid">` + Object.entries(Skins[tab]).map(([id, s]) => {
@@ -770,11 +771,11 @@
         Store.setFelt(b.dataset.felt); Skins.apply(); Sfx.button(); renderShop('felts');
       } else if (b.dataset.cosbuy) {
         const [m, id] = b.dataset.cosbuy.split(':');
-        const fn = { frames: 'buyFrame', titles: 'buyTitle', vehicles: 'buyVehicle', watches: 'buyWatch' }[m];
+        const fn = { frames: 'buyFrame', titles: 'buyTitle', vehicles: 'buyVehicle', watches: 'buyWatch', scenes: 'buyScene' }[m];
         if (Store[fn](id)) { Sfx.reward(); toast('购买成功'); syncWallet(); renderShop(m); }
       } else if (b.dataset.cos) {
         const [m, id] = b.dataset.cos.split(':');
-        const fn = { frames: 'setFrame', titles: 'setTitle', vehicles: 'setVehicle', watches: 'setWatch' }[m];
+        const fn = { frames: 'setFrame', titles: 'setTitle', vehicles: 'setVehicle', watches: 'setWatch', scenes: 'setScene' }[m];
         Store[fn](id); Skins.apply(); Sfx.button(); renderShop(m);
         if (game) render();
         if (m === 'vehicles' && id !== 'none') playVehicleEntrance();

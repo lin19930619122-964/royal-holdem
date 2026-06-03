@@ -17,6 +17,7 @@
     ownedTitles: ['none'], activeTitle: 'none',   // 称号
     ownedVehicles: ['none'], activeVehicle: 'none', // 载具(进场特效)
     ownedWatches: ['none'], activeWatch: 'none',     // 腕表
+    ownedScenes: ['vip'], activeScene: 'vip',        // 场景主题
     redeemed: [],        // 已用兑换码(去重)
     muted: false,
     handsPlayed: 0,
@@ -172,6 +173,7 @@
   const _title = mkCosmetic('titles', 'ownedTitles', 'activeTitle');
   const _veh = mkCosmetic('vehicles', 'ownedVehicles', 'activeVehicle');
   const _watch = mkCosmetic('watches', 'ownedWatches', 'activeWatch');
+  const _scene = mkCosmetic('scenes', 'ownedScenes', 'activeScene');
 
   function setMuted(m) { profile.muted = !!m; save(); }
   function recordHand(won, pot) {
@@ -223,6 +225,7 @@
     buyTitle: _title.buy, setTitle: _title.set,
     buyVehicle: _veh.buy, setVehicle: _veh.set,
     buyWatch: _watch.buy, setWatch: _watch.set,
+    buyScene: _scene.buy, setScene: _scene.set,
     setMuted, recordHand, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
     CHECKIN,
