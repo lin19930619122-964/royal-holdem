@@ -18,7 +18,8 @@
     <!-- ===== 大厅主页 ===== -->
     <section id="screen-home" class="screen">
       <header class="lobby-top">
-        <div class="brand"><span class="brand-mark">♠</span><span class="brand-name">皇室德州</span></div>
+        <div class="brand"><span class="brand-mark">♠</span><span class="brand-name">皇室德州</span>
+          <span class="lvl-chip" id="level-info">Lv.1<span class="lvl-bar"><i id="level-bar"></i></span></span></div>
         <div class="wallet">
           <span class="cur coins"><i>🪙</i><b class="coin-val">0</b></span>
           <span class="cur diamonds"><i>💎</i><b class="diamond-val">0</b></span>
@@ -33,6 +34,7 @@
       </div>
       <nav class="lobby-feats">
         <button class="feat" id="btn-checkin"><i>🎁</i><span>签到</span><em id="checkin-dot" class="dot hidden"></em></button>
+        <button class="feat" id="btn-wheel"><i>🎡</i><span>转盘</span><em id="wheel-dot" class="dot hidden"></em></button>
         <button class="feat" id="btn-shop"><i>🛒</i><span>商店</span></button>
         <button class="feat" id="btn-redeem"><i>🎟️</i><span>兑换码</span></button>
         <button class="feat" id="btn-sound"><i id="sound-icon">🔊</i><span>音效</span></button>
@@ -138,6 +140,13 @@
       <div class="modal-head"><span>自定义牌桌</span><button class="modal-close" data-close>✕</button></div>
       <div class="modal-body" id="custom-body"></div>
       <button class="big-btn" id="custom-start">进入牌桌</button>
+    </div>
+    <div id="modal-wheel" class="modal hidden">
+      <div class="modal-head"><span>每日幸运转盘</span><button class="modal-close" data-close>✕</button></div>
+      <div class="modal-body">
+        <div class="wheel-wrap"><div id="wheel" class="wheel"></div><div class="wheel-pin">▼</div></div>
+      </div>
+      <button class="big-btn" id="wheel-spin">免费抽一次</button>
     </div>
     <div id="modal-toast" class="toast hidden"></div>
   </div>

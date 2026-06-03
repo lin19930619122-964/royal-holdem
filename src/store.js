@@ -18,6 +18,10 @@
     handsPlayed: 0,
     handsWon: 0,
     biggestPot: 0,
+    xp: 0,               // 经验
+    level: 1,            // 等级
+    lastSpin: null,      // 每日幸运转盘日期
+    winStreak: 0,
   };
 
   // 7 天签到奖励（免费、慷慨）
@@ -156,9 +160,42 @@
   function setMuted(m) { profile.muted = !!m; save(); }
   function recordHand(won, pot) {
     profile.handsPlayed++;
-    if (won) profile.handsWon++;
+    if (won) { profile.handsWon++; profile.winStreak = (profile.winStreak || 0) + 1; }
+    else profile.winStreak = 0;
     if (pot > profile.biggestPot) profile.biggestPot = pot;
     save();
+  }
+
+  // 经验/等级：升级所需经验随等级递增
+  function xpForLevel(lvl) { return 100 + lvl * 100; }
+  function addXp(n) {
+    profile.xp = (profile.xp || 0) + n;
+    let leveled = 0;
+    while (profile.xp >= xpForLevel(profile.level)) { profile.xp -= xpForLevel(profile.level); profile.level++; leveled++; }
+    save();
+    return { leveled, level: profile.level, xp: profile.xp, need: xpForLevel(profile.level) };
+  }
+  function levelInfo() { return { level: profile.level, xp: profile.xp || 0, need: xpForLevel(profile.level) }; }
+
+  // 每日幸运转盘
+  const WHEEL = [
+    { type: 'coins', value: 20000, label: '🪙2万' },
+    { type: 'diamonds', value: 3, label: '💎3' },
+    { type: 'coins', value: 50000, label: '🪙5万' },
+    { type: 'diamonds', value: 8, label: '💎8' },
+    { type: 'coins', value: 100000, label: '🪙10万' },
+    { type: 'diamonds', value: 5, label: '💎5' },
+    { type: 'coins', value: 300000, label: '🪙30万' },
+    { type: 'diamonds', value: 20, label: '💎20' },
+  ];
+  function canSpin() { return profile.lastSpin !== todayStr(); }
+  function doSpin() {
+    if (!canSpin()) return null;
+    const i = Math.floor(Math.random() * WHEEL.length);
+    const r = WHEEL[i];
+    if (r.type === 'coins') profile.coins += r.value; else profile.diamonds += r.value;
+    profile.lastSpin = todayStr(); save();
+    return { index: i, reward: r };
   }
 
   window.Store = {
@@ -166,7 +203,8 @@
     canCheckin, checkinPreview, doCheckin,
     needsRelief, relief, RELIEF_FLOOR,
     redeem, buyCoinPack, buyBack, buyFelt, setBack, setFelt, setAvatar,
-    setMuted, recordHand,
+    setMuted, recordHand, addXp, levelInfo,
+    canSpin, doSpin, WHEEL,
     CHECKIN,
   };
 })();

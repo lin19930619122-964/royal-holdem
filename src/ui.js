@@ -56,6 +56,7 @@
   let scheduled = null, raiseMode = false;
   const seatEls = [], betEls = [], seatSig = [], prevBet = [];
   let boardCount = -1, lastDecoratedHand = -1, lastSyncedHand = -1, prevPot = -1;
+  let humanWinPct = null;
   const prevLA = [];
 
   /* ---------- 钱包 ---------- */
@@ -64,6 +65,7 @@
     document.querySelectorAll('.coin-val').forEach((e) => { e.textContent = p.coins.toLocaleString(); });
     document.querySelectorAll('.diamond-val').forEach((e) => { e.textContent = p.diamonds.toLocaleString(); });
     const dot = $('checkin-dot'); if (dot) dot.classList.toggle('hidden', !Store.canCheckin());
+    const wd = $('wheel-dot'); if (wd) wd.classList.toggle('hidden', !Store.canSpin());
     if (bump) document.querySelectorAll('.cur.coins').forEach((e) => { e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); });
   }
 
@@ -201,10 +203,12 @@
 
     // 实时"你的牌型"(翻牌后，帮助练牌)
     const hh = $('hand-hint'), me = game.players[0];
-    if (me && me.hole.length === 2 && !me.folded && !me.out && game.board.length >= 3 && game.phase !== 'idle') {
-      const best = P.evaluateBest(me.hole.concat(game.board));
-      hh.textContent = '你的牌型 · ' + P.handName(best.score);
-      hh.classList.remove('hidden');
+    if (me && me.hole.length === 2 && !me.folded && !me.out && game.phase !== 'idle' && game.phase !== 'gameover') {
+      let txt = '';
+      if (game.board.length >= 3) txt = '你的牌型 · ' + P.handName(P.evaluateBest(me.hole.concat(game.board)).score);
+      if (humanWinPct != null) txt += (txt ? ' · ' : '') + '胜率 ' + humanWinPct + '%';
+      if (txt) { hh.innerHTML = txt.replace(/胜率 (\d+)%/, '胜率 <b style="color:#7fe3a0">$1%</b>'); hh.classList.remove('hidden'); }
+      else hh.classList.add('hidden');
     } else hh.classList.add('hidden');
 
     updateMessage();
@@ -284,10 +288,16 @@
     if (game.phase === 'ended') {
       if (lastSyncedHand !== game.handNo) {
         lastSyncedHand = game.handNo;
-        Store.get().coins = Math.max(0, game.players[0].chips);
+        const meP = game.players[0];
+        Store.get().coins = Math.max(0, meP.chips);
         Store.save();
-        Store.recordHand(game.players[0].winThisHand > 0, game.pot);
-        syncWallet(true);
+        Store.recordHand(meP.winThisHand > 0, game.pot);
+        // 经验：打一手 +12，赢了 +30，摊牌成大牌额外加成
+        let xp = 12 + (meP.winThisHand > 0 ? 30 : 0);
+        if (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) xp += game.result.handScores[0][0] * 6;
+        const up = Store.addXp(xp);
+        syncWallet(true); syncLevel();
+        if (up.leveled > 0) { setTimeout(() => { toast(`🎉 升到 ${up.level} 级！金币 +${(up.level * 10000).toLocaleString()}`); Store.addCoins(up.level * 10000); syncWallet(true); Sfx.reward(); }, 1200); }
       }
       if (lastDecoratedHand !== game.handNo) { lastDecoratedHand = game.handNo; decorateResult(); }
       hideHumanControls();
@@ -320,6 +330,7 @@
 
   function nextHand() {
     raiseMode = false;
+    humanWinPct = null;
     Sfx.resume();
     $('result-banner').classList.add('hidden');
     // 破产救济（免费）
@@ -347,6 +358,13 @@
     $('start-area').classList.add('hidden');
     $('action-area').classList.remove('hidden');
     exitRaiseMode();
+    // 教学助手：算出你这手的实时胜率
+    const meP = game.players[0];
+    if (meP && !meP.folded && meP.hole.length === 2) {
+      const opp = game.players.filter((p) => !p.folded && !p.out && p !== meP).length || 1;
+      humanWinPct = Math.round(AI.equity(meP.hole, game.board, Math.min(opp, 6), 240) * 100);
+      render();
+    }
     const o = game.actionOptions();
     $('btn-fold').classList.remove('hidden');
     const checkBtn = $('btn-check'), callBtn = $('btn-call');
@@ -393,7 +411,7 @@
   }
 
   /* ---------- 弹窗 ---------- */
-  const MODALS = ['modal-checkin', 'modal-shop', 'modal-redeem', 'modal-custom'];
+  const MODALS = ['modal-checkin', 'modal-shop', 'modal-redeem', 'modal-custom', 'modal-wheel'];
   function openModal(id) {
     Sfx.button();
     $('modal-overlay').classList.remove('hidden');
@@ -401,6 +419,7 @@
     if (id === 'modal-checkin') renderCheckin();
     if (id === 'modal-shop') renderShop(currentShopTab);
     if (id === 'modal-redeem') renderGiftCodes();
+    if (id === 'modal-wheel') renderWheel();
   }
   function closeModal() {
     $('modal-overlay').classList.add('hidden');
@@ -500,6 +519,42 @@
         return `<div class="gift-row"><span>${g.label}<br><code>${code}</code></span>
           <button data-fill="${code}" ${used ? 'disabled' : ''}>${used ? '已领' : '填入'}</button></div>`;
       }).join('');
+  }
+
+  /* ---------- 等级 ---------- */
+  function syncLevel() {
+    const li = Store.levelInfo(); const el = $('level-info'); if (!el) return;
+    const pct = Math.min(100, Math.round(li.xp / li.need * 100));
+    el.innerHTML = 'Lv.' + li.level + '<span class="lvl-bar"><i style="width:' + pct + '%"></i></span>';
+  }
+
+  /* ---------- 幸运转盘 ---------- */
+  function renderWheel() {
+    const w = $('wheel'), segs = Store.WHEEL, n = segs.length, ang = 360 / n;
+    const colors = ['#1c5aa0', '#0e6b46', '#8a2330', '#3a2c66'];
+    const stops = segs.map((_, i) => `${colors[i % 4]} ${i * ang}deg ${(i + 1) * ang}deg`);
+    w.style.background = `conic-gradient(${stops.join(',')})`;
+    w.style.transition = 'none'; w.style.transform = 'rotate(0deg)';
+    w.innerHTML = segs.map((s, i) => `<div class="wheel-seg" style="transform:rotate(${i * ang + ang / 2}deg)"><b>${s.label}</b></div>`).join('');
+    const can = Store.canSpin();
+    $('wheel-spin').disabled = !can;
+    $('wheel-spin').textContent = can ? '免费抽一次' : '明天再来';
+  }
+  function spinWheel() {
+    if (!Store.canSpin()) return;
+    const res = Store.doSpin(); if (!res) return;
+    const n = Store.WHEEL.length, ang = 360 / n;
+    const target = 360 * 5 - (res.index * ang + ang / 2);
+    const w = $('wheel');
+    w.style.transition = 'transform 4s cubic-bezier(.15,.85,.2,1)';
+    void w.offsetWidth; w.style.transform = `rotate(${target}deg)`;
+    $('wheel-spin').disabled = true; Sfx.button();
+    setTimeout(() => {
+      Sfx.reward(); toast(`🎉 抽中 ${res.reward.label}！`);
+      syncWallet(true); syncLevel();
+      $('wheel-spin').textContent = '明天再来';
+      const wd = $('wheel-dot'); if (wd) wd.classList.add('hidden');
+    }, 4100);
   }
 
   /* ---------- 多屏路由 ---------- */
@@ -616,6 +671,8 @@
 
     // 功能栏
     $('btn-checkin').addEventListener('click', () => openModal('modal-checkin'));
+    $('btn-wheel').addEventListener('click', () => openModal('modal-wheel'));
+    $('wheel-spin').addEventListener('click', spinWheel);
     $('btn-shop').addEventListener('click', () => openModal('modal-shop'));
     $('btn-redeem').addEventListener('click', () => openModal('modal-redeem'));
     $('btn-sound').addEventListener('click', () => {
@@ -696,6 +753,7 @@
   $('sound-icon').textContent = Store.get().muted ? '🔇' : '🔊';
   setupEvents();
   syncWallet();
+  syncLevel();
   showScreen('home');
 
   // 预览模式(仅用于截图调试，?preview 或 ?preview=4 指定场次)：摆静态演示局，不启动循环
