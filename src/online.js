@@ -39,7 +39,8 @@
   function cardFaceHTML(c, small) {
     const red = P.isRed(c) ? ' red' : '';
     const r = P.RANK_LABEL[c.rank], s = P.SUIT_SYMBOL[c.suit];
-    return `<div class="card${red}${small ? ' small' : ''}"><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
+    if (small) return `<div class="card small${red}"><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
+    return `<div class="card${red}"><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
   }
   const cardBackHTML = (s) => `<div class="card back${s ? ' small' : ''}"></div>`;
 
@@ -85,7 +86,7 @@
       else betEl.classList.add('hidden');
 
       const revealed = !!s.hole;
-      const sig = `${s.holeCount}|${revealed ? 1 : 0}|${empty ? 1 : 0}`;
+      const sig = (revealed && s.hole ? 'F' + s.hole.map((c) => c.rank + c.suit).join('') : 'B' + s.holeCount) + (empty ? 'e' : '');
       if (sig !== seatSig[i]) {
         const cardsEl = el.querySelector('.player-cards');
         if (empty || s.holeCount === 0) cardsEl.innerHTML = '';

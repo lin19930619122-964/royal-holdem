@@ -52,5 +52,21 @@
     if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} }
   }
 
-  window.Fx = { flyChip, pulseWin, floatText, vibrate };
+  // 金币雨：在目标处洒落一串金币
+  function coinBurst(targetEl, layer, count) {
+    if (!targetEl || !layer) return;
+    const p = centerOf(targetEl, layer);
+    count = count || 10;
+    for (let i = 0; i < count; i++) {
+      const c = document.createElement('div');
+      c.className = 'coin-burst';
+      c.style.left = (p.x + (i - count / 2) * 7) + 'px';
+      c.style.top = (p.y - 14) + 'px';
+      c.style.animation = `coinFall ${0.7 + (i % 4) * 0.12}s ease ${i * 0.04}s forwards`;
+      layer.appendChild(c);
+      setTimeout(() => c.remove(), 1300 + i * 40);
+    }
+  }
+
+  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst };
 })();

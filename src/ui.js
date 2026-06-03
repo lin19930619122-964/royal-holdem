@@ -46,7 +46,8 @@
 
   let scheduled = null, raiseMode = false;
   const seatEls = [], betEls = [], seatSig = [], prevBet = [];
-  let boardCount = -1, lastDecoratedHand = -1, lastSyncedHand = -1;
+  let boardCount = -1, lastDecoratedHand = -1, lastSyncedHand = -1, prevPot = -1;
+  const prevLA = [];
 
   /* ---------- 钱包 ---------- */
   function syncWallet(bump) {
@@ -60,8 +61,8 @@
   /* ---------- 座位 ---------- */
   function buildSeats() {
     seatsEl.innerHTML = '';
-    seatEls.length = 0; betEls.length = 0; seatSig.length = 0; prevBet.length = 0;
-    boardCount = -1;
+    seatEls.length = 0; betEls.length = 0; seatSig.length = 0; prevBet.length = 0; prevLA.length = 0;
+    boardCount = -1; prevPot = -1;
     for (let i = 0; i < game.N; i++) {
       const pos = SEAT_POS[i] || { x: 50, y: 50 };
       const seat = document.createElement('div');
@@ -90,17 +91,20 @@
 
   function cardFaceHTML(card, small, flip) {
     const red = P.isRed(card) ? ' red' : '';
-    const sz = small ? ' small' : '';
     const fl = flip ? ' flip-in' : '';
     const r = P.RANK_LABEL[card.rank], s = P.SUIT_SYMBOL[card.suit];
-    return `<div class="card${red}${sz}${fl}"><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
+    if (small) return `<div class="card small${red}${fl}"><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
+    return `<div class="card${red}${fl}"><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
   }
   const cardBackHTML = (small) => `<div class="card back${small ? ' small' : ''}"></div>`;
 
   function render() {
     $('blindInfo').textContent = `${game.smallBlind}/${game.bigBlind}`;
     $('handInfo').textContent = `第${game.handNo}手`;
-    $('pot-amount').textContent = game.pot.toLocaleString();
+    const potNow = game.pot;
+    $('pot-amount').textContent = potNow.toLocaleString();
+    if (potNow > prevPot && prevPot >= 0) { potEl.classList.remove('pulse'); void potEl.offsetWidth; potEl.classList.add('pulse'); }
+    prevPot = potNow;
 
     if (game.board.length !== boardCount) {
       const grew = game.board.length > boardCount && boardCount >= 0;
@@ -130,6 +134,8 @@
       la.className = 'last-action';
       if (p.lastAction === '弃牌') la.classList.add('fold');
       else if (['加注', '下注', '全下'].includes(p.lastAction)) la.classList.add('raise');
+      if (p.lastAction && p.lastAction !== prevLA[i]) la.classList.add('pop');
+      prevLA[i] = p.lastAction;
 
       // 下注筹码飞向底池
       if (p.bet > prevBet[i]) {
@@ -144,7 +150,7 @@
       } else betEl.classList.add('hidden');
 
       const revealed = p.isHuman || (result && result.reveal && result.reveal.includes(p.id));
-      const sig = `${p.hole.length}|${revealed ? 1 : 0}|${p.out ? 1 : 0}`;
+      const sig = (revealed ? 'F' + p.hole.map((c) => c.rank + c.suit).join('') : 'B' + p.hole.length) + (p.out ? 'o' : '');
       if (sig !== seatSig[i]) {
         const cardsEl = el.querySelector('.player-cards');
         const wasHidden = seatSig[i].startsWith(`${p.hole.length}|0`);
@@ -194,12 +200,15 @@
     const result = game.result;
     if (!result) return;
     let humanWon = false;
+    const felt = $('table-felt');
+    felt.classList.remove('win-flash'); void felt.offsetWidth; felt.classList.add('win-flash');
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i];
       if (p.winThisHand > 0) {
-        Fx.flyChip(potEl, seatEls[i], fxLayer, { count: 3 });
+        Fx.flyChip(potEl, seatEls[i], fxLayer, { count: 4 });
         Fx.floatText(seatEls[i], `+${p.winThisHand.toLocaleString()}`, fxLayer);
         Fx.pulseWin(seatEls[i]);
+        Fx.coinBurst(seatEls[i], fxLayer, 12);
         if (p.isHuman) humanWon = true;
       }
     }
