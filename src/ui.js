@@ -71,6 +71,7 @@
       seat.style.top = pos.y + '%';
       seat.innerHTML = `
         <div class="winner-badge hidden"></div>
+        <div class="hand-name hidden"></div>
         <div class="last-action"></div>
         <div class="player-cards"></div>
         <div class="player-box">
@@ -135,6 +136,7 @@
       if (p.lastAction === '弃牌') la.classList.add('fold');
       else if (['加注', '下注', '全下'].includes(p.lastAction)) la.classList.add('raise');
       if (p.lastAction && p.lastAction !== prevLA[i]) la.classList.add('pop');
+      if (p.lastAction === '全下' && prevLA[i] !== '全下' && prevLA[i] !== undefined) flashAllIn();
       prevLA[i] = p.lastAction;
 
       // 下注筹码飞向底池
@@ -164,6 +166,12 @@
       if (result && p.winThisHand > 0) {
         badge.classList.remove('hidden'); badge.textContent = `+${p.winThisHand.toLocaleString()}`;
       } else badge.classList.add('hidden');
+
+      // 摊牌：座位上方显示牌型
+      const hn = el.querySelector('.hand-name');
+      if (result && result.showdown && result.handNames && revealed && !p.folded && result.handNames[p.id]) {
+        hn.textContent = result.handNames[p.id]; hn.classList.remove('hidden');
+      } else hn.classList.add('hidden');
     }
 
     if (game.button >= 0 && game.phase !== 'idle' && !game.players[game.button].out) {
@@ -173,7 +181,22 @@
       dealerBtn.style.top = (pos.y + (50 - pos.y) * 0.24) + '%';
     } else dealerBtn.classList.add('hidden');
 
+    // 实时"你的牌型"(翻牌后，帮助练牌)
+    const hh = $('hand-hint'), me = game.players[0];
+    if (me && me.hole.length === 2 && !me.folded && !me.out && game.board.length >= 3 && game.phase !== 'idle') {
+      const best = P.evaluateBest(me.hole.concat(game.board));
+      hh.textContent = '你的牌型 · ' + P.handName(best.score);
+      hh.classList.remove('hidden');
+    } else hh.classList.add('hidden');
+
     updateMessage();
+  }
+
+  function flashAllIn() {
+    const f = $('allin-flash');
+    f.classList.remove('hidden'); f.style.animation = 'none'; void f.offsetWidth; f.style.animation = '';
+    if (window.Sfx) Sfx.bet();
+    setTimeout(() => f.classList.add('hidden'), 1000);
   }
 
   function updateMessage() {
@@ -202,6 +225,8 @@
     let humanWon = false;
     const felt = $('table-felt');
     felt.classList.remove('win-flash'); void felt.offsetWidth; felt.classList.add('win-flash');
+    const rb = $('result-banner');
+    if (result.summary) { rb.textContent = '🏆 ' + result.summary; rb.classList.remove('hidden'); rb.style.animation = 'none'; void rb.offsetWidth; rb.style.animation = ''; }
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i];
       if (p.winThisHand > 0) {
@@ -260,6 +285,7 @@
   function nextHand() {
     raiseMode = false;
     Sfx.resume();
+    $('result-banner').classList.add('hidden');
     // 破产救济（免费）
     if (Store.get().coins < game.bigBlind * 2) {
       const got = Store.relief();
