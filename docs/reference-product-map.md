@@ -1,124 +1,213 @@
-# 参考 App 功能地图（抽象层 / 从公开结构推断）
+# 参考 App 功能地图（抽象层 + 当前项目对照 + 补齐方案）
 
-> 本文档**从文件名与目录结构推断功能**，不复制任何素材/代码。证据列只引用观察到的模块命名作为依据。
-> 目的：把参考包还原成一张「成熟德州扑克产品的功能地图」，作为后续清洁室原创规格的输入。
-
-证据来源：`resources/config.json` 的 3,133 条资源路径（详见 `reference-ipa-inventory.md`）。
-
----
-
-## 0. 成熟度的四层结构
-
-参考包的"成熟感"不是单一华丽界面，而是四层叠加：
-
-| 层 | 内容 | 证据强度 |
-|---|---|---|
-| **产品层** | 大厅、资料、赛季、成就、俱乐部、排行、邮件、活动、商城、邀请、回流、签到、转盘 | prefabs/hall 330 |
-| **牌桌层** | 聊天、礼物、表情、语音、奖池、牌谱、换桌、旁观、桌内排行、行动提示、赢家展示、举报 | prefabs/table 55 + animations/desk 258 |
-| **资源层** | 20 套牌皮、16+ 桌布主题、载具入场、连胜火焰、礼物动画、赛季美术 | textures 1794 + animations 559 + sound 187 |
-| **技术层** | Cocos/JSB、加密资源、语音、风控、统计、播放器、WebSocket、钥匙串、越狱检测 | Frameworks/bundles |
+> 本文从参考包的**公开文件结构/命名**抽象功能，不复制任何素材/代码/商标。
+> 每张表都带「当前状态 / 缺口 / 怎么补」——评分低的直接写明如何补，不回避。
+> 状态图例：✅ 已实装 ｜ 🟡 半实装/仅展示 ｜ ⬜ 缺失 ｜ 🚫 约束禁止（真钱/风控/上报/麦克风）。
+> 证据：`reference-ipa-inventory.md`（3,133 资源路径，textures1794/animations559/prefabs431/sound187/res160）。
+> 当前项目基线：M1–M8 + 精修后（源码 `./src`，含 social.js/复盘/赛季/活动/教程/对手画像等）。
 
 ---
 
-## 1. 启动 / 引导 / 新手
+## 1. 场景层级表
 
-| 观察模块 | 推断功能 |
-|---|---|
-| `prefabs/login`(11)、`backSignUp` | 登录 / 重新登录 / 账号体系 |
-| `guide`、`TeachingLayer`、`prefabs/table/vPrefabTableNovice`、`noviceTask` | 新手引导、教学层、新手任务 |
-| `animations/hall/guide`、`enterTable` | 引导动画、进桌动画 |
-
-## 2. 大厅外壳与导航
-`textures/hall/index`(34) + `animations/hall/index`(24) → 大厅主框架、入口网格、横幅、跑马灯、bgm（`sound/other/home_0…4`）。
-
-## 3. 个人 / 身份 / 成长
-| 观察模块 | 推断功能 |
-|---|---|
-| `myInfo` / `myInfoNew`(16) / `userInfo` | 玩家资料：头像、数据、外观、身份多合一 |
-| `masterLevel`(4) + `textures/hall/MasterLevel`(68) + `textures/common/master`(98) | 大师等级体系（重模块） |
-| `achievementWall`(13) + `AchievementLayer` + `textures/common/acheivement`(190) + `animations/hall/achivementWall`(52) | 成就墙（资源极重，长期目标 + 展示） |
-| `textures/common/headFrame`(36) / `head`(64) / `avatarRank` | 头像、头像框、头像挂件、头像等级 |
-
-## 4. 赛季体系（参考包最重模块）
-`legendarySeason`(101 prefab) + `textures/hall/legendarySeason`(186) + `animations/hall/legendLife`(72) + `sound/LegendarySeason`(18) + `seasonActivity`(9) + `gloryRoad` / `legendLife`。
-→ 赛季是大厅第一重模块：赛季等级、荣耀之路、赛季活动、赛季宝箱、赛季 bgm、专属美术。
-
-## 5. 社交 / 竞技
-| 观察模块 | 推断功能 |
-|---|---|
-| `gameTeam`(16) + `textures/common/gtBadge` | 战队 / 俱乐部（社交长期入口） |
-| `rank`(8) / `scoreRankFee` / `animations/desk/fameRankBoard` | 排行榜 / 名人堂 |
-| `onlineRecord`(9) | 在线 / 战绩记录 |
-| `email`(7) | 邮件中心 |
-| `invite`(6) / `recommend` / `vLayerInviteRewardPop` | 邀请 / 推荐 / 邀请奖励 |
-| `match`(4) + `prefabs/table/MttRealtimeInfoLayer` / `MatchRankLayer` | 锦标赛 / MTT 实时信息 / 赛事排名 |
-
-## 6. 运营 / 活动 / 变现（本地训练版将重解释或裁掉）
-| 观察模块 | 推断功能 | 本地版处理 |
-|---|---|---|
-| `Exchange`(14) | 兑换 / 礼包 | 保留为**训练筹码兑换码** |
-| `shop`(4) + `textures/hall/shop`(48) | 商城 / 皮肤 | 保留为**训练筹码商店**（已有） |
-| `passport`(6) | 通行证 | 保留为**免费训练通行证** |
-| `loopSign` / `dailySignUp`(4) | 循环签到 / 每日签到 | 已有（免费） |
-| `turntable`(3) + `luckyChoice` | 转盘 / 幸运抽选 | 已有（免费） |
-| `mysteryShop`(3) / `weeklySpecial` / `dailySpecial` | 限时特惠货架 | 重解释为**轮换训练礼包** |
-| `goldenPig`(2) / `goldenShark` / `bigCard` | 金猪钱罐 / 金鲨 / 大牌奖励 | 重解释为**里程碑奖励** |
-| `packet` / `RedPacketLayer` | 红包 | 重解释为**训练奖励发放** |
-| `firstPay` / `enterPay` / `pokerPay` / `vLayerPayRestrictionPop` / `dailyLimit` | 首充 / 入口付费 / 牌桌支付 / 付费限制 | **删除**（不接真钱） |
-| `sureWinGift` / `legendaryGift` / `giftCard` / `pendantGift` / `legendaryGift` | 各类礼包 | 重解释为**免费成长礼** |
-| `noonNightWelfare` / `midnightCrazy` / `mondayReward` / `holidayThree` / `holidayFour` | 时段/节日福利 | 可选**训练活跃奖励** |
-| `onceForLife` / `firstPay` | 限购/一次性 | **删除** |
-| `hotActivity`(8) / `activeTask`(5) / `noticeAnnounce` / `gameAnnounce` | 限时活动 / 活跃任务 / 公告 | 保留为**训练任务 + 公告** |
-| `propPop` / `propPopInvite` | 道具弹窗 | 重解释为**外观道具** |
-
-## 7. 牌桌核心
-| 观察模块 | 推断功能 | 重要性 |
-|---|---|---|
-| `vPrefabTable` / `poker` / `chip` / `vPrefabAppendChip` / `vPrefabCardType` | 牌桌主体 / 牌 / 筹码 / 补码 / 牌型展示 | 核心 |
-| `history`(7) | **牌谱 / 历史记录 / 复盘** | 高 |
-| `jackPot`(6) / `JackpotLayer` / `animations/desk/jackpotLight` | 桌内奖池 | 中 |
-| `chat`(4) | 牌桌文字聊天 | 高 |
-| `gitLayer`(3) + `magicEmoji`(110 动画) + `freeEmoji`(48) + `sound/magic`(40) | 礼物层 + 魔法表情 + 免费表情 | 高（社交感来源） |
-| `tip`(2) / `actionLight` | 桌内提示 / 行动光效 | 中 |
-| `WatchLayer`(2) | 旁观 | 中 |
-| `ChangeTable`(2) | 换桌 | 中 |
-| `changePoker`(2) | 换牌 / 特殊玩法 | 低 |
-| `pendant`(2) / `pendantGift` | 桌内挂件 | 低 |
-| `winningStreak` / `secutiveWinner` + `sound/table/fire/1…9` + `animations/desk/fire`(40) | **连胜火焰**（越连越炸） | 高（情绪价值） |
-| `topPlayerNotification`(16 动画) + `vTopPlayerNotification` | 顶级玩家全场通告 | 中 |
-| `vReport` | **举报入口** | 安全 |
-| `bankrupt` / `bankruptCharge` | 破产 / 破产补充 | 已有（破产救济） |
-| `LevelUpLayer` / `addMaster` / `iconUpgrade` | 升级层 / 大师晋升 | 中 |
-| `joinShow`(15 音 + `animations/hall/sail`) | **载具入场秀**（汽车/游艇/飞机/摩托…） | 高（炫耀感） |
-| `season` / `vLayerSeasonAchievePop` / `vLayerWatchAchievePop` | 桌内赛季 / 成就弹窗 | 中 |
-| `pokerPay` | 牌桌支付 | **删除** |
-
-## 8. 音频系统分层（情绪反馈密度）
-1. **行动音**：fold/check/call/raise/bet/allin（每动作独立）。
-2. **筹码/发牌**：dealCard、flop_cards、raise_chip、appendChip。
-3. **结果/连胜**：win、fire/1…9（连胜阶梯）、secutiveWinner。
-4. **快捷语音**：14 句 × 男女（挑衅/赞美/认怂/惊讶/催促…）。
-5. **礼物互动**：40 条 magic 音效。
-6. **载具入场**：15 条 joinShow。
-7. **大厅/活动**：home bgm、转盘、签到、宝箱、金猪、赛季 bgm。
-
-## 9. 视觉/动效系统（华丽感密度）
-- **牌皮**：~20 套。
-- **桌布主题**：16+ 套（大/小/宽屏三态）。
-- **连胜火焰**：40 帧动画 + 9 级音效。
-- **礼物/表情**：110 magicEmoji + 48 freeEmoji 动画。
-- **赛季美术**：186 纹理 + 72 legendLife 动画。
-- **成就**：190 纹理 + 52 动画。
-- **启动**：深色舞台 + 聚光 + 发光牌桌 + 筹码/牌漂浮 + 星尘 + 纵深走台（氛围参考，非素材）。
+| 场景 | 参考依据 | 本项目原创实现 | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| Launch 开屏 | LaunchScreen + launch2.jpg + 深色舞台 | `runSplash()` Canvas 聚光+漂浮花色+星尘+发光标题 | ✅ | 可加 `prefers-reduced-motion` 降级（fx.js 读 matchMedia，粒子数×0.3）|
+| Login 登录 | prefabs/login(11)、backSignUp | 本地无账号，跳过登录直进大厅 | 🚫→N/A | 本地训练不需账号；如做云存档再加，**不接第三方登录** |
+| Hall 大厅 | prefabs/hall(330) | `screen-home`：档案条/状态卡/活动/模式网格/13 入口 | ✅ | 持续填实占位入口（见表 4）|
+| Table 牌桌 | prefabs/table(55) | `screen-table`：座位/底池/公共牌/工具栏 | ✅ | 见表 3 |
+| Tutorial 新手引导 | guide/TeachingLayer/noviceTask | `runTutorial()` 5 页图文，首次进桌弹+帮助中心重看 | ✅ | 可加「交互式高亮指引」（指向按钮的遮罩气泡），文件 `ui.js`，优先级低 |
+| Profile 资料 | myInfoNew(16)/userInfo | openPanel `profile`：金币/钻石/胜率/外观/等级 | ✅ | 可加头像更换入口直达商店 |
+| Settings 设置 | prefabs/hall/setting | openPanel `settings`：声音/训练提示开关+隐私 | ✅ | 可加震动开关、动效强度档位 |
+| History 牌谱 | prefabs/table/history(7) | openPanel `tableHistory`：复盘列表(近30手) | ✅ | 增大保留上限/导出，优先级低 |
+| Replay 回放 | history + onlineRecord | 复盘详情：逐决策+对手摊牌+对错判定 | ✅ **超越** | 可做「逐街动画回放」（重演发牌/下注），文件 `ui.js`+`fx.js`，优先级中 |
+| Skin 外观 | textures/cards(20套)/table bg(16+) | 商店 9 类，程序化牌背48/桌布22+图 | ✅ | 主题广度可继续加（`skins.js` 调色板）|
+| Achievement 成就 | achievementWall(13)+190纹理 | openPanel `achievements`：成就墙宫格+领取 | ✅ | 解锁翻牌动画可加（`fx.js`）|
+| Rank 排行 | rank(8)/scoreRankFee | openPanel `rank`：本地财富榜（你 vs 基准） | 🟡 | 多榜（胜率榜/段位榜）可加；真人榜需服务端 |
+| 本地训练 | training/TeachingLayer | 训练/考试模式、实时提示、对手画像、盈利曲线 | ✅ **超越** | 见表 8 |
+| Tournament 锦标赛 | match(4)/MTT | openPanel `tourney`：仅入口 | ⬜ | **怎么补**：本地 SNG（单桌淘汰赛，递增盲注），文件 `game.js`+`ui.js`，优先级中 |
 
 ---
 
-## 10. 抽象结论（交给清洁室规格）
+## 2. 资源系统表
 
-参考产品 = **一个牌桌核心 + 一个高密度大厅 + 一套多层情绪反馈 + 一套重资源外观体系 + 一套联网/变现/风控技术栈**。
+| 资源类 | 参考规模 | 本项目方案（原创/程序化优先，控体积） | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 图片 | textures 1794 | 头像24 + 场景5 + 牌背/桌布少量图 + 大量 CSS 程序化 | ✅ | 体积 56M（参考 320M）；继续走程序化 |
+| 卡牌 | cards 20 套(814) | CSS 程序化牌面(角标+中心 pip/cmini) + 程序化牌背48 | 🟡 | **补**：再加 2-3 套风格化牌面（花色描边/底纹），`styles.css`，优先级低 |
+| 桌布 | table/bg 16+套 | 程序化 felt(调色板22) + 4 图 | ✅ | 调色板可再扩 |
+| 头像 | common/head(64) | 24 张原创/AI 生成 | 🟡 | **补**：扩到 ~40 张（4090 ComfyUI 批量），`assets/av/`，优先级低 |
+| 头像框 | common/headFrame(36) | 12 程序化 CSS box-shadow 框 | ✅ | 可加动态光效框 |
+| 按钮 | textures/common | CSS 渐变/金边按钮统一 | ✅ | — |
+| 弹窗 | prefabs/hall propPop | 统一 `#modal-panel` + openPanel 体系 | ✅ | — |
+| 动效 | animations 559 | `fx.js` 程序化 + CSS keyframes（见表 5） | ✅ | 见表 5 缺口 |
+| 音效 | sound/table(53) | `sound.js` WebAudio 合成（行动/筹码/胜负/礼物/连胜） | ✅ | — |
+| 语音 | quickWords(28)+GCloudVoice | 180 条 edge-tts 东北话原创 + 文字气泡 | ✅ **超越** | 可加成都话第二语音包，`gen_voice.py`，优先级低 |
+| 配置 | res/config.json | `store.js`(localStorage) + `skins.js` 调色板表 | ✅ | — |
 
-本地训练版的取舍方向：
-- **保留并加强**：牌桌核心、牌谱/复盘、连胜情绪反馈、外观体系（程序化/原创轻量）、成长（赛季/成就/任务/等级）、AI 对手与训练分析。
-- **重解释为免费训练**：商店、兑换、通行证、签到、转盘、活动、礼包。
-- **删除**：一切真钱付费（firstPay/pokerPay/付费限制）、账号风控、统计上报、实时语音麦克风、联网对战服务依赖（保留本地/可选自建）。
-- **超越点**：把"history/复盘"从记录升级为**带胜率/赔率对错判定的训练复盘**，并加 **AI 对手画像 + 实时策略提示**（参考包未做透）。
+---
+
+## 3. 牌桌 UI 表
+
+| 元素 | 参考依据 | 当前实现（文件） | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 座位 | vPrefabTableUserInfo | `buildSeats()` 2/6/9 人布局，头像/框/称号/筹码 | ✅ | — |
+| 底池 | chip/appendChip | `#pot-amount` + 筹码飞行 + pulse | ✅ | — |
+| 公共牌 | poker | `boardEl` 发牌动画 | ✅ | — |
+| 手牌 | cards | 你的牌大号 + 摊牌翻开对手 | ✅ | — |
+| 行动按钮 | table tip | 弃/过/跟/加/全下，`#action-area` | ✅ | — |
+| 滑杆 | — | `#raise-slider` + 数值 | ✅ | **补**：滑杆手感（步进吸附 BB、长按加减），`ui.js`，优先级中 |
+| 快捷下注 | — | ½池/1池/最大 `.quick` 按钮 | ✅ | 可加 ⅓池/2BB |
+| 倒计时 | table tip | ⬜ 无回合计时 | ⬜ | **补**：人类回合环形倒计时（超时自动过牌/弃牌），`ui.js`+`styles.css`，优先级中，验收=超时自动行动且有进度环 |
+| 聊天 | chat(4) | 快捷语气泡 + 对手回应（`social.js`） | ✅ | 真人自由聊天需服务端 |
+| 表情 | freeEmoji(48) | 🟡 并入礼物/快捷语 | 🟡 | **补**：独立表情面板（😀😎😭😡…冒泡），`social.js`+`ui.js`，优先级低 |
+| 礼物 | gitLayer/magicEmoji | 互动礼物飞行命中爆开（6 种） | ✅ | — |
+| 历史 | history(7) | 牌桌工具「牌谱」→复盘 | ✅ | — |
+| 设置 | DeskSettingDrop | 牌桌内经设置面板 | 🟡 | **补**：牌桌内快捷设置抽屉（静音/退桌/换桌），`ui.js`，优先级低 |
+| 顶级通告 | topPlayerNotification(16) | 大牌型/巨池横幅 `Fx.topBanner` | ✅ | — |
+| 旁观/换桌/举报 | WatchLayer/ChangeTable/vReport | ⬜ 入口 | ⬜ | 依赖服务端，留入口；本地不适用 |
+
+---
+
+## 4. 大厅 UI 表
+
+| 元素 | 参考依据 | 当前实现 | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 玩家信息 | myInfoNew | profile 面板 + 大厅档案条 | ✅ | — |
+| 筹码 | — | 钱包条（金币/钻石）实时同步 | ✅ | — |
+| 等级 | masterLevel | 等级经验 + 段位积分阶梯 | ✅ | — |
+| 入口按钮 | hall/index | 13 入口网格 + 工具栏 | ✅ | — |
+| 模式选择 | match | 选桌屏：新手/进阶/高额/单挑 + 自定义 | ✅ | **补**：难度（休闲/高手/大师）在选桌页更显眼，`index.html`，优先级低 |
+| 任务 | activeTask | 每日任务领取 + 限时活动领取 | ✅ | — |
+| 成就 | achievementWall | 成就墙 | ✅ | — |
+| 皮肤 | shop | 商店 9 类购买装备 | ✅ | — |
+| 历史 | onlineRecord | 数据中心→复盘 | ✅ | — |
+| 设置 | setting | 设置面板 | ✅ | — |
+| 赛季 | legendarySeason(101) | 皇家赛季 battle pass(30级奖励表) | ✅ | 段位晋升动画可加 |
+| 邮件 | email(7) | 邮件中心（条件解锁可领） | ✅ | — |
+| 运营 | mysteryShop/goldenPig/turntable/loopSign | 限时礼架/金库钱罐/转盘/签到（全免费） | ✅ | — |
+| 俱乐部/好友/邀请 | gameTeam/invite | ⬜ 入口 | ⬜ | 依赖服务端真人，留入口 |
+
+---
+
+## 5. 动画反馈表
+
+| 反馈 | 参考依据 | 当前实现（fx.js/styles.css） | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 发牌 | animations/desk | `dealIn` 卡牌甩入 + 发牌音 | ✅ | — |
+| 下注 | chipToMe | 筹码飞行 `flyChip` + 下注码堆音 | ✅ | — |
+| 赢池 | desk/win(16) | 飞币 `flyChip`/`coinBurst` + `floatText` | ✅ | — |
+| 翻牌 | — | `flipIn` 翻牌动画 | ✅ | — |
+| 摊牌 | — | 对手翻牌 + `handCelebration` 牌型炸场分级 | ✅ | — |
+| 弃牌 | — | 座位置灰 `.folded` + 弃牌音 | ✅ | — |
+| 行动高亮 | actionLight | `.seat.active` 金光 + 头像脉冲 | ✅ | — |
+| 倒计时 | tip | ⬜ | ⬜ | **补**：见表 3 倒计时（环形进度+末段变红），`fx.js` |
+| 牌型高亮 | vPrefabCardType | 牌型名展示 + 庆祝特效分级 | ✅ | **补**：高亮组成最优 5 张的牌（描金边），`ui.js`，优先级中 |
+| 升级 | LevelUpLayer | 升级 toast + 金币奖励 | 🟡 | **补**：升级专属弹层动画（光环+等级数字跳动），`fx.js`，优先级低 |
+| 成就 | achivementWall(52) | 解锁后可领；无解锁瞬间动画 | 🟡 | **补**：成就解锁翻牌/飞入动画，`fx.js`，优先级低 |
+| 礼物 | magicEmoji(110) | `flyGift` 飞行+命中爆开 | ✅ | — |
+| 表情 | freeEmoji(48) | 文字气泡 `speechBubble`（顶部座位朝下修正） | 🟡 | 见表 3 表情面板 |
+| 连胜烈焰 | fire(40)/streak | `streakFlame` 6 级阶梯 | ✅ **超越** | — |
+| 入场座驾 | joinShow(15) | `vehicle-fx` 横移+尾迹 | ✅ | 可升级原创 SVG 座驾 |
+
+---
+
+## 6. 音频反馈表
+
+| 反馈 | 参考依据 | 当前实现（sound.js/voice.js） | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 按钮 | sound/common | `Sfx.button()` | ✅ | — |
+| 发牌 | dealCard/flop | `Sfx.deal()` 噪声扫频+轻点 | ✅ | — |
+| 下注 | actionBet | `Sfx.bet()` 码堆+叮当 | ✅ | — |
+| 加注 | actionRaise/raise_chip | `Sfx.bet()`（同下注，加注复用） | ✅ | **补**：加注用更强音色与下注区分，`sound.js`，优先级低 |
+| 全下 | actionAllIn/allin | `Sfx.allin()` 码堆+上扬 + 闪光 | ✅ | — |
+| 弃牌 | actionFold | `Sfx.fold()` 甩牌唰 | ✅ | — |
+| 胜利 | win/secutiveWinner | `Sfx.win()` 上行琶音 + `Sfx.streak()` | ✅ | — |
+| 失败 | — | `Sfx.lose()` 低沉下行 | ✅ | — |
+| 倒计时 | tip | ⬜ | ⬜ | **补**：倒计时末 3 秒滴答音，`sound.js`，随表 3 倒计时一起做 |
+| 快捷短语 | quickWords(28) | 180 条 edge-tts 方言 + 文字气泡 | ✅ **超越** | 第二方言可加 |
+| 礼物命中 | sound/magic(40) | `Sfx.gift(type)` 6 型合成音 | ✅ | — |
+| 背景音乐 | sound/other/bgm | `music.js` 暖色 lounge 循环 | ✅ | 可加赛季限定 bgm |
+
+---
+
+## 7. 成长系统表
+
+| 系统 | 参考依据 | 当前实现（store.js） | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 等级 | masterLevel | xp/level，每手+经验，升级奖励 | ✅ | — |
+| 成就 | achievementWall | 8 项成就，解锁领取 | ✅ | **补**：扩到 ~20 项（含牌型/盈利/纪律类），`store.js` ACHV，优先级中 |
+| 每日训练 | activeTask/dailySignUp | 每日任务3 + 每日活动4 + 签到 | ✅ | — |
+| 局数统计 | onlineRecord | handsPlayed/Won/winrate/biggestPot | ✅ | — |
+| 盈利曲线 | — | 数据中心 Canvas 折线（近 N 手累计净收益） | ✅ **超越** | **补**：按场次/按天分段曲线，`ui.js` drawProfitCurve，优先级低 |
+| 正确决策率 | — | 复盘统计「决策正确率」（胜率 vs 赔率判定） | ✅ **超越** | — |
+| 牌型收集 | — | ⬜ 无「打出过哪些牌型」图鉴 | ⬜ | **补**：牌型图鉴（高牌→同花顺，记录各牌型达成次数+最佳），`store.js`(bestHand 已有，扩成计数表)+新面板，优先级中，验收=每种牌型显示达成次数与首次时间 |
+| 段位 | masterLevel | 7 阶积分段位 + 晋升提示 | ✅ | 掉段保护/赛季段位重置可加 |
+
+---
+
+## 8. 策略学习系统表（本项目核心差异化，已超越参考）
+
+| 模块 | 参考依据 | 当前实现 | 状态 | 缺口 & 怎么补 |
+|---|---|---|---|---|
+| 翻前 | training | `preflopClass()` 起手牌分类(顶级/强开/可玩/投机/边缘/弱) | ✅ | **补**：按位置(UTG/CO/BTN/盲)细化开牌范围表，`ai.js`/新模块，优先级中，验收=不同位置给不同范围建议 |
+| 翻后 | — | 实时牌型名 + outs + 胜率建议 | ✅ | **补**：标注听牌类型（卡顺/两头/同花听），`ui.js computeOuts`，优先级中 |
+| 底池赔率 | — | 实时赔率门槛 + 与胜率比较给建议 | ✅ | — |
+| 胜率 | — | 蒙特卡洛 equityFull（2500 模拟，已加缓存） | ✅ **超越** | — |
+| 范围 | — | 🟡 仅起手牌单手分类，无「对手范围」推断 | 🟡 | **补**：对手范围估计（按其位置/动作收窄范围，显示你对其范围的胜率），`ai.js`，优先级高，验收=面对加注时显示「对其范围胜率」 |
+| 位置 | — | 🟡 引擎用到位置，但 UI 未显式提示 | 🟡 | **补**：UI 标注你的位置(按钮/盲/前/中/后)与位置建议，`ui.js`，优先级中 |
+| 下注尺度 | — | 快捷 ½/1 池；建议文案含「下注要价值」 | 🟡 | **补**：按牌力/听牌给推荐下注尺度（如「这里建议 ⅔ 池价值下注」），`ui.js`，优先级中 |
+| 复盘 | history | 逐决策对错+理由+对手摊牌+正确率 | ✅ **超越** | **补**：复盘里给「最优行动建议」对比你的实际行动，`ui.js renderHandDetail`，优先级高，验收=每步显示「建议X / 你选Y」 |
+| 考试模式 | — | 隐藏全部提示自测 | ✅ **超越** | **补**：考试结束出「本局评分」(正确决策率+EV 损失估计)，`ui.js`，优先级中 |
+
+---
+
+## 9. 当前项目缺口表（评分低不装死，逐项写明怎么补）
+
+> 严重度 H/M/L；优先级 P0(尽快)/P1/P2；验收=可观测的完成标准。
+
+| # | 缺什么 | 严重度 | 涉及文件 | 怎么补 | 优先级 | 验收结果 |
+|---|---|---|---|---|---|---|
+| 1 | 回合倒计时 | M | ui.js, styles.css, sound.js | 人类回合环形进度条，超时自动过牌/弃牌，末 3 秒滴答 | P1 | 超时自动行动且有可见进度环 |
+| 2 | 对手范围推断 | H | ai.js, ui.js | 按对手位置+动作收窄范围，算「对其范围胜率」并展示 | P0 | 面对加注时显示对范围胜率，与单纯胜率不同 |
+| 3 | 复盘给最优建议对比 | H | ui.js | 每个决策旁显示「建议X / 你选Y」+ EV 差 | P0 | 复盘详情每步出现建议对比行 |
+| 4 | 位置感提示 | M | ui.js | UI 标你的位置与位置化开牌建议 | P1 | 牌桌显示 BTN/SB/BB 等 + 位置建议 |
+| 5 | 牌型图鉴/收集 | M | store.js, ui.js | 记录各牌型达成次数+首次时间，新面板展示 | P1 | 9 种牌型各显示次数 |
+| 6 | 本地锦标赛(SNG) | M | game.js, ui.js | 单桌淘汰，递增盲注，淘汰排名 | P1 | 能开一局 SNG 直到分出名次 |
+| 7 | 最优 5 张高亮 | L | ui.js | 摊牌时给组成牌型的 5 张描金边 | P2 | 摊牌时最优牌高亮 |
+| 8 | 成就扩充到~20 | L | store.js | 增牌型/盈利/纪律类成就 | P2 | 成就墙 ≥18 项 |
+| 9 | 升级/成就解锁动画 | L | fx.js | 专属弹层光环+翻牌动画 | P2 | 升级有独立动画而非仅 toast |
+| 10 | 独立表情面板 | L | social.js, ui.js | 表情宫格冒泡 | P2 | 牌桌可发 ≥8 种表情 |
+| 11 | 低动效无障碍 | L | fx.js | prefers-reduced-motion 时粒子/开屏降级 | P2 | 系统开降级后特效明显减弱 |
+| 12 | 多人真社交(旁观/换桌/举报/俱乐部/好友) | M | mp.js, server.js, 新UI | 需扩权威服务端 + 房间/观战/举报协议 | P1(独立线) | 两端可真人同桌+观战+举报 |
+| 13 | 真钱/充值/风控/上报/麦克风 | — | — | **不做** | 🚫 | 永不实现 |
+
+---
+
+## 10. 原创化替代表（参考抽象 → 不可复制 → 我们怎么原创）
+
+| 参考元素（抽象能力） | 不能复制的部分 | 我们的原创实现方案 | 现状 |
+|---|---|---|---|
+| 赛季体系（长期留存） | legendarySeason 命名/美术/活动配置 | 「皇家赛季」原创 30 级奖励表，程序化进度 UI，按月重置 | ✅ |
+| 牌皮/桌布（外观经济） | 20 套 cards / 16 套 bg 贴图 | CSS/渐变程序化生成（48 牌背/22 桌布），调色板表 | ✅ |
+| 快捷语音（社交氛围） | quickWords 英文键名音频 | 原创中文短语库 + edge-tts 东北话自产 180 条 | ✅ |
+| 连胜火焰（情绪反馈） | fire 帧动画/音效资源 | `streakFlame` Canvas/CSS 程序化 6 级 + 合成音 | ✅ |
+| 礼物/表情（互动） | magicEmoji/freeEmoji 资源 | 原创 emoji 组合 + `flyGift` 程序化飞行爆开 + 合成命中音 | ✅ |
+| 入场座驾（炫耀） | joinShow 模型/音 | emoji/CSS 座驾横移+尾迹（可升级原创 SVG） | ✅ |
+| 成就/段位（目标感） | achievementWall 美术/文案 | 原创成就项 + 7 阶段位（青铜→皇家大师）原创命名 | ✅ |
+| 牌桌主题氛围（舞台感） | 具体贴图/聚光资源 | 通用赌场舞台美学→原创 Canvas 开屏 + 木纹金边桌（CSS） | ✅ |
+| 运营货架（活跃） | mysteryShop/firstPay 配置 | 重解释为**免费**每日礼包/金库/活动，**删除一切真钱** | ✅ |
+| 字体 | msyh/方正等商业 ttf | 系统字体 + 可商用字体，不打包参考字体 | ✅ |
+| 训练能力（参考较弱） | —（无可抄，自研更强） | 复盘+错误分析、实时提示、对手画像、盈利曲线（自研超越） | ✅ |
+| 商标/游戏名/活动名/专有文案 | 「传奇德州扑克」等全部专名 | 全改原创「皇室德州·训练场 / 皇家赛季」，src 已无残留 | ✅ |
+
+> 清洁室总原则：参考只用于「该有哪些能力、密度多大、节奏如何」；落地一律原创程序化或自产素材，绝不导入参考的图/音/字/动画/prefab/代码/商标。
+
+---
+
+## 附：下一步建议执行顺序（按缺口表优先级）
+
+P0 先做（训练价值最高、最能拉开与参考的差距）：**#2 对手范围推断 → #3 复盘最优建议对比**。
+P1 跟上：#1 倒计时、#4 位置感、#5 牌型图鉴、#6 本地 SNG、#12 多人（独立线）。
+P2 收尾打磨：#7~#11 视觉/无障碍/表情。
+🚫 永不做：#13。
