@@ -102,11 +102,11 @@
   }
 
   // 座位上方的快捷语/闲聊气泡（挂在座位元素内，跟随座位定位）
-  function speechBubble(seatEl, text, cls) {
+  function speechBubble(seatEl, text, cls, below) {
     if (!seatEl || !text) return;
     seatEl.querySelectorAll('.speech-bubble').forEach((b) => b.remove());
     const b = document.createElement('div');
-    b.className = 'speech-bubble' + (cls ? ' ' + cls : '');
+    b.className = 'speech-bubble' + (cls ? ' ' + cls : '') + (below ? ' below' : '');
     b.textContent = text;
     seatEl.appendChild(b);
     void b.offsetWidth; b.classList.add('show');

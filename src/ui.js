@@ -26,11 +26,12 @@
   const AVATAR_COUNT = 24;
   const ACT2VOICE = { 弃牌: 'fold', 过牌: 'check', 跟注: 'call', 加注: 'raise', 下注: 'raise', 全下: 'allin' };
   function maybeVoice(p) {
-    if (!p || p.isHuman || !window.Voice) return;
+    if (!p || p.isHuman || !window.Voice) return false;
     let key = ACT2VOICE[p.lastAction];
-    if (!key) return;
+    if (!key) return false;
     if ((key === 'raise' || key === 'allin') && Math.random() < 0.4) key = 'taunt'; // 加注/全下时偶尔挑衅
-    if (Math.random() < 0.66) Voice.play(seatVoice[p.id] || 0, key);
+    if (Math.random() < 0.66) { Voice.play(seatVoice[p.id] || 0, key); return true; }
+    return false;
   }
 
   // 不同人数的座位布局(人类固定底部正中)
@@ -69,6 +70,7 @@
   let humanWinPct = null;
   let handAnalysis = null;
   let handDecisions = [];   // 本手牌内你的每个决策(用于复盘/错误分析)
+  let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   const prevLA = [];
 
   // 牌局复盘：把一张牌渲染成带花色颜色的小标签
@@ -347,10 +349,12 @@
     if (!game) return [];
     return game.players.filter((p) => !p.isHuman && !p.out);
   }
+  // 顶部座位的气泡朝下，避免顶出牌桌
+  function seatIsTop(id) { return !!(SEAT_POS && SEAT_POS[id] && SEAT_POS[id].y < 38); }
   // 你说一句快捷语：座位上方冒泡，随机对手回应
   function sayPhrase(text) {
     if (!game || !seatEls[0]) return;
-    Fx.speechBubble(seatEls[0], text, 'mine');
+    Fx.speechBubble(seatEls[0], text, 'mine', seatIsTop(0));
     Sfx.button();
     const opps = activeOpponents();
     if (opps.length && Math.random() < 0.8) {
@@ -358,7 +362,7 @@
       setTimeout(() => {
         const el = seatEls[opp.id];
         const reply = Social.pickChatter(Math.random() < 0.5 ? 'raise' : 'fold') || '哼';
-        if (el) Fx.speechBubble(el, reply);
+        if (el) Fx.speechBubble(el, reply, '', seatIsTop(opp.id));
       }, 900 + Math.random() * 700);
     }
   }
@@ -374,7 +378,7 @@
     closeModal();
     Fx.flyGift(seatEls[0], seatEls[target.id], fxLayer, gf.icon);
     try { Sfx.gift(gf.sfx); } catch (_) {}
-    setTimeout(() => { if (seatEls[target.id]) Fx.speechBubble(seatEls[target.id], Social.pickChatter('win') || '多谢'); }, 1000);
+    setTimeout(() => { if (seatEls[target.id]) Fx.speechBubble(seatEls[target.id], Social.pickChatter('win') || '多谢', '', seatIsTop(target.id)); }, 1000);
   }
   // 记录 AI 本局行动统计（用于对手画像）
   function recordSeatAct(p) {
@@ -388,15 +392,15 @@
       case '全下': pr.allins++; pr.entered++; break;
     }
   }
-  // AI 行动时偶尔闲聊（冒泡），与语音错峰
-  function maybeChatter(p) {
-    if (!p || p.isHuman || !window.Social || !seatEls[p.id]) return;
+  // AI 行动时偶尔闲聊（冒泡）。voiced=该回合已播语音则跳过，避免与语音撞车
+  function maybeChatter(p, voiced) {
+    if (voiced || !p || p.isHuman || !window.Social || !seatEls[p.id]) return;
     const key = ACT2VOICE[p.lastAction];
     let ck = (key === 'raise') ? 'raise' : (key === 'allin') ? 'allin' : (key === 'fold') ? 'fold' : null;
     if (!ck) return;
-    if (Math.random() < 0.28) {
+    if (Math.random() < 0.32) {
       const line = Social.pickChatter(ck);
-      if (line) Fx.speechBubble(seatEls[p.id], line);
+      if (line) Fx.speechBubble(seatEls[p.id], line, '', seatIsTop(p.id));
     }
   }
 
@@ -547,8 +551,8 @@
         game.act(d.action, d.amount);
         recordSeatAct(p);
         actSound(p);
-        maybeVoice(p);
-        maybeChatter(p);
+        const voiced = maybeVoice(p);
+        maybeChatter(p, voiced);
         tick();
       }, delay);
     }
@@ -588,7 +592,10 @@
     const meP = game.players[0];
     if (meP && !meP.folded && meP.hole.length === 2) {
       const opp = game.players.filter((p) => !p.folded && !p.out && p !== meP).length || 1;
-      const ef = AI.equityFull(meP.hole, game.board, Math.min(opp, 6), 2500);
+      // 缓存：同一手同一街、对手数不变时复用蒙特卡洛结果（避免取消加注等重复重算造成卡顿）
+      const eqKey = `${game.handNo}|${game.board.length}|${Math.min(opp, 6)}`;
+      if (eqKey !== _eqKey) { _eq = AI.equityFull(meP.hole, game.board, Math.min(opp, 6), 2500); _eqKey = eqKey; }
+      const ef = _eq;
       const eq = ef.win + ef.tie / 2;
       const winPct = Math.round(ef.win * 100), tiePct = Math.round(ef.tie * 100), losePct = Math.round(ef.lose * 100);
       const name = game.board.length >= 3 ? P.handName(P.evaluateBest(meP.hole.concat(game.board)).score) : preflopClass(meP.hole);
