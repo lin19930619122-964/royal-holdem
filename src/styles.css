@@ -381,6 +381,13 @@ html, body {
 .flame-particle { position:absolute; pointer-events:none; z-index:33; will-change:transform; }
 @keyframes flameRise { 0%{opacity:0;transform:translate(-50%,0) scale(.6)} 15%{opacity:1} 100%{opacity:0;transform:translate(calc(-50% + var(--fx)),var(--fy)) scale(1.2)} }
 
+/* 顶级全场通告横幅 */
+.top-banner { position:absolute; top:6%; left:0; right:0; z-index:35; pointer-events:none; display:flex; justify-content:center; }
+.top-banner span { display:inline-block; max-width:92%; padding:5px 16px; border-radius:999px; white-space:nowrap; font-size:12px; font-weight:800; color:#3a2400;
+  background:linear-gradient(90deg, rgba(245,207,107,.2), var(--gold-lt), rgba(245,207,107,.2)); border:1px solid var(--gold);
+  box-shadow:0 2px 12px rgba(245,207,107,.5); animation:topBannerIn 4.2s ease forwards; }
+@keyframes topBannerIn { 0%{opacity:0;transform:translateY(-14px) scale(.9)} 10%{opacity:1;transform:none} 85%{opacity:1} 100%{opacity:0;transform:translateY(-10px)} }
+
 .coin-burst { position:absolute; width:16px; height:16px; border-radius:50%; margin:-8px; pointer-events:none; z-index:21;
   background:radial-gradient(circle at 38% 32%,#fff 0 3px,var(--gold) 4px 100%); border:1.5px solid #fff8; }
 @keyframes coinFall { from{transform:translateY(-30px) scale(.6);opacity:0} 20%{opacity:1} to{transform:translateY(60px) scale(1);opacity:0} }

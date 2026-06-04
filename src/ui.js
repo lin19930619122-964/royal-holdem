@@ -465,6 +465,16 @@
         if (tier >= 6) { Fx.shake($('table-wrap'), tier >= 8 ? 11 : 7); Fx.vibrate(tier >= 8 ? [70, 40, 90] : 45); }
       }
     }
+    // 顶级全场通告：大牌型(同花及以上) 或 巨型底池触发横幅
+    const topW = game.players.filter((q) => q.winThisHand > 0).sort((a, b) => b.winThisHand - a.winThisHand)[0];
+    if (topW) {
+      const tierTop = (result.showdown && result.handScores && result.handScores[topW.id]) ? result.handScores[topW.id][0] + 1 : 0;
+      const bigPot = topW.winThisHand >= game.bigBlind * 40;
+      if (tierTop >= 6 || bigPot) {
+        const what = tierTop >= 6 ? `${result.handNames[topW.id]}` : '巨型底池';
+        Fx.topBanner(fxLayer, `${topW.name} 凭 ${what} 赢得 ${fmtChips(topW.winThisHand)}`);
+      }
+    }
   }
 
   /* ---------- 游戏循环 ---------- */
@@ -907,13 +917,17 @@
             <div><b>${m.title}</b><div class="pr-text">${m.body}<br>附件 🪙${fmtChips(m.coins)} · 💎${m.diamonds}</div></div>${btn}</div>`;
         }).join('') + `</div>`;
     } else if (kind === 'events') {
-      html = `<div class="panel-hero"><b>限时活动中心</b><span>原创活动体系，用于承载首胜、连胜、节日活动和回流奖励。</span></div>
-        <div class="panel-list">
-          ${panelRow('🔥', '首胜加奖', '每日第一手获胜额外奖励 5万金币。', wins > 0 ? '已达成' : '进行中')}
-          ${panelRow('⚡', '三连胜挑战', `当前连胜 ${p.winStreak || 0}/3，完成后奖励 10 钻石。`, (p.winStreak || 0) >= 3 ? '可领' : '挑战')}
-          ${panelRow('🎊', '周末豪客夜', '高额场、大师场结算经验提升 30%。', '周末')}
-          ${panelRow('🔁', '回流礼遇', '连续 3 天未登录后回归可领取补给。', '运营')}
-        </div>`;
+      const evs = Store.getEvents();
+      html = `<div class="panel-hero"><b>限时活动中心</b><span>原创每日活动，达成条件即可领取训练筹码与钻石，每日 0 点刷新。</span></div>
+        <div class="panel-list">` +
+        evs.map((e) => {
+          const btn = e.claimed ? `<em class="rc-ok">已领</em>`
+            : e.done ? `<button class="pr-claim" data-claim-event="${e.id}">领取</button>`
+              : `<em>${e.cur}/${e.goal}</em>`;
+          return `<div class="panel-row ${e.done && !e.claimed ? 'achv-ready' : ''}"><div class="pr-ic">🎯</div>
+            <div><b>${e.name}</b><div class="pr-text"><div class="progress-track"><i style="width:${pct(e.cur, e.goal)}%"></i></div>${e.desc} · 奖励 🪙${fmtChips(e.coins)} · 💎${e.diamonds}</div></div>${btn}</div>`;
+        }).join('') +
+        `${panelRow('🔁', '回流礼遇', '连续未登录后回归可领补给（规划中）。', '运营')}</div>`;
     } else if (kind === 'gifts') {
       html = `<div class="panel-hero"><b>牌桌礼物</b><span>礼物体系增加社交氛围和付费承载点，当前先做产品入口和礼物目录。</span></div>
         <div class="panel-list">
@@ -1449,6 +1463,8 @@
       if (ml) { const r = Store.claimMail(ml.dataset.claimMail); if (r) { Sfx.reward(); toast(`邮件附件 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('mail'); } return; }
       if (dg) { const r = Store.claimDailyGift(); if (r) { Sfx.reward(); toast(`今日礼包 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('mysteryShop'); } return; }
       if (cv && !cv.disabled) { const r = Store.crackVault(); if (r) { Sfx.reward(); toast(`敲碎金库 🪙+${fmtChips(r.coins)}`); syncWallet(true); openPanel('goldenPig'); } return; }
+      const ev = e.target.closest('[data-claim-event]');
+      if (ev) { const r = Store.claimEvent(ev.dataset.claimEvent); if (r) { Sfx.reward(); toast(`活动奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('events'); } return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
       else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }

@@ -37,6 +37,9 @@ PANELS.forEach((k) => {
 });
 
 // 2) 关键经济/成长流
+ok(Array.isArray(S.getEvents()) && S.getEvents().length >= 4, 'events list');
+ok(S.claimEvent('firstwin') === null, 'event not claimable before condition');
+ok(typeof window.Fx.topBanner === 'function', 'Fx.topBanner');
 ok(S.canDailyGift() && S.claimDailyGift().coins > 0, 'daily gift claim');
 S.addVault(2000000); ok(S.crackVault().coins > 0, 'vault crack');
 ok(S.claimMail('welcome').coins > 0, 'mail claim');

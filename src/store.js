@@ -32,6 +32,8 @@
     allinTotal: 0,       // 全下总次数
     dailyDate: null,     // 每日任务日期
     dHands: 0, dWins: 0, dAllin: 0,  // 今日进度
+    dMaxStreak: 0, dBestHand: 0,     // 今日最高连胜 / 今日最佳牌型
+    eventClaimed: [],    // 今日已领活动
     taskClaimed: [],     // 今日已领任务
     achvClaimed: [],     // 已领成就
     handLog: [],         // 牌局复盘记录(最近 N 手)
@@ -208,12 +210,14 @@
     if (profile.dailyDate !== todayStr()) {
       profile.dailyDate = todayStr();
       profile.dHands = 0; profile.dWins = 0; profile.dAllin = 0; profile.taskClaimed = [];
+      profile.dMaxStreak = 0; profile.dBestHand = 0; profile.eventClaimed = [];
     }
   }
   function recordHand(won, pot, handCat) {
     dailyReset();
     profile.handsPlayed++; profile.dHands++;
-    if (won) { profile.handsWon++; profile.dWins++; profile.winStreak = (profile.winStreak || 0) + 1; if (profile.winStreak > (profile.bestStreak || 0)) profile.bestStreak = profile.winStreak; }
+    if ((handCat || 0) > (profile.dBestHand || 0)) profile.dBestHand = handCat || 0;
+    if (won) { profile.handsWon++; profile.dWins++; profile.winStreak = (profile.winStreak || 0) + 1; if (profile.winStreak > (profile.bestStreak || 0)) profile.bestStreak = profile.winStreak; if (profile.winStreak > (profile.dMaxStreak || 0)) profile.dMaxStreak = profile.winStreak; }
     else profile.winStreak = 0;
     if (pot > profile.biggestPot) profile.biggestPot = pot;
     if ((handCat || 0) > (profile.bestHand || 0)) profile.bestHand = handCat || 0;
@@ -259,7 +263,8 @@
     return { coins: a.coins, diamonds: a.diamonds };
   }
   function hasClaimable() {
-    return getTasks().some((t) => t.done && !t.claimed) || getAchievements().some((a) => a.unlocked && !a.claimed) || getSeason().claimable;
+    return getTasks().some((t) => t.done && !t.claimed) || getAchievements().some((a) => a.unlocked && !a.claimed) || getSeason().claimable
+      || getEvents().some((e) => e.done && !e.claimed) || canDailyGift() || mailUnreadCount() > 0;
   }
   const HANDNAMES = ['高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺'];
   function getStats() {
@@ -337,6 +342,26 @@
       if (!(profile.seasonClaimed || []).includes(l)) { const r = claimSeason(l); if (r) { coins += r.coins; diamonds += r.diamonds; n++; } }
     }
     return n ? { coins, diamonds, n } : null;
+  }
+
+  // ---- 限时活动（每日，条件达成可领，免费）----
+  function getEvents() {
+    dailyReset();
+    const claimed = profile.eventClaimed || [];
+    const defs = [
+      { id: 'firstwin', name: '今日首胜', desc: '今日获胜 1 手', cur: () => profile.dWins || 0, goal: 1, coins: 50000, diamonds: 5 },
+      { id: 'streak3', name: '三连胜挑战', desc: '今日达成 3 连胜', cur: () => profile.dMaxStreak || 0, goal: 3, coins: 60000, diamonds: 8 },
+      { id: 'bighand', name: '同花及以上', desc: '今日打出同花或更大牌型', cur: () => profile.dBestHand || 0, goal: 5, coins: 80000, diamonds: 10 },
+      { id: 'grind', name: '勤练 20 手', desc: '今日完成 20 手对局', cur: () => profile.dHands || 0, goal: 20, coins: 60000, diamonds: 6 },
+    ];
+    return defs.map((e) => { const c = e.cur(); return { id: e.id, name: e.name, desc: e.desc, cur: c, goal: e.goal, done: c >= e.goal, claimed: claimed.includes(e.id), coins: e.coins, diamonds: e.diamonds }; });
+  }
+  function claimEvent(id) {
+    const e = getEvents().find((x) => x.id === id);
+    if (!e || !e.done || e.claimed) return null;
+    profile.coins += e.coins; profile.diamonds += e.diamonds;
+    profile.eventClaimed = profile.eventClaimed || []; profile.eventClaimed.push(id); save();
+    return { coins: e.coins, diamonds: e.diamonds };
   }
 
   // ---- 每日礼包（免费，每日一次）----
@@ -443,7 +468,7 @@
     nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach,
     addSeasonXp, getSeason, claimSeason, claimSeasonAll, rankInfo, recordRank,
     canDailyGift, claimDailyGift, addVault, getVault, crackVault,
-    getMail, claimMail, mailUnreadCount,
+    getMail, claimMail, mailUnreadCount, getEvents, claimEvent,
     CHECKIN,
   };
 })();

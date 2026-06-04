@@ -174,5 +174,14 @@
     return L;
   }
 
-  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake, speechBubble, flyGift, streakFlame };
+  // 顶级全场通告：横幅从右向左滑过牌桌顶部（程序化）
+  function topBanner(layer, text) {
+    if (!layer || !text) return;
+    const b = document.createElement('div');
+    b.className = 'top-banner'; b.innerHTML = `<span>📣 ${text}</span>`;
+    layer.appendChild(b);
+    setTimeout(() => b.remove(), 4200);
+  }
+
+  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake, speechBubble, flyGift, streakFlame, topBanner };
 })();
