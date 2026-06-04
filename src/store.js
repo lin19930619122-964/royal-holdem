@@ -36,6 +36,7 @@
     achvClaimed: [],     // 已领成就
     handLog: [],         // 牌局复盘记录(最近 N 手)
     handSeq: 0,          // 累计手数编号(牌局编号)
+    coachMode: true,     // 训练模式:实时显示胜率/赔率/建议(关=考试模式)
   };
   const HANDLOG_CAP = 30;
 
@@ -260,6 +261,7 @@
   }
   function getHandLog() { return profile.handLog || []; }
   function clearHandLog() { profile.handLog = []; save(); }
+  function toggleCoach() { profile.coachMode = !profile.coachMode; save(); return profile.coachMode; }
 
   // 经验/等级：升级所需经验随等级递增
   function xpForLevel(lvl) { return 100 + lvl * 100; }
@@ -306,7 +308,7 @@
     setMuted, recordHand, recordAllin, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
     getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
-    nextHandNo, addHandRecord, getHandLog, clearHandLog,
+    nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach,
     CHECKIN,
   };
 })();

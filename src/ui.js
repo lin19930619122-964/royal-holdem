@@ -13,6 +13,16 @@
   let tableConfig = null;     // 当前牌桌规则
   let seatAvatars = [];       // 每个座位用的头像编号(1..12)
   let seatVoice = [];         // 每个座位的方言: 'db'(东北)/'cd'(成都)
+  let seatProfiles = [];      // AI 对手画像(本桌):风格 + 本局观察统计
+  // AI 风格 → 原创中文画像
+  const STYLE_INFO = {
+    nit:     { label: '岩石', tag: '紧弱', color: '#8fb6ff', desc: '极紧，只玩强牌，怕被诈唬。对策：多偷盲、单挑施压。' },
+    tag:     { label: '紧凶', tag: 'TAG', color: '#5fd38a', desc: '紧且有侵略性，价值清晰。对策：尊重其加注，别轻易跟丢。' },
+    lag:     { label: '松凶', tag: 'LAG', color: '#ffb454', desc: '范围宽、爱施压，诈唬多。对策：用强牌抓诈，慎打边缘牌。' },
+    station: { label: '跟注站', tag: '松弱', color: '#ff8db0', desc: '什么都跟，很少弃。对策：只打价值，别对它诈唬。' },
+    maniac:  { label: '疯子', tag: '超凶', color: '#ff6b6b', desc: '疯狂加注全下，方差极大。对策：耐心等强牌收割。' },
+    shark:   { label: '鲨鱼', tag: '高手', color: '#c9a6ff', desc: '紧凶+高纪律+读你弱点，难被抓。对策：减少漏洞、保持平衡。' },
+  };
   const AVATAR_COUNT = 24;
   const ACT2VOICE = { 弃牌: 'fold', 过牌: 'check', 跟注: 'call', 加注: 'raise', 下注: 'raise', 全下: 'allin' };
   function maybeVoice(p) {
@@ -93,6 +103,26 @@
   }
 
   // 听牌/改善张数(outs)：枚举剩余牌，能提升牌型类别的张数
+  // 翻牌前起手牌分类（原创简化范围，用于训练范围意识）
+  function preflopClass(hole) {
+    if (!hole || hole.length < 2) return '翻牌前';
+    const a = Math.max(hole[0].rank, hole[1].rank), b = Math.min(hole[0].rank, hole[1].rank);
+    const suited = hole[0].suit === hole[1].suit, pair = a === b, gap = a - b;
+    const L = (r) => P.RANK_LABEL[r];
+    const note = pair ? `${L(a)}${L(a)}` : `${L(a)}${L(b)}${suited ? 's' : 'o'}`;
+    let cls;
+    if (pair && a >= 12) cls = '顶级强牌';          // QQ+
+    else if (a === 14 && b === 13) cls = '顶级强牌'; // AK
+    else if (pair && a >= 9) cls = '强开牌';         // 99-JJ
+    else if (a === 14 && b >= 11) cls = '强开牌';    // AQ/AJ
+    else if (pair) cls = '可玩对子';
+    else if (suited && a >= 13 && b >= 10) cls = '强开牌';
+    else if (a >= 12 && b >= 10) cls = '边缘可玩';   // 大牌
+    else if (suited && gap <= 2 && b >= 5) cls = '投机同花连张';
+    else if (a === 14) cls = '边缘可玩';             // Ax
+    else cls = '偏弱牌';
+    return `${cls} (${note})`;
+  }
   function computeOuts(hole, board) {
     if (board.length < 3 || board.length >= 5) return null;
     const cur = P.evaluateBest(hole.concat(board)).score;
@@ -285,7 +315,7 @@
 
     // 实时"你的牌型"(翻牌后，帮助练牌)
     const hh = $('hand-hint'), me = game.players[0];
-    if (me && me.hole.length === 2 && !me.folded && !me.out && handAnalysis && game.phase !== 'idle' && game.phase !== 'gameover') {
+    if (Store.get().coachMode && me && me.hole.length === 2 && !me.folded && !me.out && handAnalysis && game.phase !== 'idle' && game.phase !== 'gameover') {
       const a = handAnalysis;
       const draw = (a.outs && a.outs > 0) ? `听牌 ${a.outs} outs · ` : '';
       const odds = a.po != null ? `底池赔率 ${a.po}% · ` : '';
@@ -345,6 +375,18 @@
     Fx.flyGift(seatEls[0], seatEls[target.id], fxLayer, gf.icon);
     try { Sfx.gift(gf.sfx); } catch (_) {}
     setTimeout(() => { if (seatEls[target.id]) Fx.speechBubble(seatEls[target.id], Social.pickChatter('win') || '多谢'); }, 1000);
+  }
+  // 记录 AI 本局行动统计（用于对手画像）
+  function recordSeatAct(p) {
+    const pr = seatProfiles[p.id];
+    if (!pr) return;
+    pr.acts++;
+    switch (p.lastAction) {
+      case '加注': case '下注': pr.raises++; pr.entered++; break;
+      case '跟注': pr.calls++; pr.entered++; break;
+      case '弃牌': pr.folds++; break;
+      case '全下': pr.allins++; pr.entered++; break;
+    }
   }
   // AI 行动时偶尔闲聊（冒泡），与语音错峰
   function maybeChatter(p) {
@@ -489,6 +531,7 @@
       scheduled = setTimeout(() => {
         const d = AI.decide(p, game.aiContext());
         game.act(d.action, d.amount);
+        recordSeatAct(p);
         actSound(p);
         maybeVoice(p);
         maybeChatter(p);
@@ -534,7 +577,7 @@
       const ef = AI.equityFull(meP.hole, game.board, Math.min(opp, 6), 2500);
       const eq = ef.win + ef.tie / 2;
       const winPct = Math.round(ef.win * 100), tiePct = Math.round(ef.tie * 100), losePct = Math.round(ef.lose * 100);
-      const name = game.board.length >= 3 ? P.handName(P.evaluateBest(meP.hole.concat(game.board)).score) : '翻牌前';
+      const name = game.board.length >= 3 ? P.handName(P.evaluateBest(meP.hole.concat(game.board)).score) : preflopClass(meP.hole);
       const outs = computeOuts(meP.hole, game.board);
       const toCall = Math.max(0, game.currentBet - meP.bet), pot = game.pot;
       let rec, po = null;
@@ -717,6 +760,36 @@
     return html;
   }
 
+  // 盈利曲线：把牌谱净收益按时间累计，画成 Canvas 折线（程序化，无大资源）
+  function drawProfitCurve() {
+    const cv = $('profit-curve'); if (!cv || !cv.getContext) return;
+    const log = Store.getHandLog(); if (log.length < 2) return;
+    const series = log.slice().reverse(); // 旧→新
+    let cum = 0; const pts = series.map((h) => (cum += (h.net || 0)));
+    const w = cv.width, hgt = cv.height, pad = 6;
+    const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, w, hgt);
+    const min = Math.min(0, ...pts), max = Math.max(0, ...pts), range = (max - min) || 1;
+    const X = (i) => pad + i * (w - pad * 2) / (pts.length - 1);
+    const Y = (v) => hgt - pad - (v - min) / range * (hgt - pad * 2);
+    // 零线
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, Y(0)); ctx.lineTo(w - pad, Y(0)); ctx.stroke();
+    // 填充
+    const grad = ctx.createLinearGradient(0, 0, 0, hgt);
+    grad.addColorStop(0, 'rgba(95,211,138,.35)'); grad.addColorStop(1, 'rgba(95,211,138,0)');
+    ctx.beginPath(); ctx.moveTo(X(0), Y(pts[0]));
+    pts.forEach((v, i) => ctx.lineTo(X(i), Y(v)));
+    ctx.lineTo(X(pts.length - 1), Y(0)); ctx.lineTo(X(0), Y(0)); ctx.closePath();
+    ctx.fillStyle = grad; ctx.fill();
+    // 折线
+    ctx.beginPath(); ctx.moveTo(X(0), Y(pts[0]));
+    pts.forEach((v, i) => ctx.lineTo(X(i), Y(v)));
+    ctx.strokeStyle = pts[pts.length - 1] >= 0 ? '#5fd38a' : '#ff7a7a'; ctx.lineWidth = 2; ctx.stroke();
+    // 末点
+    const lx = X(pts.length - 1), ly = Y(pts[pts.length - 1]);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+  }
+
   function openPanel(kind) {
     const p = Store.get();
     const hands = p.handsPlayed || 0, wins = p.handsWon || 0;
@@ -811,13 +884,28 @@
           ${panelRow('👑', '加冕', '为赢家播放皇冠登场动画。', '99钻')}
         </div>`;
     } else if (kind === 'coach') {
-      html = `<div class="panel-hero"><b>训练营</b><span>把现有胜率提示包装成训练体系，帮助玩家从新手向高手成长。</span></div>
+      const coachOn = Store.get().coachMode;
+      html = `<div class="panel-hero"><b>训练营</b><span>训练模式实时显示胜率/赔率/建议与起手牌范围；考试模式隐藏提示，检验你的真实水平。</span></div>
         <div class="panel-list">
-          ${panelRow('📚', '起手牌训练', '按位置学习强牌、边缘牌、弃牌范围。', '课程')}
-          ${panelRow('🧮', '底池赔率', '牌桌中已显示胜率和赔率建议，可继续扩展成练习题。', '已接入')}
-          ${panelRow('🎭', '诈唬识别', '结合对手模型记录你的弃牌率和激进度。', '进阶')}
-          ${panelRow('🦈', '鲨鱼模式', '高手场和大师场已启用更强 AI 策略。', '可玩')}
-        </div>`;
+          <div class="panel-row"><div class="pr-ic">${coachOn ? '🎓' : '📝'}</div>
+            <div><b>${coachOn ? '训练模式（提示开启）' : '考试模式（提示隐藏）'}</b>
+            <div class="pr-text">${coachOn ? '牌桌实时显示胜率、底池赔率、起手牌范围与行动建议。' : '不显示任何提示，复盘时再看对错分析。'}</div></div>
+            <button class="pr-claim" data-toggle="coach">${coachOn ? '切到考试' : '切到训练'}</button></div>`;
+      // 当前牌桌的对手画像
+      if (currentScreen === 'table' && game && seatProfiles.length) {
+        html += `<div class="panel-title-sm">本桌对手画像</div>`;
+        game.players.forEach((pl) => {
+          const pr = seatProfiles[pl.id]; if (!pr || pl.out) return;
+          const si = STYLE_INFO[pr.style] || STYLE_INFO.tag;
+          const aggr = pr.acts ? Math.round((pr.raises + pr.allins) / pr.acts * 100) : 0;
+          html += `<div class="panel-row"><div class="pr-ic"><img class="prof-av" src="assets/av/${seatAvatars[pl.id] || 1}.png" onerror="this.style.display='none'"/></div>
+            <div><b>${pl.name} <span class="style-tag" style="background:${si.color}">${si.label}·${si.tag}</span></b>
+            <div class="pr-text">${si.desc}<br>本局观察：行动 ${pr.acts} · 激进度 ${aggr}% · 入池 ${pr.entered} · 弃牌 ${pr.folds}</div></div>
+            <em>🪙${fmtChips(pl.chips)}</em></div>`;
+        });
+      } else {
+        html += `<div class="panel-list">${panelRow('🦈', '对手画像', '进入牌桌后，这里实时显示每个对手的风格标签与本局打法统计。', '进桌可见')}</div>`;
+      }
     } else if (kind === 'activityMap') {
       html = `<div class="panel-hero"><b>成熟运营骨架</b><span>按商业 App 的结构拆成成长、活动、社交、牌桌互动和安全五条线，先用轻量面板承载，后续可逐个接服务端。</span></div>
         <div class="panel-list">
@@ -919,6 +1007,7 @@
           <div class="metric"><b>${acc}%</b><span>决策正确率</span></div>
           <div class="metric"><b class="${netCls}">${netSum >= 0 ? '+' : ''}${fmtChips(netSum)}</b><span>近${log.length}手净收益</span></div>
         </div>
+        ${log.length >= 2 ? `<div class="curve-wrap"><div class="curve-title">盈利曲线（近 ${log.length} 手累计净收益）</div><canvas id="profit-curve" width="300" height="110"></canvas></div>` : ''}
         <div class="panel-list">
           <div class="panel-row rc-row" data-open-history="1"><div class="pr-ic">🔍</div><div><b>牌局复盘</b><div class="pr-text">逐手回看公共牌、你的决策与对手摊牌，附胜率/赔率对错判定。</div></div><em>${log.length} 手</em></div>
           ${panelRow('📊', '牌风画像', `样本 ${window.OppModel.acts || 0} 次，激进度 ${Math.round((window.OppModel.exploit().aggr || 0) * 100)}%。`, '模型')}
@@ -933,12 +1022,13 @@
         ${panelRow('⚖️', '公平申诉', '可对异常牌局提交牌局编号和回放。', '规划')}
       </div>`;
     } else if (kind === 'settings') {
-      html = `<div class="panel-hero"><b>系统设置</b><span>成熟 App 需要把音效、隐私、网络和资源管理集中到设置中心。</span></div>
+      const muted = Store.get().muted, coachOn = Store.get().coachMode;
+      html = `<div class="panel-hero"><b>系统设置</b><span>成熟 App 需要把音效、训练、隐私、网络集中到设置中心。</span></div>
         <div class="panel-list">
-          ${panelRow('🔊', '声音设置', `当前音效：${Store.get().muted ? '关闭' : '开启'}。`, '可切换')}
-          ${panelRow('🌐', '联机服务器', '真人对战默认连接 m5.tail5255b4.ts.net。', '当前')}
-          ${panelRow('🧹', '缓存管理', '图片与音频为内置资源，后续可加资源包更新。', '资源')}
-          ${panelRow('🔒', '隐私说明', '当前试玩版不接相机、定位、IDFA；商业版接入前需补说明。', '合规')}
+          <div class="panel-row"><div class="pr-ic">${muted ? '🔇' : '🔊'}</div><div><b>声音</b><div class="pr-text">音效与语音 ${muted ? '已关闭' : '已开启'}。</div></div><button class="pr-claim" data-toggle="sound">${muted ? '开启' : '关闭'}</button></div>
+          <div class="panel-row"><div class="pr-ic">${coachOn ? '🎓' : '📝'}</div><div><b>训练提示</b><div class="pr-text">${coachOn ? '牌桌实时显示胜率/赔率/建议。' : '考试模式：隐藏所有提示。'}</div></div><button class="pr-claim" data-toggle="coach">${coachOn ? '关闭' : '开启'}</button></div>
+          ${panelRow('🌐', '联机服务器', '真人对战默认连接本地 Tailscale 节点。', '当前')}
+          ${panelRow('🔒', '隐私说明', '本地训练版不接相机、定位、IDFA、麦克风，不采集上报。', '合规')}
         </div>`;
     } else if (kind === 'tableChat') {
       const inTable = currentScreen === 'table' && game;
@@ -1002,6 +1092,7 @@
     }
     $('panel-body').innerHTML = html;
     openModal('modal-panel');
+    if (kind === 'analytics') drawProfitCurve();
   }
 
   function renderCheckin() {
@@ -1197,6 +1288,10 @@
     // 按难度配置 AI：高手/大师=鲨鱼，更准的模拟
     game.players.forEach((pl) => { if (!pl.isHuman) pl.ai = AI.makePersona(cfg.level); });
     AI.setSims(cfg.level === 'master' ? 260 : cfg.level === 'hard' ? 220 : 170);
+    // 对手画像：记录每个 AI 的风格 + 本局观察统计(入池/加注/弃牌/全下)
+    seatProfiles = game.players.map((pl) => pl.isHuman ? null : {
+      style: (pl.ai && pl.ai.style) || 'tag', acts: 0, raises: 0, calls: 0, folds: 0, allins: 0, entered: 0, hands: 0,
+    });
     // 头像分配：你用所选头像，机器人用不重复的随机头像
     const me = Store.get().activeAvatar || 1;
     const pool = []; for (let k = 1; k <= AVATAR_COUNT; k++) if (k !== me) pool.push(k);
@@ -1271,9 +1366,16 @@
       else if (back) { $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (oh) { openPanel('tableHistory'); }
       else if (row) { $('panel-body').innerHTML = renderHandDetail(parseInt(row.dataset.hand, 10)); try { Sfx.button(); } catch (_) {} }
-      else { const say = e.target.closest('[data-say]'), gift = e.target.closest('[data-gift]');
+      else { const say = e.target.closest('[data-say]'), gift = e.target.closest('[data-gift]'), tg = e.target.closest('[data-toggle]');
         if (say && !say.disabled) { closeModal(); sayPhrase(say.dataset.say); }
         else if (gift && !gift.disabled) { sendGift(gift.dataset.gift); }
+        else if (tg) {
+          const which = tg.dataset.toggle, src = $('panel-title').textContent === '训练营' ? 'coach' : 'settings';
+          if (which === 'coach') { const on = Store.toggleCoach(); toast(on ? '已切到训练模式' : '已切到考试模式'); if (game) render(); }
+          else if (which === 'sound') { const m = !Store.get().muted; Store.get().muted = m; Store.save(); Sfx.setMuted(m); if (window.Voice) Voice.setMuted(m); $('sound-icon') && ($('sound-icon').textContent = m ? '🔇' : '🔊'); }
+          try { Sfx.button(); } catch (_) {}
+          openPanel(src);
+        }
       }
     });
     $('home-task-checkin').addEventListener('click', () => openModal('modal-checkin'));
