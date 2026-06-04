@@ -49,6 +49,7 @@
     vaultCracked: 0,     // 金库累计敲碎次数
     mailClaimed: [],     // 已领邮件 id
     tutorialDone: false, // 新手教程是否已看
+    handTypeCounts: [0, 0, 0, 0, 0, 0, 0, 0, 0], // 各牌型摊牌达成次数(高牌→同花顺)
   };
   const VAULT_MIN = 20000; // 金库最低可敲碎额
   const SEASON_LEN = 30;          // 赛季 30 级
@@ -285,6 +286,19 @@
   function clearHandLog() { profile.handLog = []; save(); }
   function toggleCoach() { profile.coachMode = !profile.coachMode; save(); return profile.coachMode; }
 
+  // 牌型图鉴：摊牌时记录你达成的牌型类别(0..8)
+  function recordHandType(cat) {
+    if (cat == null || cat < 0 || cat > 8) return;
+    if (!profile.handTypeCounts || profile.handTypeCounts.length !== 9) profile.handTypeCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    profile.handTypeCounts[cat]++; save();
+  }
+  function getHandDex() {
+    const names = ['高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺'];
+    const icons = ['🃏', '🂱', '🂲', '🂳', '🂴', '🂵', '🂶', '🂷', '👑'];
+    const c = profile.handTypeCounts || [];
+    return names.map((nm, i) => ({ cat: i, name: nm, icon: icons[i], count: c[i] || 0, unlocked: (c[i] || 0) > 0 }));
+  }
+
   // ---- 皇家赛季（免费 battle pass，按月）----
   function seasonIdNow() { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}`; }
   function seasonXpForLevel(l) { return 200 + l * 60; }
@@ -466,7 +480,7 @@
     setMuted, recordHand, recordAllin, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
     getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
-    nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach,
+    nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach, recordHandType, getHandDex,
     addSeasonXp, getSeason, claimSeason, claimSeasonAll, rankInfo, recordRank,
     canDailyGift, claimDailyGift, addVault, getVault, crackVault,
     getMail, claimMail, mailUnreadCount, getEvents, claimEvent,

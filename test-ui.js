@@ -64,6 +64,10 @@ ok(typeof window.PokerAI.equityVsRange === 'function', 'AI.equityVsRange exists'
 ['speechBubble', 'flyGift', 'streakFlame'].forEach((fn) => ok(typeof window.Fx[fn] === 'function', 'Fx.' + fn));
 ok(Object.keys(window.Skins.backs).length > 30, 'backs themes');
 ok(window.document.getElementById('splash'), 'splash created');
+// P1: 牌型图鉴数据层 + 面板
+ok(typeof S.recordHandType === 'function' && typeof S.getHandDex === 'function', 'handDex API');
+S.recordHandType(8); S.recordHandType(8); ok(S.getHandDex()[8].count === 2 && S.getHandDex()[8].unlocked, 'recordHandType counts');
+window.SceneRouter.go('handDex'); ok(/牌型图鉴/.test(body.innerHTML) && /已解锁牌型/.test(body.innerHTML), 'handDex panel renders');
 // SceneRouter：统一路由
 ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
 ['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));

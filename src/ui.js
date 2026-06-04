@@ -332,13 +332,15 @@
       const a = handAnalysis;
       const draw = (a.outs && a.outs > 0) ? `听牌 ${a.outs} outs · ` : '';
       const odds = a.po != null ? `底池赔率 ${a.po}% · ` : '';
+      const posTag = a.pos ? `<span class="pos-tag">${a.pos.label}</span> ` : '';
+      const posAdvice = (a.pos && game.board.length === 0) ? `<div class="hh3">📍 ${a.pos.advice}</div>` : '';
       const range = a.rangeEq != null
         ? `<div class="hh3">⚔ ${a.aggrName}${a.aggrStyle ? '(' + a.aggrStyle + ')' : ''} 范围≈前 ${a.rangePct}% · 对其范围胜率 <b>${a.rangeEq}%</b></div>`
         : '';
       hh.innerHTML =
-        `<div class="hh1">你的牌型 · ${a.name} · 胜率 <b>${a.winPct}%</b></div>` +
+        `<div class="hh1">${posTag}${a.name} · 胜率 <b>${a.winPct}%</b></div>` +
         `<div class="hh2">赢${a.winPct} 平${a.tiePct} 输${a.losePct}% · ${draw}${odds}${a.opp}人 · <em>${a.rec}</em></div>` +
-        range;
+        posAdvice + range;
       hh.classList.remove('hidden');
     } else hh.classList.add('hidden');
 
@@ -366,6 +368,21 @@
   }
   // 顶部座位的气泡朝下，避免顶出牌桌
   function seatIsTop(id) { return !!(SEAT_POS && SEAT_POS[id] && SEAT_POS[id].y < 38); }
+  // 你的位置（按钮/盲位/前中后位）+ 位置化建议
+  function positionInfo() {
+    if (!game || game.button == null || game.button < 0) return null;
+    const N = game.N, rel = (((0 - game.button) % N) + N) % N; // 0=按钮，1=小盲，2=大盲…
+    if (N === 2) return rel === 0 ? { label: '按钮/小盲 BTN', advice: '单挑按钮：范围很宽，主动加注' } : { label: '大盲 BB', advice: '单挑大盲：防守要宽，别轻易弃' };
+    if (rel === 0) return { label: '按钮 BTN', advice: '位置最好：放宽开牌、多偷盲、多浮动' };
+    if (rel === 1) return { label: '小盲 SB', advice: '位置差：盲位防守，避免亏损跟注' };
+    if (rel === 2) return { label: '大盲 BB', advice: '位置差：有赔率可防守，但别过度' };
+    if (rel === N - 1) return { label: '关煞 CO', advice: '后位：开牌放宽，关注按钮动作' };
+    const early = rel <= 2 + Math.floor((N - 3) / 3);
+    const mid = rel <= 2 + Math.floor((N - 3) * 2 / 3);
+    if (early) return { label: '前位 UTG', advice: '前位：范围最紧，只开强牌' };
+    if (mid) return { label: '中位 MP', advice: '中位：适度收紧' };
+    return { label: '后位 HJ', advice: '偏后位：可适度放宽' };
+  }
   // 估计进攻者范围（前百分之多少的起手牌）：按街道+加注尺度+风格
   function estimateRangePct(aggr) {
     const street = game.board.length;
@@ -531,8 +548,10 @@
         const meP = game.players[0];
         Store.get().coins = Math.max(0, meP.chips);
         Store.save();
-        const hc = (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) ? game.result.handScores[0][0] : 0;
+        const sawShowdown = !!(game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]);
+        const hc = sawShowdown ? game.result.handScores[0][0] : 0;
         Store.recordHand(meP.winThisHand > 0, game.pot, hc);
+        if (sawShowdown) Store.recordHandType(hc);  // 牌型图鉴：仅摊牌亮牌时计入
         // 经验：打一手 +12，赢了 +30，摊牌成大牌额外加成
         let xp = 12 + (meP.winThisHand > 0 ? 30 : 0);
         if (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) xp += game.result.handScores[0][0] * 6;
@@ -659,7 +678,8 @@
           aggrStyle = si ? si.label : '';
         }
       }
-      handAnalysis = { winPct, tiePct, losePct, name, outs, po, rec, opp, rangeEq, rangePct, aggrName, aggrStyle };
+      const pos = positionInfo();
+      handAnalysis = { winPct, tiePct, losePct, name, outs, po, rec, opp, rangeEq, rangePct, aggrName, aggrStyle, pos };
       humanWinPct = winPct;
       render();
     }
@@ -674,8 +694,34 @@
     const raiseBtn = $('btn-raise');
     if (o.canRaise) { raiseBtn.classList.remove('hidden'); raiseBtn.textContent = o.isBet ? '下注' : '加注'; }
     else raiseBtn.classList.add('hidden');
+    startTurnTimer(o);   // 回合倒计时（#1）
   }
-  function hideHumanControls() { $('action-area').classList.add('hidden'); }
+  function hideHumanControls() { clearTurnTimer(); $('action-area').classList.add('hidden'); }
+
+  /* ---------- 回合倒计时 ---------- */
+  let _turnTimer = null, _turnWarn = null;
+  const TURN_SECS = 25;
+  function clearTurnTimer() {
+    if (_turnTimer) { clearTimeout(_turnTimer); _turnTimer = null; }
+    if (_turnWarn) { clearTimeout(_turnWarn); _turnWarn = null; }
+    const bar = $('turn-timer'); if (bar) bar.classList.add('hidden');
+  }
+  function startTurnTimer(o) {
+    clearTurnTimer();
+    let bar = $('turn-timer');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'turn-timer'; bar.innerHTML = '<i></i>'; const aa = $('action-area'); aa.insertBefore(bar, aa.firstChild); }
+    bar.classList.remove('hidden');
+    const fill = bar.querySelector('i');
+    fill.classList.remove('warn'); fill.style.transition = 'none'; fill.style.width = '100%'; void fill.offsetWidth;
+    fill.style.transition = `width ${TURN_SECS}s linear`; fill.style.width = '0%';
+    _turnWarn = setTimeout(() => { fill.classList.add('warn'); try { Sfx.button(); } catch (_) {} }, (TURN_SECS - 5) * 1000);
+    _turnTimer = setTimeout(() => {
+      const me = game && game.players[0];
+      if (!me || me.folded || me.out || !game.bettingOpen) return;
+      const opt = (o && typeof o.canCheck === 'boolean') ? o : game.actionOptions();
+      humanAct(opt.canCheck ? 'check' : 'fold');   // 超时：能过牌就过，否则弃牌
+    }, TURN_SECS * 1000);
+  }
 
   function enterRaiseMode() {
     raiseMode = true; Sfx.button();
@@ -700,6 +746,7 @@
   const roundToBB = (v) => Math.round(v / game.bigBlind) * game.bigBlind;
 
   function humanAct(action, amount) {
+    clearTurnTimer();
     const p = game.players[0];
     const facing = (game.currentBet - p.bet) > 0;
     // 复盘记录：在出手前抓取决策当下的胜率/底池/待跟注，并即时判定对错
@@ -910,7 +957,7 @@
     activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
     goldenPig: '金库钱罐', invite: '邀请礼', tableChat: '牌桌聊天',
     tableGift: '牌桌礼物', tableHistory: '牌局记录', jackpot: '皇家奖池',
-    voiceCenter: '语音中心', strategyLab: '策略实验室',
+    voiceCenter: '语音中心', strategyLab: '策略实验室', handDex: '牌型图鉴',
   };
   // 渲染面板正文 HTML（与弹窗/后置钩子解耦，便于单测与后续逐面板拆分）
   function renderPanelHTML(kind, p, hands, wins, rate) {
@@ -1054,6 +1101,20 @@
         <div class="panel-title-sm">对手风格图鉴</div>
         <div class="panel-list">` +
         Object.values(STYLE_INFO).map((si) => `<div class="panel-row"><div class="pr-ic"><span class="style-tag" style="background:${si.color}">${si.label}</span></div><div><b>${si.label} · ${si.tag}</b><div class="pr-text">${si.desc}</div></div></div>`).join('') +
+        `</div>
+        <div class="panel-title-sm">牌型图鉴</div>
+        <div class="panel-row rc-row" data-scene="handDex"><div class="pr-ic">📖</div><div><b>牌型收集进度</b><div class="pr-text">查看你已在摊牌打出过哪些牌型及次数。</div></div><em>进入</em></div>`;
+    } else if (kind === 'handDex') {
+      const dex = Store.getHandDex();
+      const got = dex.filter((d) => d.unlocked).length;
+      html = `<div class="panel-hero"><b>牌型图鉴</b><span>每次摊牌亮牌即记录你达成的牌型，集齐九种牌型。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>${got}/9</b><span>已解锁牌型</span></div>
+          <div class="metric"><b>${dex.reduce((s, d) => s + d.count, 0)}</b><span>摊牌总次数</span></div>
+          <div class="metric"><b>${dex[8].count}</b><span>同花顺</span></div>
+        </div>
+        <div class="achv-wall">` +
+        dex.map((d) => `<div class="achv-cell ${d.unlocked ? 'achv-claimed' : 'achv-locked'}"><div class="achv-ic">${d.unlocked ? d.icon : '🔒'}</div><b>${d.name}</b><span>${d.unlocked ? '已达成 ' + d.count + ' 次' : '未达成'}</span></div>`).join('') +
         `</div>`;
     } else if (kind === 'activityMap') {
       html = `<div class="panel-hero"><b>成熟运营骨架</b><span>按商业 App 的结构拆成成长、活动、社交、牌桌互动和安全五条线，先用轻量面板承载，后续可逐个接服务端。</span></div>
@@ -1503,6 +1564,7 @@
     SceneRouter.register('tutorial', (pm) => { runTutorial(true, pm.lessonId); });   // TutorialScene
     SceneRouter.register('replay', (pm) => { showScreen('home'); openReplay(pm.handId); }); // ReplayScene / HandReviewOverlay
     SceneRouter.register('strategyLab', () => { showScreen('home'); openPanel('strategyLab'); }); // StrategyLabScene
+    SceneRouter.register('handDex', () => { showScreen('home'); openPanel('handDex'); });       // 牌型图鉴
   }
 
   /* ---------- 事件绑定 ---------- */
