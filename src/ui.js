@@ -403,6 +403,17 @@
       if (line) Fx.speechBubble(seatEls[p.id], line, '', seatIsTop(p.id));
     }
   }
+  // AI 思考时长：按决策难度变化（弃牌快、跟注中、加注/全下慢），更像真人
+  function aiThinkDelay(action) {
+    switch (action) {
+      case 'fold': return 380 + Math.random() * 360;
+      case 'check': return 520 + Math.random() * 420;
+      case 'call': return 680 + Math.random() * 520;
+      case 'raise': case 'bet': return 920 + Math.random() * 720;
+      case 'allin': return 1100 + Math.random() * 650;
+      default: return 650 + Math.random() * 600;
+    }
+  }
 
   function updateMessage() {
     const msg = $('message-bar');
@@ -545,9 +556,10 @@
     if (p.isHuman) enableHumanControls();
     else {
       hideHumanControls();
-      const delay = 600 + Math.random() * 850;
+      // 先算决策，再按"决策难度"决定思考时长：弃牌快、跟注中、加注/全下慢，更像真人
+      const d = AI.decide(p, game.aiContext());
+      const delay = aiThinkDelay(d.action);
       scheduled = setTimeout(() => {
-        const d = AI.decide(p, game.aiContext());
         game.act(d.action, d.amount);
         recordSeatAct(p);
         actSound(p);
