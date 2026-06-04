@@ -206,6 +206,10 @@ html, body {
 .seat .ptitle { font-size: 9px; font-weight: 800; line-height: 1; margin-bottom: 1px; white-space: nowrap; }
 /* 载具进场 */
 .vehicle-fx { position: absolute; top: 44%; left: -25%; font-size: 58px; z-index: 33; pointer-events: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.55)); animation: driveAcross 1.7s ease-out forwards; }
+.vehicle-fx::before { content: ''; position: absolute; right: 100%; top: 42%; width: 90px; height: 8px; transform: translateY(-50%);
+  background: linear-gradient(90deg, rgba(245,207,107,0), rgba(245,207,107,.85)); border-radius: 4px; filter: blur(2px); }
+.vehicle-fx::after { content: ''; position: absolute; right: 100%; top: 50%; width: 140px; height: 3px; transform: translateY(-50%);
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.6)); }
 @keyframes driveAcross { 0%{left:-25%;opacity:0;transform:scale(.7)} 14%{opacity:1} 50%{left:36%;transform:scale(1.25)} 85%{opacity:1} 100%{left:125%;opacity:0;transform:scale(1)} }
 .seat.active .avatar { box-shadow: 0 0 0 2px var(--gold), 0 0 16px var(--gold); animation: avatarPulse 1.2s ease infinite; }
 @keyframes avatarPulse { 0%,100%{ box-shadow:0 0 0 2px var(--gold), 0 0 10px rgba(245,207,107,.6);} 50%{ box-shadow:0 0 0 2px var(--gold), 0 0 22px rgba(245,207,107,1);} }
@@ -771,6 +775,16 @@ html, body {
 .achv-cell.achv-locked { opacity: .5; }
 .achv-cell.achv-unlocked { border-color: var(--gold); box-shadow: 0 0 12px rgba(245,207,107,.3); }
 .achv-cell.achv-claimed { border-color: rgba(95,211,138,.4); }
+
+/* ---------- 原创开屏舞台 ---------- */
+#splash { position: fixed; inset: 0; z-index: 9999; background: #04100a; transition: opacity .4s; overflow: hidden; }
+#splash canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#splash-logo { position: absolute; left: 0; right: 0; top: 30%; text-align: center; color: #fff;
+  font-size: 42px; font-weight: 900; letter-spacing: 4px; -webkit-text-stroke: 1px var(--gold-deep);
+  text-shadow: 0 0 26px var(--gold), 0 4px 10px #000; animation: splashLogo 2.4s ease; }
+#splash-logo span { display: block; font-size: 16px; letter-spacing: 8px; font-weight: 700; color: var(--gold-lt);
+  -webkit-text-stroke: 0; text-shadow: 0 0 12px var(--gold); margin-top: 8px; }
+@keyframes splashLogo { 0%{opacity:0; transform:translateY(14px) scale(.9)} 30%{opacity:1; transform:none} 85%{opacity:1} 100%{opacity:.95} }
 .rank-row { grid-template-columns: 30px 1fr auto; }
 .rank-row .pr-ic { font-size: 15px; font-weight: 900; color: var(--gold); }
 

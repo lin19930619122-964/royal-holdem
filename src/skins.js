@@ -49,11 +49,13 @@
     ['波点', (a, b) => `repeating-radial-gradient(circle at 50% 50%,${a} 0 4px,${b} 4px 8px)`],
     ['菱格', (a, b) => `conic-gradient(from 0deg,${a} 0 90deg,${b} 90deg 180deg,${a} 180deg 270deg,${b} 270deg)`],
     ['流光', (a, b) => `linear-gradient(135deg,${a},${b} 50%,${a})`],
+    ['交织', (a, b) => `repeating-linear-gradient(45deg,${a} 0 6px,${b} 6px 12px), repeating-linear-gradient(-45deg,${a}55 0 6px,transparent 6px 12px)`],
+    ['鳞光', (a, b) => `radial-gradient(circle at 50% 0,${b} 0 30%,${a} 31%), radial-gradient(circle at 50% 100%,${b} 0 30%,${a} 31%)`],
   ];
   let _bi = 0;
   for (const [cn, a, b] of PAL) {
     for (const [pn, fn] of PAT) {
-      if (_bi >= 32) break;
+      if (_bi >= 48) break;
       backs['g' + _bi] = { name: cn + pn, price: 5 + (_bi % 6) * 3, css: `${fn(a, b)}, ${b}` };
       _bi++;
     }
@@ -68,6 +70,8 @@
     ['琥珀棕', '#9a6a30', '#5e3e18', '#2e1e0a'], ['冰川白', '#5a7a8a', '#39505c', '#1c2a32'],
     ['绛紫红', '#8a2a5a', '#5a1838', '#2e0c1c'], ['孔雀绿', '#0e8a7a', '#085049', '#042a26'],
     ['钴蓝', '#2858c0', '#163a8a', '#0a1e4a'], ['玛瑙红', '#b0303a', '#701820', '#3a0c10'],
+    ['翡冷翠', '#1ea88c', '#0e5a4a', '#062e26'], ['夜皇', '#3a2a7a', '#201450', '#0e0a2e'],
+    ['鎏金黑', '#c8a040', '#6a5018', '#241a06'], ['绯樱', '#d4506a', '#8a2a44', '#4a1422'],
   ];
   FPAL.forEach(([nm, a, b, c], i) => { felts['gf' + i] = { name: nm, price: 8 + (i % 4) * 4, a, b, c }; });
 

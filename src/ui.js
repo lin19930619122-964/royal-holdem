@@ -1332,6 +1332,57 @@
   }
 
   /* ---------- 事件绑定 ---------- */
+  // 原创开屏舞台：深色聚光 + 漂浮扑克花色 + 星尘 + 发光标题（Canvas 程序化，无大资源）
+  function runSplash() {
+    if (!window.requestAnimationFrame || sessionStorage.getItem('rh_splash')) return;
+    try { sessionStorage.setItem('rh_splash', '1'); } catch (_) {}
+    const ov = document.createElement('div'); ov.id = 'splash';
+    const cv = document.createElement('canvas'); ov.appendChild(cv);
+    const logo = document.createElement('div'); logo.id = 'splash-logo';
+    logo.innerHTML = '皇室德州<span>训练场</span>'; ov.appendChild(logo);
+    document.body.appendChild(ov);
+    const W = ov.clientWidth || window.innerWidth, H = ov.clientHeight || window.innerHeight;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d'); if (ctx) ctx.scale(dpr, dpr);
+    const SUITS = ['♠', '♥', '♦', '♣'];
+    const floats = []; for (let i = 0; i < 18; i++) floats.push({
+      x: Math.random() * W, y: H + Math.random() * H, vy: 0.4 + Math.random() * 1.1,
+      rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.04,
+      s: 16 + Math.random() * 30, g: SUITS[i % 4], red: i % 4 === 1 || i % 4 === 2,
+    });
+    const dust = []; for (let i = 0; i < 60; i++) dust.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.6 + 0.3, p: Math.random() * Math.PI * 2 });
+    const T0 = performance.now(), DUR = 2400; let raf;
+    function frame(now) {
+      const t = now - T0, k = Math.min(1, t / DUR);
+      if (!ctx) return finish();
+      ctx.clearRect(0, 0, W, H);
+      // 背景纵深 + 聚光
+      const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#0a1f14'); bg.addColorStop(1, '#04100a');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      const sp = ctx.createRadialGradient(W / 2, H * 0.32, 10, W / 2, H * 0.32, H * 0.6);
+      sp.addColorStop(0, 'rgba(245,207,107,.22)'); sp.addColorStop(1, 'rgba(245,207,107,0)');
+      ctx.fillStyle = sp; ctx.fillRect(0, 0, W, H);
+      // 星尘
+      dust.forEach((d) => { d.p += 0.05; const a = 0.3 + Math.sin(d.p) * 0.3; ctx.globalAlpha = Math.max(0, a); ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill(); });
+      ctx.globalAlpha = 1;
+      // 漂浮花色
+      floats.forEach((f) => {
+        f.y -= f.vy; f.rot += f.vr; if (f.y < -40) { f.y = H + 30; f.x = Math.random() * W; }
+        ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot); ctx.globalAlpha = 0.5;
+        ctx.fillStyle = f.red ? '#e0564f' : '#f3efe6'; ctx.font = `${f.s}px serif`; ctx.textAlign = 'center';
+        ctx.fillText(f.g, 0, 0); ctx.restore();
+      });
+      ctx.globalAlpha = 1;
+      if (t > DUR - 500) ov.style.opacity = String(Math.max(0, (DUR - t) / 500));
+      if (t >= DUR) return finish();
+      raf = requestAnimationFrame(frame);
+    }
+    function finish() { if (raf) cancelAnimationFrame(raf); ov.remove(); }
+    ov.addEventListener('click', finish);
+    raf = requestAnimationFrame(frame);
+  }
+
   function setupEvents() {
     // 路由
     $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); renderRooms(); showScreen('select'); });
@@ -1497,6 +1548,7 @@
   syncWallet();
   syncLevel();
   showScreen('home');
+  runSplash();
 
   // 预览模式(仅用于截图调试，?preview 或 ?preview=4 指定场次)：摆静态演示局，不启动循环
   const pv = location.search.match(/preview=?(\d+)?/);
