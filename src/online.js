@@ -143,7 +143,14 @@
   }
 
   function updateControls() {
-    if (state.youSpectator) { $('host-area').classList.add('hidden'); $('action-area').classList.add('hidden'); return; }
+    const sitBtn = $('btn-sit');
+    if (state.youSpectator) {
+      $('host-area').classList.add('hidden'); $('action-area').classList.add('hidden');
+      const free = state.seats.some((s) => s.kind === 'empty');
+      sitBtn.classList.toggle('hidden', !free);
+      return;
+    }
+    sitBtn.classList.add('hidden');
     // 房主控制
     const host = state.hostSeat === mySeat && !state.running && state.seatedCount >= 1;
     $('host-area').classList.toggle('hidden', !host);
@@ -270,7 +277,7 @@
       else if (m.type === 'joined') { localStorage.setItem(TOKEN_KEY, m.token); spectating = false; chatPopulated = false; $('join-overlay').classList.add('hidden'); }
       else if (m.type === 'spectating') { spectating = true; chatPopulated = false; $('join-overlay').classList.add('hidden'); }
       else if (m.type === 'state') { state = m; if (!chatPopulated && m.chat) { renderChat(m.chat); chatPopulated = true; } render(); }
-      else if (m.type === 'chat') { appendChat(m); }
+      else if (m.type === 'chat') { appendChat(m); if (m.seat >= 0 && seatEls[m.seat] && Fx.speechBubble) Fx.speechBubble(seatEls[m.seat], m.text, m.seat === mySeat ? 'mine' : ''); try { Sfx.button(); } catch (_) {} }
       else if (m.type === 'sys') { appendChat({ sys: true, text: m.text }); }
       else if (m.type === 'emote') { flyEmote(m.seat, m.emoji); }
       else if (m.type === 'gift') { flyEmote(m.toSeat, m.gift); }
@@ -307,14 +314,20 @@
       const pick = $('report-pick');
       if (pick.style.display === 'flex') { pick.style.display = 'none'; return; }
       const opps = (state ? state.seats : []).filter((s) => s.kind === 'human' && s.seat !== mySeat);
-      pick.innerHTML = opps.length ? opps.map((s) => `<button data-rep="${s.seat}">举报 ${s.name}</button>`).join('') : '<span class="ci-sys" style="font-size:12px">暂无可举报的真人玩家</span>';
+      pick.innerHTML = opps.length
+        ? opps.map((s) => `<div style="display:flex;gap:6px;align-items:center;width:100%"><span class="ci-seat" style="flex:1">${escapeHtml(s.name)}</span>${s.code ? `<button data-friend="${s.code}">加好友</button>` : ''}<button data-rep="${s.seat}">举报</button></div>`).join('')
+        : '<span class="ci-sys" style="font-size:12px">暂无其他真人玩家</span>';
       pick.style.display = 'flex';
     });
     $('report-pick').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-rep]'); if (!b) return;
-      send({ type: 'report', seat: +b.dataset.rep, reason: '不当行为' });
+      const rep = e.target.closest('[data-rep]'), fr = e.target.closest('[data-friend]');
+      if (rep) { send({ type: 'report', seat: +rep.dataset.rep, reason: '不当行为' }); appendChat({ sys: true, text: '举报已提交' }); }
+      else if (fr) { send({ type: 'addFriend', code: fr.dataset.friend }); appendChat({ sys: true, text: '已发送加好友' }); }
+      else return;
       $('report-pick').style.display = 'none';
     });
+    // 旁观者入座（当前房间有空位时）
+    $('btn-sit').addEventListener('click', () => { if (state) { Sfx.button(); send({ type: 'join', room: state.room, name: myName, token: localStorage.getItem(TOKEN_KEY) || null }); } });
     // 好友 / 俱乐部面板
     $('btn-friends').addEventListener('click', () => { Sfx.button(); $('soc-msg').textContent = ''; $('social-overlay').classList.remove('hidden'); if (ws && ws.readyState === 1) send({ type: 'social' }); });
     $('soc-close').addEventListener('click', () => $('social-overlay').classList.add('hidden'));

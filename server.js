@@ -41,7 +41,15 @@ try {
 
   // io：mp.js 通过它把状态/事件发给房间成员
   const io = {
-    sendState(table) { for (const connId of table.members) { const m = table.seatByConn(connId); send(connId, table.buildState(m ? m.seat : -1)); } },
+    sendState(table) {
+      for (const connId of table.members) {
+        const m = table.seatByConn(connId);
+        const st = table.buildState(m ? m.seat : -1);
+        // 给真人座位附上其好友码，方便同桌互加
+        for (const s of st.seats) { if (s.kind === 'human') { const meta = table.seatMeta[s.seat]; const p = meta && pidByConn.get(meta.connId); if (p) s.code = p; } }
+        send(connId, st);
+      }
+    },
     relay(table, obj) { if (obj && obj.to != null) { send(obj.to, obj); return; } for (const connId of table.members) send(connId, obj); },
   };
   const rooms = new Rooms(io);

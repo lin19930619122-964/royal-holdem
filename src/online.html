@@ -39,7 +39,7 @@
     #social-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
     #chat-input { flex:1; min-width:90px; padding:7px 10px; border-radius:9px; border:1px solid rgba(245,207,107,.3); background:rgba(0,0,0,.35); color:#fff; font-size:13px; }
     #social-row button { border:1px solid rgba(245,207,107,.25); background:rgba(255,255,255,.05); color:#eafff1; border-radius:9px; padding:6px 9px; font-size:14px; font-weight:700; }
-    #report-pick { display:none; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    #report-pick { display:none; flex-direction:column; gap:6px; margin-top:6px; }
     #report-pick button { background:rgba(255,90,90,.15); border-color:rgba(255,120,120,.4); color:#ffb0b0; font-size:12px; }
     .emote-fly { position:absolute; z-index:38; font-size:30px; pointer-events:none; transform:translate(-50%,-50%); animation:emoteUp 1.6s ease-out forwards; }
     @keyframes emoteUp { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.2)} 100%{opacity:0;transform:translate(-50%,-160%) scale(1)} }
@@ -72,6 +72,7 @@
       <div class="left">
         <button id="btn-lobby">大厅</button>
         <button id="btn-friends">好友</button>
+        <button id="btn-sit" class="hidden">入座</button>
         <span id="seatInfo">座位 -/6</span>
         <span id="blindInfo">50/100</span>
       </div>
