@@ -58,7 +58,39 @@
   let boardCount = -1, lastDecoratedHand = -1, lastSyncedHand = -1, prevPot = -1;
   let humanWinPct = null;
   let handAnalysis = null;
+  let handDecisions = [];   // 本手牌内你的每个决策(用于复盘/错误分析)
   const prevLA = [];
+
+  // 牌局复盘：把一张牌渲染成带花色颜色的小标签
+  function cardChip(card) {
+    if (!card) return '';
+    const red = P.isRed(card);
+    return `<span class="rc-card${red ? ' red' : ''}">${P.RANK_LABEL[card.rank]}${P.SUIT_SYMBOL[card.suit]}</span>`;
+  }
+  const STREET_CN = (n) => (n === 0 ? '翻牌前' : n === 3 ? '翻牌' : n === 4 ? '转牌' : '河牌');
+  const ACTION_CN = { fold: '弃牌', check: '过牌', call: '跟注', raise: '加注' };
+  // 决策对错判定：用决策当下的胜率(权益) 对比 底池赔率，给出训练反馈
+  function verdictFor(action, winPct, toCall, pot) {
+    if (winPct == null) return { tag: '—', good: null, why: '' };
+    const eq = winPct / 100;
+    const po = toCall > 0 ? toCall / (pot + toCall) : 0;       // 需要的最低胜率
+    const poTxt = toCall > 0 ? `需≥${Math.round(po * 100)}%` : '无需跟注';
+    if (action === 'fold') {
+      if (toCall > 0 && eq > po + 0.10) return { tag: '❗偏误', good: false, why: `胜率 ${winPct}% 高于赔率门槛(${poTxt})，弃牌丢了价值` };
+      return { tag: '✓ 合理', good: true, why: `胜率 ${winPct}% 不足以跟注(${poTxt})，弃牌正确` };
+    }
+    if (action === 'call') {
+      if (toCall > 0 && eq < po - 0.04) return { tag: '❗偏误', good: false, why: `胜率 ${winPct}% 低于赔率门槛(${poTxt})，赔率不足` };
+      return { tag: '✓ 合理', good: true, why: `胜率 ${winPct}% 满足赔率门槛(${poTxt})` };
+    }
+    if (action === 'raise') {
+      if (eq > 0.6) return { tag: '✓ 价值', good: true, why: `胜率 ${winPct}%，加注要价值` };
+      if (eq < 0.33) return { tag: '⚠ 诈唬', good: null, why: `胜率 ${winPct}% 偏低，属高风险诈唬` };
+      return { tag: '◆ 进攻', good: null, why: `胜率 ${winPct}%，半诈唬/施压` };
+    }
+    if (action === 'check') return { tag: '○ 过牌', good: null, why: `胜率 ${winPct}%，免费看牌` };
+    return { tag: '—', good: null, why: '' };
+  }
 
   // 听牌/改善张数(outs)：枚举剩余牌，能提升牌型类别的张数
   function computeOuts(hole, board) {
@@ -356,6 +388,28 @@
         let xp = 12 + (meP.winThisHand > 0 ? 30 : 0);
         if (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) xp += game.result.handScores[0][0] * 6;
         const up = Store.addXp(xp);
+        // 牌局复盘记录：编号、公共牌、你的手牌、净盈亏、摊牌信息、你的决策与对错
+        try {
+          const res = game.result || {};
+          const net = (meP.winThisHand || 0) - (meP.totalContribution || 0);
+          const showdown = !!res.showdown;
+          const oppShow = showdown && res.handScores
+            ? game.players.filter((pl) => !pl.isHuman && !pl.folded && !pl.out && pl.hole && pl.hole.length === 2)
+                .map((pl) => ({ name: pl.name, hole: pl.hole.slice(), hand: (res.handNames && res.handNames[pl.id]) || '' }))
+            : [];
+          const mistakes = handDecisions.filter((d) => d.good === false).length;
+          Store.addHandRecord({
+            no: Store.nextHandNo(),
+            board: game.board.slice(),
+            hole: (meP.hole || []).slice(),
+            net, won: meP.winThisHand > 0, folded: meP.folded,
+            myHand: showdown && res.handNames ? (res.handNames[0] || '') : '',
+            summary: res.summary || '',
+            showdown, oppShow,
+            decisions: handDecisions.slice(),
+            mistakes,
+          });
+        } catch (e) {}
         syncWallet(true); syncLevel();
         if (up.leveled > 0) { setTimeout(() => { toast(`🎉 升到 ${up.level} 级！金币 +${(up.level * 10000).toLocaleString()}`); Store.addCoins(up.level * 10000); syncWallet(true); Sfx.reward(); }, 1200); }
       }
@@ -390,7 +444,7 @@
 
   function nextHand() {
     raiseMode = false;
-    humanWinPct = null; handAnalysis = null;
+    humanWinPct = null; handAnalysis = null; handDecisions = [];
     Sfx.resume();
     $('result-banner').classList.add('hidden');
     // 破产救济（免费）
@@ -474,6 +528,14 @@
   function humanAct(action, amount) {
     const p = game.players[0];
     const facing = (game.currentBet - p.bet) > 0;
+    // 复盘记录：在出手前抓取决策当下的胜率/底池/待跟注，并即时判定对错
+    const toCall = Math.max(0, game.currentBet - p.bet), potNow = game.pot;
+    const v = verdictFor(action, humanWinPct, toCall, potNow);
+    handDecisions.push({
+      street: STREET_CN(game.board.length), action: ACTION_CN[action] || action,
+      winPct: humanWinPct, toCall, pot: potNow,
+      tag: v.tag, good: v.good, why: v.why,
+    });
     window.OppModel.record(action, facing);
     game.act(action, amount);
     if (p.lastAction === '全下') Store.recordAllin();
@@ -529,6 +591,77 @@
   function panelRow(ic, title, text, tag) {
     return `<div class="panel-row"><div class="pr-ic">${ic}</div><div><b>${title}</b><div class="pr-text">${text}</div></div><em>${tag || ''}</em></div>`;
   }
+  // 复盘列表：最近若干手，含编号、净盈亏、错误数、可点击进入详情
+  function renderHandLogList() {
+    const log = Store.getHandLog();
+    const totalMistakes = log.reduce((s, h) => s + (h.mistakes || 0), 0);
+    const reviewed = log.length;
+    const acc = (() => {
+      let n = 0, g = 0;
+      log.forEach((h) => (h.decisions || []).forEach((d) => { if (d.good === true || d.good === false) { n++; if (d.good) g++; } }));
+      return n ? Math.round(g / n * 100) : 0;
+    })();
+    let html = `<div class="panel-hero"><b>牌局复盘</b><span>每手牌自动记录你的决策，并按"胜率 vs 底池赔率"判定对错。点任意一手查看逐步复盘与对手摊牌。</span></div>
+      <div class="metric-grid">
+        <div class="metric"><b>${reviewed}</b><span>已记录手数</span></div>
+        <div class="metric"><b>${acc}%</b><span>决策正确率</span></div>
+        <div class="metric"><b>${totalMistakes}</b><span>待复盘失误</span></div>
+      </div>`;
+    if (!log.length) {
+      html += `<div class="panel-list">${panelRow('🃏', '暂无记录', '打完一手牌后，这里会出现可点击复盘的牌谱。', '提示')}</div>`;
+      return html;
+    }
+    html += `<div class="panel-list">` + log.map((h, idx) => {
+      const sign = h.net > 0 ? '+' : '';
+      const cls = h.net > 0 ? 'pr-net-up' : h.net < 0 ? 'pr-net-down' : '';
+      const flag = h.mistakes > 0 ? `<span class="rc-flag">${h.mistakes}处待复盘</span>` : `<span class="rc-ok">✓</span>`;
+      const cards = (h.hole || []).map(cardChip).join('');
+      const result = h.folded ? '弃牌' : (h.won ? '获胜' : (h.showdown ? '摊牌负' : '未赢'));
+      return `<div class="panel-row rc-row" data-hand="${idx}">
+        <div class="pr-ic">#${h.no}</div>
+        <div><b>${cards} <span class="rc-sub">${result}</span></b>
+          <div class="pr-text">${flag} · ${(h.decisions || []).length} 个决策</div></div>
+        <em class="${cls}">${sign}${fmtChips(h.net)}</em></div>`;
+    }).join('') + `</div>
+      <div class="rc-actions"><button class="pr-claim" data-hand-clear="1">清空复盘记录</button></div>`;
+    return html;
+  }
+  // 单手复盘详情：公共牌、你的手牌、逐决策对错与解释、对手摊牌
+  function renderHandDetail(idx) {
+    const log = Store.getHandLog();
+    const h = log[idx];
+    if (!h) return renderHandLogList();
+    const board = (h.board || []).map(cardChip).join(' ') || '<span class="rc-sub">未到翻牌</span>';
+    const hole = (h.hole || []).map(cardChip).join(' ');
+    const sign = h.net > 0 ? '+' : '';
+    const netCls = h.net > 0 ? 'pr-net-up' : h.net < 0 ? 'pr-net-down' : '';
+    let html = `<div class="rc-back"><button class="pr-ghost" data-hand-back="1">← 返回列表</button><span>第 ${h.no} 手复盘</span></div>
+      <div class="rc-board"><div class="rc-line"><span class="rc-label">公共牌</span>${board}</div>
+        <div class="rc-line"><span class="rc-label">你的手牌</span>${hole} ${h.myHand ? `<span class="rc-sub">(${h.myHand})</span>` : ''}</div>
+        <div class="rc-line"><span class="rc-label">结果</span><b class="${netCls}">${sign}${fmtChips(h.net)}</b> <span class="rc-sub">${h.summary || ''}</span></div></div>`;
+    html += `<div class="rc-steps">`;
+    if (!(h.decisions || []).length) {
+      html += `<div class="rc-sub" style="padding:10px">本手你未行动(自动盖牌/盲注)。</div>`;
+    } else {
+      h.decisions.forEach((d, i) => {
+        const badge = d.good === true ? 'rc-good' : d.good === false ? 'rc-bad' : 'rc-neutral';
+        const wp = d.winPct != null ? `胜率 ${d.winPct}%` : '';
+        const odds = d.toCall > 0 ? ` · 跟${fmtChips(d.toCall)}/池${fmtChips(d.pot)}` : '';
+        html += `<div class="rc-step">
+          <div class="rc-step-h"><b>${i + 1}. ${d.street} · ${d.action}</b><span class="rc-tag ${badge}">${d.tag}</span></div>
+          <div class="rc-sub">${wp}${odds}</div>
+          ${d.why ? `<div class="rc-why">${d.why}</div>` : ''}</div>`;
+      });
+    }
+    html += `</div>`;
+    if (h.showdown && h.oppShow && h.oppShow.length) {
+      html += `<div class="rc-board"><div class="rc-line"><span class="rc-label">对手摊牌</span></div>` +
+        h.oppShow.map((o) => `<div class="rc-line"><span class="rc-sub" style="min-width:64px">${o.name}</span>${(o.hole || []).map(cardChip).join(' ')} <span class="rc-sub">${o.hand}</span></div>`).join('') +
+        `</div>`;
+    }
+    return html;
+  }
+
   function openPanel(kind) {
     const p = Store.get();
     const hands = p.handsPlayed || 0, wins = p.handsWon || 0;
@@ -720,16 +853,22 @@
         </div>`;
     } else if (kind === 'analytics') {
       const foldRate = window.OppModel.betsFaced ? Math.round(window.OppModel.folds / window.OppModel.betsFaced * 100) : 0;
-      html = `<div class="panel-hero"><b>数据中心</b><span>把玩家表现转成可读数据，形成高端牌手工具感。</span></div>
+      const log = Store.getHandLog();
+      let dN = 0, dG = 0, netSum = 0;
+      log.forEach((h) => { netSum += (h.net || 0); (h.decisions || []).forEach((d) => { if (d.good === true || d.good === false) { dN++; if (d.good) dG++; } }); });
+      const acc = dN ? Math.round(dG / dN * 100) : 0;
+      const netCls = netSum > 0 ? 'pr-net-up' : netSum < 0 ? 'pr-net-down' : '';
+      html = `<div class="panel-hero"><b>数据中心</b><span>把玩家表现转成可读数据，形成高端牌手工具感。点"牌局复盘"逐手回看你的决策对错。</span></div>
         <div class="metric-grid">
           <div class="metric"><b>${rate}%</b><span>胜率</span></div>
-          <div class="metric"><b>${foldRate}%</b><span>面对下注弃牌</span></div>
-          <div class="metric"><b>${fmtChips(p.biggestPot || 0)}</b><span>最大底池</span></div>
+          <div class="metric"><b>${acc}%</b><span>决策正确率</span></div>
+          <div class="metric"><b class="${netCls}">${netSum >= 0 ? '+' : ''}${fmtChips(netSum)}</b><span>近${log.length}手净收益</span></div>
         </div>
         <div class="panel-list">
+          <div class="panel-row rc-row" data-open-history="1"><div class="pr-ic">🔍</div><div><b>牌局复盘</b><div class="pr-text">逐手回看公共牌、你的决策与对手摊牌，附胜率/赔率对错判定。</div></div><em>${log.length} 手</em></div>
           ${panelRow('📊', '牌风画像', `样本 ${window.OppModel.acts || 0} 次，激进度 ${Math.round((window.OppModel.exploit().aggr || 0) * 100)}%。`, '模型')}
           ${panelRow('🧠', 'AI 读牌', '高手场会根据你的弃牌率和激进度调整策略。', '已接入')}
-          ${panelRow('📈', '盈利曲线', '后续可记录每手净收益并展示曲线。', '扩展')}
+          ${panelRow('📉', '面对下注弃牌', `你面对下注的弃牌率约 ${foldRate}%，过高会被对手频繁施压。`, '诊断')}
         </div>`;
     } else if (kind === 'support') {
       html = `<div class="panel-list">
@@ -762,13 +901,7 @@
           ${panelRow('🎬', '特效扩展', '后续用 CSS/Canvas 做轻量动画，避免体积膨胀。', '路线')}
         </div>`;
     } else if (kind === 'tableHistory') {
-      html = `<div class="panel-hero"><b>牌局记录</b><span>牌谱是安全、公平申诉和高手复盘的基础。当前展示本局概览，后续可保存每手行动线。</span></div>
-        <div class="panel-list">
-          ${panelRow('🃏', '当前手数', `本次档案累计 ${hands} 手，当前牌桌显示第 ${window.Game?.handNo || 0} 手。`, '记录')}
-          ${panelRow('💰', '最大底池', `历史最大底池 ${fmtChips(p.biggestPot || 0)}。`, '统计')}
-          ${panelRow('📜', '行动线', '可扩展记录：盲注、发牌、下注、公共牌、摊牌、分池。', '待接入')}
-          ${panelRow('⚖️', '申诉编号', '商业版每手生成唯一编号，供客服复核。', '安全')}
-        </div>`;
+      html = renderHandLogList();
     } else if (kind === 'jackpot') {
       const jackpot = 880000 + hands * 12000 + wins * 46000;
       html = `<div class="panel-hero"><b>皇家奖池</b><span>奖池入口增加高额目标感，先做展示与规则，后续可接真实计奖。</span></div>
@@ -1074,8 +1207,13 @@
     // 面板内领取(任务/成就)
     $('panel-body').addEventListener('click', (e) => {
       const tk = e.target.closest('[data-claim-task]'), ac = e.target.closest('[data-claim-achv]');
+      const row = e.target.closest('[data-hand]'), back = e.target.closest('[data-hand-back]'), clr = e.target.closest('[data-hand-clear]'), oh = e.target.closest('[data-open-history]');
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
       else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
+      else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
+      else if (back) { $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
+      else if (oh) { openPanel('tableHistory'); }
+      else if (row) { $('panel-body').innerHTML = renderHandDetail(parseInt(row.dataset.hand, 10)); try { Sfx.button(); } catch (_) {} }
     });
     $('home-task-checkin').addEventListener('click', () => openModal('modal-checkin'));
     $('home-task-wheel').addEventListener('click', () => openModal('modal-wheel'));

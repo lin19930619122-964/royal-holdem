@@ -34,7 +34,10 @@
     dHands: 0, dWins: 0, dAllin: 0,  // 今日进度
     taskClaimed: [],     // 今日已领任务
     achvClaimed: [],     // 已领成就
+    handLog: [],         // 牌局复盘记录(最近 N 手)
+    handSeq: 0,          // 累计手数编号(牌局编号)
   };
+  const HANDLOG_CAP = 30;
 
   // 7 天签到奖励（免费、慷慨）
   const CHECKIN = [
@@ -247,6 +250,17 @@
     return { hands: profile.handsPlayed, wins: profile.handsWon, winrate: wr, biggest: profile.biggestPot, level: profile.level, bestStreak: profile.bestStreak || 0, allin: profile.allinTotal || 0, bestHand: HANDNAMES[profile.bestHand || 0] };
   }
 
+  // 牌局复盘：记录每手牌(牌局编号、公共牌、手牌、决策序列与对错判定、结果)
+  function nextHandNo() { profile.handSeq = (profile.handSeq || 0) + 1; return profile.handSeq; }
+  function addHandRecord(rec) {
+    if (!profile.handLog) profile.handLog = [];
+    profile.handLog.unshift(rec);
+    if (profile.handLog.length > HANDLOG_CAP) profile.handLog.length = HANDLOG_CAP;
+    save();
+  }
+  function getHandLog() { return profile.handLog || []; }
+  function clearHandLog() { profile.handLog = []; save(); }
+
   // 经验/等级：升级所需经验随等级递增
   function xpForLevel(lvl) { return 100 + lvl * 100; }
   function addXp(n) {
@@ -292,6 +306,7 @@
     setMuted, recordHand, recordAllin, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
     getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
+    nextHandNo, addHandRecord, getHandLog, clearHandLog,
     CHECKIN,
   };
 })();

@@ -668,6 +668,34 @@ html, body {
 .pr-claim:active { transform: translateY(1px); }
 @keyframes claimPulse { 0%,100%{box-shadow:0 2px 8px rgba(245,207,107,.4)} 50%{box-shadow:0 2px 16px rgba(245,207,107,.9)} }
 .panel-row.achv-ready { border-color: var(--gold); box-shadow: 0 0 12px rgba(245,207,107,.35); }
+
+/* ---------- 牌局复盘 ---------- */
+.rc-card { display: inline-block; min-width: 26px; text-align: center; padding: 2px 5px; margin: 0 2px; border-radius: 5px; background: #fff; color: #15331f; font-weight: 900; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.rc-card.red { color: #d6312f; }
+.rc-row { cursor: pointer; transition: background .15s; }
+.rc-row:active { background: rgba(245,207,107,.12); }
+.rc-sub { color: #9fc4ae; font-size: 11px; font-weight: 600; }
+.rc-flag { color: #ffb454; font-weight: 800; font-size: 11px; }
+.rc-ok { color: #5fd38a; font-weight: 800; }
+.pr-net-up { color: #5fd38a !important; }
+.pr-net-down { color: #ff7a7a !important; }
+.rc-actions { margin-top: 12px; text-align: center; }
+.rc-back { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.rc-back span { color: var(--gold); font-weight: 800; font-size: 13px; }
+.pr-ghost { border: 1px solid rgba(245,207,107,.5); background: transparent; color: var(--gold); border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: 12px; }
+.pr-ghost:active { transform: translateY(1px); }
+.rc-board { background: rgba(0,0,0,.22); border: 1px solid rgba(245,207,107,.16); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.rc-line { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 5px 0; }
+.rc-label { display: inline-block; min-width: 56px; color: #bfe6cf; font-size: 11px; font-weight: 700; }
+.rc-steps { display: flex; flex-direction: column; gap: 8px; }
+.rc-step { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 8px 11px; }
+.rc-step-h { display: flex; justify-content: space-between; align-items: center; }
+.rc-step-h b { color: #fff; font-size: 12px; }
+.rc-tag { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.rc-good { color: #1d3b27; background: #5fd38a; }
+.rc-bad { color: #fff; background: #d6403e; }
+.rc-neutral { color: #2a2410; background: var(--gold); }
+.rc-why { color: #cfe6da; font-size: 11px; margin-top: 4px; line-height: 1.4; }
 .rank-row { grid-template-columns: 30px 1fr auto; }
 .rank-row .pr-ic { font-size: 15px; font-weight: 900; color: var(--gold); }
 
