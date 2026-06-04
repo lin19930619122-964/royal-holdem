@@ -37,7 +37,18 @@
     handLog: [],         // 牌局复盘记录(最近 N 手)
     handSeq: 0,          // 累计手数编号(牌局编号)
     coachMode: true,     // 训练模式:实时显示胜率/赔率/建议(关=考试模式)
+    seasonId: null,      // 皇家赛季(按月) id
+    seasonXp: 0,         // 赛季经验
+    seasonLevel: 1,      // 赛季等级
+    seasonClaimed: [],   // 已领赛季奖励等级
+    rankPoints: 0,       // 段位积分(赢+/输-)
   };
+  const SEASON_LEN = 30;          // 赛季 30 级
+  // 段位阶梯(原创命名)
+  const RANK_TIERS = [
+    { name: '青铜', need: 0 }, { name: '白银', need: 200 }, { name: '黄金', need: 500 },
+    { name: '铂金', need: 900 }, { name: '钻石', need: 1400 }, { name: '星耀', need: 2000 }, { name: '皇家大师', need: 2800 },
+  ];
   const HANDLOG_CAP = 30;
 
   // 7 天签到奖励（免费、慷慨）
@@ -243,7 +254,7 @@
     return { coins: a.coins, diamonds: a.diamonds };
   }
   function hasClaimable() {
-    return getTasks().some((t) => t.done && !t.claimed) || getAchievements().some((a) => a.unlocked && !a.claimed);
+    return getTasks().some((t) => t.done && !t.claimed) || getAchievements().some((a) => a.unlocked && !a.claimed) || getSeason().claimable;
   }
   const HANDNAMES = ['高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺'];
   function getStats() {
@@ -262,6 +273,84 @@
   function getHandLog() { return profile.handLog || []; }
   function clearHandLog() { profile.handLog = []; save(); }
   function toggleCoach() { profile.coachMode = !profile.coachMode; save(); return profile.coachMode; }
+
+  // ---- 皇家赛季（免费 battle pass，按月）----
+  function seasonIdNow() { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}`; }
+  function seasonXpForLevel(l) { return 200 + l * 60; }
+  function seasonReward(level) {
+    // 原创奖励表：金币随等级递增，每 5 级钻石加成，里程碑大奖
+    const coins = 12000 + level * 3000;
+    let diamonds = 0;
+    if (level % 10 === 0) diamonds = 20;
+    else if (level % 5 === 0) diamonds = 8;
+    else if (level % 2 === 0) diamonds = 2;
+    return { coins, diamonds };
+  }
+  function seasonCheck() {
+    const id = seasonIdNow();
+    if (profile.seasonId !== id) { profile.seasonId = id; profile.seasonXp = 0; profile.seasonLevel = 1; profile.seasonClaimed = []; save(); }
+  }
+  function addSeasonXp(n) {
+    seasonCheck();
+    profile.seasonXp = (profile.seasonXp || 0) + n;
+    while (profile.seasonLevel < SEASON_LEN && profile.seasonXp >= seasonXpForLevel(profile.seasonLevel)) {
+      profile.seasonXp -= seasonXpForLevel(profile.seasonLevel); profile.seasonLevel++;
+    }
+    if (profile.seasonLevel >= SEASON_LEN) profile.seasonXp = 0;
+    save();
+  }
+  function getSeason() {
+    seasonCheck();
+    const rewards = [];
+    for (let l = 1; l <= SEASON_LEN; l++) {
+      const r = seasonReward(l);
+      rewards.push({ level: l, coins: r.coins, diamonds: r.diamonds, unlocked: l <= profile.seasonLevel, claimed: (profile.seasonClaimed || []).includes(l) });
+    }
+    return {
+      id: profile.seasonId, level: profile.seasonLevel, xp: profile.seasonXp,
+      need: profile.seasonLevel >= SEASON_LEN ? 0 : seasonXpForLevel(profile.seasonLevel),
+      total: SEASON_LEN, rewards,
+      claimable: rewards.some((r) => r.unlocked && !r.claimed),
+    };
+  }
+  function claimSeason(level) {
+    seasonCheck();
+    level = +level;
+    if (level > profile.seasonLevel) return null;
+    if ((profile.seasonClaimed || []).includes(level)) return null;
+    const r = seasonReward(level);
+    profile.coins += r.coins; profile.diamonds += r.diamonds;
+    profile.seasonClaimed = profile.seasonClaimed || []; profile.seasonClaimed.push(level);
+    save();
+    return r;
+  }
+  // 一键领取所有可领等级
+  function claimSeasonAll() {
+    seasonCheck();
+    let coins = 0, diamonds = 0, n = 0;
+    for (let l = 1; l <= profile.seasonLevel; l++) {
+      if (!(profile.seasonClaimed || []).includes(l)) { const r = claimSeason(l); if (r) { coins += r.coins; diamonds += r.diamonds; n++; } }
+    }
+    return n ? { coins, diamonds, n } : null;
+  }
+
+  // ---- 段位（原创积分阶梯）----
+  function rankInfo() {
+    const pts = profile.rankPoints || 0;
+    let idx = 0;
+    for (let i = 0; i < RANK_TIERS.length; i++) if (pts >= RANK_TIERS[i].need) idx = i;
+    const cur = RANK_TIERS[idx], next = RANK_TIERS[idx + 1];
+    const progress = next ? Math.round((pts - cur.need) / (next.need - cur.need) * 100) : 100;
+    return { idx, name: cur.name, points: pts, next: next ? next.name : null, toNext: next ? next.need - pts : 0, progress };
+  }
+  // 记录段位积分，返回是否晋升
+  function recordRank(won) {
+    const before = rankInfo().idx;
+    profile.rankPoints = Math.max(0, (profile.rankPoints || 0) + (won ? 25 : -15));
+    save();
+    const after = rankInfo().idx;
+    return after > before ? rankInfo().name : null;
+  }
 
   // 经验/等级：升级所需经验随等级递增
   function xpForLevel(lvl) { return 100 + lvl * 100; }
@@ -309,6 +398,7 @@
     canSpin, doSpin, WHEEL,
     getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
     nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach,
+    addSeasonXp, getSeason, claimSeason, claimSeasonAll, rankInfo, recordRank,
     CHECKIN,
   };
 })();

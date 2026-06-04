@@ -484,6 +484,9 @@
         let xp = 12 + (meP.winThisHand > 0 ? 30 : 0);
         if (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) xp += game.result.handScores[0][0] * 6;
         const up = Store.addXp(xp);
+        Store.addSeasonXp(xp);  // 赛季经验同步累计
+        const promo = Store.recordRank(meP.winThisHand > 0);  // 段位积分，晋升则提示
+        if (promo) setTimeout(() => { toast(`🏆 段位晋升：${promo}！`); Sfx.reward(); }, 1600);
         // 牌局复盘记录：编号、公共牌、你的手牌、净盈亏、摊牌信息、你的决策与对错
         try {
           const res = game.result || {};
@@ -760,6 +763,33 @@
     return html;
   }
 
+  // 皇家赛季 battle pass：奖励表 + 领取 + 进度（season 与 passport 共用）
+  function renderSeasonTrack() {
+    const s = Store.getSeason();
+    const rankI = Store.rankInfo();
+    let html = `<div class="panel-hero"><b>皇家赛季 · ${s.id || ''}</b><span>免费赛季通行证：打牌积累赛季经验，逐级解锁金币与钻石奖励，每月初重置。</span></div>
+      <div class="metric-grid">
+        <div class="metric"><b>Lv.${s.level}/${s.total}</b><span>赛季等级</span></div>
+        <div class="metric"><b>${rankI.name}</b><span>当前段位</span></div>
+        <div class="metric"><b>${rankI.points}</b><span>段位积分</span></div>
+      </div>
+      <div class="curve-wrap"><div class="curve-title">本级进度 ${s.need ? s.xp + '/' + s.need : '已满级'}</div>
+        <div class="progress-track"><i style="width:${s.need ? pct(s.xp, s.need) : 100}%"></i></div></div>`;
+    if (s.claimable) html += `<div class="rc-actions"><button class="pr-claim" data-claim-season-all="1">一键领取全部可领</button></div>`;
+    html += `<div class="season-track">`;
+    s.rewards.forEach((r) => {
+      const state = r.claimed ? `<em class="rc-ok">已领</em>`
+        : r.unlocked ? `<button class="pr-claim" data-claim-season="${r.level}">领取</button>`
+        : `<em class="rc-sub">未解锁</em>`;
+      html += `<div class="season-row${r.unlocked && !r.claimed ? ' season-ready' : ''}${r.claimed ? ' season-done' : ''}">
+        <div class="season-lv">Lv.${r.level}</div>
+        <div class="season-reward">🪙${fmtChips(r.coins)}${r.diamonds ? ' · 💎' + r.diamonds : ''}</div>
+        ${state}</div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
   // 盈利曲线：把牌谱净收益按时间累计，画成 Canvas 折线（程序化，无大资源）
   function drawProfitCurve() {
     const cv = $('profit-curve'); if (!cv || !cv.getContext) return;
@@ -797,7 +827,7 @@
     const titleMap = {
       profile: '玩家资料', missions: '每日任务', rank: '排行榜', mail: '邮件中心',
       club: '俱乐部', vault: '保险箱', support: '客服中心', notice: '系统公告',
-      season: '赛季通行证', tourney: '锦标赛', vip: '贵宾中心', security: '牌局安全',
+      season: '皇家赛季', tourney: '锦标赛', vip: '贵宾中心', security: '牌局安全',
       events: '活动中心', gifts: '牌桌礼物', coach: '训练营', achievements: '成就殿堂',
       friends: '好友中心', analytics: '数据中心', settings: '系统设置',
       activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
@@ -864,7 +894,7 @@
     } else if (kind === 'mail') {
       html = `<div class="panel-list">
         ${panelRow('🎁', '欢迎礼包', '感谢加入皇室德州，礼包码入口已放在大厅。', '未领取')}
-        ${panelRow('📣', '赛季公告', '传奇赛季开放，完成每日任务可获得额外奖励。', '新')}
+        ${panelRow('📣', '赛季公告', '皇家赛季开放，完成每日任务可获得额外奖励。', '新')}
         ${panelRow('🛠️', '系统通知', '当前版本强化了大厅、商店、任务、排行榜与活动面板。', '已读')}
       </div>`;
     } else if (kind === 'events') {
@@ -916,18 +946,7 @@
           ${panelRow('🛡️', '安全线', '公平说明、回放、举报、断线重连、服务端权威发牌。', '路线')}
         </div>`;
     } else if (kind === 'passport') {
-      const lv = p.level || 1;
-      html = `<div class="panel-hero"><b>皇家征程</b><span>赛季通行证用 50 级成长承载长期留存，不复制任何外部赛季设定。</span></div>
-        <div class="metric-grid">
-          <div class="metric"><b>Lv.${lv}</b><span>当前等级</span></div>
-          <div class="metric"><b>${Math.min(50, lv + 4)}</b><span>下个奖励</span></div>
-          <div class="metric"><b>${Math.max(0, 50 - lv)}</b><span>剩余等级</span></div>
-        </div>
-        <div class="panel-list">
-          ${panelRow('🎁', '免费路线', `<div>金币、钻石、基础头像框</div><div class="progress-track"><i style="width:${pct(lv,50)}%"></i></div>`, '开放')}
-          ${panelRow('👑', '高级路线', '高级牌背、入场特效、贵宾场景和专属称号。', '预留')}
-          ${panelRow('🃏', '周任务', '完成牌局、获胜、连胜、参加真人桌都可以积累通行证经验。', '任务')}
-        </div>`;
+      html = renderSeasonTrack();
     } else if (kind === 'mysteryShop') {
       html = `<div class="panel-hero"><b>秘宝商店</b><span>用于承载周期折扣和外观轮换，做成皇室自己的轻奢货架。</span></div>
         <div class="panel-list">
@@ -977,14 +996,22 @@
         </div>`;
     } else if (kind === 'achievements') {
       const list = Store.getAchievements();
+      const got = list.filter((a) => a.unlocked).length;
       html = `<div class="panel-hero"><b>成就殿堂</b><span>达成里程碑领取奖励，记录你的高手之路。</span></div>
-        <div class="panel-list">` +
+        <div class="metric-grid">
+          <div class="metric"><b>${got}/${list.length}</b><span>已解锁</span></div>
+          <div class="metric"><b>${list.filter((a) => a.unlocked && !a.claimed).length}</b><span>可领取</span></div>
+          <div class="metric"><b>${list.filter((a) => a.claimed).length}</b><span>已领奖</span></div>
+        </div>
+        <div class="achv-wall">` +
         list.map((a) => {
-          const btn = a.claimed ? `<em>已领</em>`
+          const cls = a.claimed ? 'achv-claimed' : a.unlocked ? 'achv-unlocked' : 'achv-locked';
+          const ic = a.claimed ? '🏅' : a.unlocked ? '🎖️' : '🔒';
+          const btn = a.claimed ? `<em class="rc-ok">已领</em>`
             : a.unlocked ? `<button class="pr-claim" data-claim-achv="${a.id}">领取</button>`
-              : `<em>未达成</em>`;
-          return `<div class="panel-row ${a.unlocked && !a.claimed ? 'achv-ready' : ''}"><div class="pr-ic">${a.claimed ? '🏅' : a.unlocked ? '🎖️' : '🔒'}</div>
-            <div><b>${a.name}</b><div class="pr-text">${a.desc} · 奖励 🪙${fmtChips(a.coins)} · 💎${a.diamonds}</div></div>${btn}</div>`;
+              : `<em class="rc-sub">未达成</em>`;
+          return `<div class="achv-cell ${cls}"><div class="achv-ic">${ic}</div><b>${a.name}</b>
+            <span>${a.desc}</span><div class="achv-rw">🪙${fmtChips(a.coins)} · 💎${a.diamonds}</div>${btn}</div>`;
         }).join('') + `</div>`;
     } else if (kind === 'friends') {
       html = `<div class="panel-hero"><b>好友中心</b><span>好友体系为真人桌、邀请、俱乐部和礼物互动做准备。</span></div>
@@ -1075,13 +1102,7 @@
         ${panelRow('🛡️', '安全路线', '服务端权威牌局、回放、举报、封禁是下一阶段重点。', '路线')}
       </div>`;
     } else if (kind === 'season') {
-      const lv = p.level || 1;
-      html = `<div class="panel-hero"><b>传奇赛季</b><span>赛季进度随等级、牌局和每日活跃提升。</span></div>
-        <div class="panel-list">
-          ${panelRow('🎖️', '赛季等级', `<div>Lv.${lv}/50</div><div class="progress-track"><i style="width:${pct(lv,50)}%"></i></div>`, '进行中')}
-          ${panelRow('💎', '免费奖励', '金币、钻石、头像框、牌背。', '已开放')}
-          ${panelRow('👑', '高级奖励', '豪华场景、称号、载具和特殊入场特效。', '规划')}
-        </div>`;
+      html = renderSeasonTrack();
     } else if (kind === 'tourney') {
       html = `<div class="panel-hero"><b>锦标赛大厅</b><span>这里用于模拟商业 App 的赛事入口；真正开赛需要服务端报名、桌位调度和结算。</span></div>
         <div class="panel-list">
@@ -1360,6 +1381,9 @@
     $('panel-body').addEventListener('click', (e) => {
       const tk = e.target.closest('[data-claim-task]'), ac = e.target.closest('[data-claim-achv]');
       const row = e.target.closest('[data-hand]'), back = e.target.closest('[data-hand-back]'), clr = e.target.closest('[data-hand-clear]'), oh = e.target.closest('[data-open-history]');
+      const sc = e.target.closest('[data-claim-season]'), sca = e.target.closest('[data-claim-season-all]');
+      if (sc) { const r = Store.claimSeason(sc.dataset.claimSeason); if (r) { Sfx.reward(); toast(`赛季奖励 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
+      if (sca) { const r = Store.claimSeasonAll(); if (r) { Sfx.reward(); toast(`领取 ${r.n} 级 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
       else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }

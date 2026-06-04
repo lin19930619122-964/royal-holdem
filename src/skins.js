@@ -113,7 +113,7 @@
     lucky: { name: '欧皇', price: 20, text: '🍀欧皇', color: '#7fe3a0' },
     tycoon: { name: '大亨', price: 25, text: '💰大亨', color: '#f5cf6b' },
     god: { name: '赌神', price: 38, text: '👑赌神', color: '#fff3cf' },
-    legend: { name: '传奇', price: 50, text: '✨传奇', color: '#c9a6ff' },
+    legend: { name: '皇家传说', price: 50, text: '✨皇家传说', color: '#c9a6ff' },
   };
 
   // 载具(进场特效，代表身份)

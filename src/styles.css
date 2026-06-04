@@ -750,6 +750,27 @@ html, body {
 .curve-wrap { background: rgba(0,0,0,.22); border: 1px solid rgba(245,207,107,.16); border-radius: 12px; padding: 10px; margin-bottom: 10px; }
 .curve-title { color: #bfe6cf; font-size: 11px; font-weight: 700; margin-bottom: 6px; }
 #profit-curve { width: 100%; height: auto; display: block; }
+
+/* ---------- 皇家赛季奖励轨 ---------- */
+.season-track { display: flex; flex-direction: column; gap: 7px; max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.season-row { display: grid; grid-template-columns: 56px 1fr auto; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); }
+.season-row.season-ready { border-color: var(--gold); box-shadow: 0 0 10px rgba(245,207,107,.3); }
+.season-row.season-done { opacity: .6; }
+.season-lv { font-weight: 900; color: var(--gold); font-size: 13px; }
+.season-reward { color: #eafff1; font-size: 13px; font-weight: 600; }
+
+/* ---------- 成就墙 ---------- */
+.achv-wall { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.achv-cell { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 12px 8px; border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.04); }
+.achv-cell .achv-ic { font-size: 30px; line-height: 1; }
+.achv-cell b { color: #fff; font-size: 13px; }
+.achv-cell span { color: #9fc4ae; font-size: 11px; line-height: 1.3; }
+.achv-cell .achv-rw { color: var(--gold); font-size: 11px; font-weight: 700; margin: 2px 0 4px; }
+.achv-cell.achv-locked { opacity: .5; }
+.achv-cell.achv-unlocked { border-color: var(--gold); box-shadow: 0 0 12px rgba(245,207,107,.3); }
+.achv-cell.achv-claimed { border-color: rgba(95,211,138,.4); }
 .rank-row { grid-template-columns: 30px 1fr auto; }
 .rank-row .pr-ic { font-size: 15px; font-weight: 900; color: var(--gold); }
 
