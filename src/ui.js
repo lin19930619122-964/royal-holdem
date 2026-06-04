@@ -312,6 +312,52 @@
     fxLayer.appendChild(el); setTimeout(() => el.remove(), 1800);
   }
 
+  /* ---------- 牌桌社交（快捷语 / 礼物 / AI 闲聊） ---------- */
+  function activeOpponents() {
+    if (!game) return [];
+    return game.players.filter((p) => !p.isHuman && !p.out);
+  }
+  // 你说一句快捷语：座位上方冒泡，随机对手回应
+  function sayPhrase(text) {
+    if (!game || !seatEls[0]) return;
+    Fx.speechBubble(seatEls[0], text, 'mine');
+    Sfx.button();
+    const opps = activeOpponents();
+    if (opps.length && Math.random() < 0.8) {
+      const opp = opps[Math.floor(Math.random() * opps.length)];
+      setTimeout(() => {
+        const el = seatEls[opp.id];
+        const reply = Social.pickChatter(Math.random() < 0.5 ? 'raise' : 'fold') || '哼';
+        if (el) Fx.speechBubble(el, reply);
+      }, 900 + Math.random() * 700);
+    }
+  }
+  // 送礼物：扣训练筹码（如有价），飞向随机对手并命中爆开
+  function sendGift(id) {
+    const gf = (Social.GIFTS || []).find((g) => g.id === id);
+    if (!gf || !game || !seatEls[0]) return;
+    if (gf.cost > 0 && Store.get().coins < gf.cost) { toast('训练筹码不足'); return; }
+    const opps = activeOpponents();
+    if (!opps.length) { toast('暂无可赠送的对手'); return; }
+    const target = opps[Math.floor(Math.random() * opps.length)];
+    if (gf.cost > 0) { Store.get().coins -= gf.cost; Store.save(); syncWallet(true); }
+    closeModal();
+    Fx.flyGift(seatEls[0], seatEls[target.id], fxLayer, gf.icon);
+    try { Sfx.gift(gf.sfx); } catch (_) {}
+    setTimeout(() => { if (seatEls[target.id]) Fx.speechBubble(seatEls[target.id], Social.pickChatter('win') || '多谢'); }, 1000);
+  }
+  // AI 行动时偶尔闲聊（冒泡），与语音错峰
+  function maybeChatter(p) {
+    if (!p || p.isHuman || !window.Social || !seatEls[p.id]) return;
+    const key = ACT2VOICE[p.lastAction];
+    let ck = (key === 'raise') ? 'raise' : (key === 'allin') ? 'allin' : (key === 'fold') ? 'fold' : null;
+    if (!ck) return;
+    if (Math.random() < 0.28) {
+      const line = Social.pickChatter(ck);
+      if (line) Fx.speechBubble(seatEls[p.id], line);
+    }
+  }
+
   function updateMessage() {
     const msg = $('message-bar');
     if (game.phase === 'idle') { msg.textContent = '点击「开始」发牌'; return; }
@@ -352,8 +398,16 @@
         else if (window.Voice && Math.random() < 0.7) Voice.play(seatVoice[p.id] || 0, 'win');
       }
     }
-    if (humanWon) { Sfx.win(); Fx.vibrate(60); }
-    else { Sfx.lose(); }
+    if (humanWon) {
+      Sfx.win(); Fx.vibrate(60);
+      // 连胜烈焰：≥2 连胜起阶梯升级（程序化火焰，无大资源）
+      const streak = Store.get().winStreak || 0;
+      if (streak >= 2) {
+        const L = Fx.streakFlame(fxLayer, streak);
+        try { Sfx.streak(L || 1); } catch (_) {}
+        if (streak >= 4) Fx.shake($('table-wrap'), streak >= 6 ? 9 : 6);
+      }
+    } else { Sfx.lose(); }
 
     // 牌型特效：摊牌时按牌型等级炸场(对子小、同花顺最炸)。优先展示你的牌型
     if (result.showdown && result.handScores) {
@@ -437,6 +491,7 @@
         game.act(d.action, d.amount);
         actSound(p);
         maybeVoice(p);
+        maybeChatter(p);
         tick();
       }, delay);
     }
@@ -886,20 +941,20 @@
           ${panelRow('🔒', '隐私说明', '当前试玩版不接相机、定位、IDFA；商业版接入前需补说明。', '合规')}
         </div>`;
     } else if (kind === 'tableChat') {
-      html = `<div class="panel-hero"><b>牌桌聊天</b><span>先提供快捷语句和情绪反馈，真人桌上线后再接入真正聊天、禁言和举报。</span></div>
-        <div class="panel-list">
-          ${panelRow('💬', '快捷语句', '好牌、精彩、再来一手、跟到底、稳一点。', '可用')}
-          ${panelRow('🙂', '表情互动', '微笑、鼓掌、惊讶、思考、庆祝。', '目录')}
-          ${panelRow('🛡️', '聊天安全', '商业版需要敏感词、禁言、举报和聊天记录。', '规划')}
-        </div>`;
+      const inTable = currentScreen === 'table' && game;
+      html = `<div class="panel-hero"><b>牌桌聊天</b><span>${inTable ? '点一句话，座位上方会冒出气泡，对手也会回应你。' : '进入牌桌后即可使用快捷语，向对手喊话。'}</span></div>`;
+      (Social.PHRASES || []).forEach((g) => {
+        html += `<div class="say-group"><div class="say-cat">${g.cat}</div><div class="say-wrap">` +
+          g.items.map((t) => `<button class="say-chip" data-say="${t}"${inTable ? '' : ' disabled'}>${t}</button>`).join('') +
+          `</div></div>`;
+      });
     } else if (kind === 'tableGift') {
-      html = `<div class="panel-hero"><b>牌桌礼物</b><span>牌桌内礼物用于强化互动和赢家仪式感，当前保持轻量目录，不增加大体积资源。</span></div>
-        <div class="panel-list">
-          ${panelRow('🌹', '玫瑰飞送', '低价礼物，适合日常互动。', '5钻')}
-          ${panelRow('🍾', '香槟庆祝', '赢牌后播放庆祝提示。', '18钻')}
-          ${panelRow('👑', '皇家加冕', '赢家专属高光礼物。', '99钻')}
-          ${panelRow('🎬', '特效扩展', '后续用 CSS/Canvas 做轻量动画，避免体积膨胀。', '路线')}
-        </div>`;
+      const inTable = currentScreen === 'table' && game;
+      html = `<div class="panel-hero"><b>牌桌礼物</b><span>${inTable ? '送给对手一份礼物，看它飞过牌桌命中爆开。免费礼物不花筹码。' : '进入牌桌后可向对手赠送互动礼物。'}</span><em>🪙 ${fmtChips(Store.get().coins)}</em></div>
+        <div class="gift-grid">` +
+        (Social.GIFTS || []).map((gf) => `<button class="gift-card" data-gift="${gf.id}"${inTable ? '' : ' disabled'}>
+          <span class="gift-ic">${gf.icon}</span><b>${gf.name}</b><em>${gf.cost ? '🪙' + fmtChips(gf.cost) : '免费'}</em></button>`).join('') +
+        `</div>`;
     } else if (kind === 'tableHistory') {
       html = renderHandLogList();
     } else if (kind === 'jackpot') {
@@ -1091,7 +1146,9 @@
   }
 
   /* ---------- 多屏路由 ---------- */
+  let currentScreen = 'home';
   function showScreen(name) {
+    currentScreen = name;
     ['home', 'select', 'table'].forEach((s) => $('screen-' + s).classList.toggle('hidden', s !== name));
   }
 
@@ -1214,6 +1271,10 @@
       else if (back) { $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (oh) { openPanel('tableHistory'); }
       else if (row) { $('panel-body').innerHTML = renderHandDetail(parseInt(row.dataset.hand, 10)); try { Sfx.button(); } catch (_) {} }
+      else { const say = e.target.closest('[data-say]'), gift = e.target.closest('[data-gift]');
+        if (say && !say.disabled) { closeModal(); sayPhrase(say.dataset.say); }
+        else if (gift && !gift.disabled) { sendGift(gift.dataset.gift); }
+      }
     });
     $('home-task-checkin').addEventListener('click', () => openModal('modal-checkin'));
     $('home-task-wheel').addEventListener('click', () => openModal('modal-wheel'));

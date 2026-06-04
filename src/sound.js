@@ -60,6 +60,24 @@
     lose() { tone(330, 0.3, 'sine', 0.14); tone(247, 0.4, 'sine', 0.12, 0.12); },
     reward() { [659, 880, 1175].forEach((f, i) => tone(f, 0.26, 'sine', 0.2, i * 0.07)); clink(0, 1.2); clink(0.1, 1.1); },
     button() { tone(700, 0.04, 'square', 0.08); },
+    // 礼物命中音效（合成，按礼物类型）
+    gift(type) {
+      switch (type) {
+        case 'pop': tone(600, 0.05, 'square', 0.12); tone(900, 0.05, 'square', 0.1, 0.05); break;
+        case 'whoosh': noise(0.35, 0.12, 0, { type: 'bandpass', from: 600, to: 4000, q: 0.8 }); tone(220, 0.3, 'sawtooth', 0.08, 0, 1200); break;
+        case 'boom': tone(80, 0.4, 'sine', 0.3); noise(0.3, 0.22, 0.02, { type: 'lowpass', from: 1200, to: 200 }); break;
+        case 'fanfare': [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'triangle', 0.18, i * 0.08)); break;
+        case 'sparkle': [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.18, 'sine', 0.14, i * 0.05)); for (let i = 0; i < 4; i++) clink(0.1 + i * 0.05, 1.3 + i * 0.1); break;
+        default: tone(880, 0.16, 'sine', 0.14); tone(1175, 0.16, 'sine', 0.12, 0.08); // soft
+      }
+    },
+    // 连胜烈焰：火焰轰鸣，按连胜级别升调加层
+    streak(level) {
+      const L = Math.max(1, Math.min(6, level));
+      tone(90, 0.3 + L * 0.05, 'sawtooth', 0.12 + L * 0.02);
+      noise(0.25 + L * 0.05, 0.1 + L * 0.02, 0, { type: 'lowpass', from: 1800, to: 300, q: 0.6 });
+      for (let i = 0; i < L; i++) tone(330 + i * 110, 0.18, 'triangle', 0.12, i * 0.06, 660 + i * 110);
+    },
   };
   window.Sfx = Sfx;
 })();

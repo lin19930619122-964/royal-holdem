@@ -101,5 +101,78 @@
     setTimeout(() => el.classList.remove('shaking'), 600);
   }
 
-  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake };
+  // 座位上方的快捷语/闲聊气泡（挂在座位元素内，跟随座位定位）
+  function speechBubble(seatEl, text, cls) {
+    if (!seatEl || !text) return;
+    seatEl.querySelectorAll('.speech-bubble').forEach((b) => b.remove());
+    const b = document.createElement('div');
+    b.className = 'speech-bubble' + (cls ? ' ' + cls : '');
+    b.textContent = text;
+    seatEl.appendChild(b);
+    void b.offsetWidth; b.classList.add('show');
+    setTimeout(() => { b.classList.remove('show'); setTimeout(() => b.remove(), 300); }, 2400);
+  }
+
+  // 互动礼物：从送礼方飞向目标，命中后爆开
+  function flyGift(fromEl, toEl, layer, icon) {
+    if (!fromEl || !toEl || !layer) return;
+    const a = centerOf(fromEl, layer), z = centerOf(toEl, layer);
+    const g = document.createElement('div');
+    g.className = 'gift-fly'; g.textContent = icon;
+    g.style.left = a.x + 'px'; g.style.top = a.y + 'px';
+    g.style.setProperty('--gx', (z.x - a.x) + 'px');
+    g.style.setProperty('--gy', (z.y - a.y) + 'px');
+    layer.appendChild(g);
+    setTimeout(() => {
+      g.remove();
+      // 命中爆开
+      const burst = ['✨', '💥', icon];
+      for (let i = 0; i < 10; i++) {
+        const p = document.createElement('div');
+        p.className = 'cele-particle'; p.textContent = burst[i % burst.length];
+        const ang = Math.random() * Math.PI * 2, dist = 30 + Math.random() * 50;
+        p.style.left = z.x + 'px'; p.style.top = z.y + 'px'; p.style.fontSize = '16px';
+        p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+        p.style.setProperty('--dy', (Math.sin(ang) * dist - 10) + 'px');
+        p.style.animation = `celeFly ${0.6 + Math.random() * 0.5}s ease-out forwards`;
+        layer.appendChild(p);
+        setTimeout(() => p.remove(), 1200);
+      }
+    }, 760);
+  }
+
+  // 连胜烈焰：≥5 级阶梯，越连越炸（程序化，无大资源）
+  function streakFlame(layer, streak) {
+    if (!layer || streak < 2) return;
+    const L = streak >= 8 ? 6 : streak >= 6 ? 5 : streak >= 5 ? 4 : streak >= 4 ? 3 : streak >= 3 ? 2 : 1;
+    const labels = ['', '连胜 ×2 🔥', '连胜 ×3 🔥🔥', '势不可挡 🔥🔥🔥', '烈焰连胜 🔥🔥🔥🔥', '燎原之势 🔥🔥🔥🔥🔥', '皇家统治 👑🔥'];
+    const tint = document.createElement('div');
+    tint.className = 'streak-tint lv' + L;
+    layer.appendChild(tint);
+    setTimeout(() => tint.remove(), 1400 + L * 120);
+    const banner = document.createElement('div');
+    banner.className = 'streak-banner lv' + L;
+    banner.textContent = labels[L];
+    layer.appendChild(banner);
+    setTimeout(() => banner.remove(), 1900);
+    // 底部升腾火苗，数量随级别
+    const r = layer.getBoundingClientRect();
+    const n = 6 + L * 6;
+    for (let i = 0; i < n; i++) {
+      const f = document.createElement('div');
+      f.className = 'flame-particle';
+      f.textContent = L >= 5 ? '🔥' : (Math.random() < 0.7 ? '🔥' : '✨');
+      f.style.left = (Math.random() * r.width) + 'px';
+      f.style.top = (r.height - 6) + 'px';
+      f.style.fontSize = (12 + L * 2 + Math.random() * 6) + 'px';
+      f.style.setProperty('--fy', -(80 + L * 30 + Math.random() * 60) + 'px');
+      f.style.setProperty('--fx', (Math.random() * 40 - 20) + 'px');
+      f.style.animation = `flameRise ${0.9 + Math.random() * 0.8}s ease-out ${i * 0.02}s forwards`;
+      layer.appendChild(f);
+      setTimeout(() => f.remove(), 1800);
+    }
+    return L;
+  }
+
+  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake, speechBubble, flyGift, streakFlame };
 })();

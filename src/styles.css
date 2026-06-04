@@ -331,6 +331,52 @@ html, body {
 .shaking { animation: screenShake .5s ease; }
 @keyframes screenShake { 0%,100%{transform:translate(0,0)} 15%{transform:translate(var(--shake),0)} 30%{transform:translate(calc(var(--shake)*-1),2px)} 45%{transform:translate(0,var(--shake))} 60%{transform:translate(calc(var(--shake)*-1),0)} 80%{transform:translate(var(--shake),-2px)} }
 
+/* ---------- 牌桌社交：快捷语气泡 / 礼物 / 连胜烈焰 ---------- */
+.speech-bubble { position:absolute; left:50%; bottom:100%; transform:translate(-50%,6px); margin-bottom:6px; z-index:40;
+  background:#fff; color:#1a3022; font-size:12px; font-weight:700; padding:5px 10px; border-radius:12px; white-space:nowrap;
+  box-shadow:0 3px 10px rgba(0,0,0,.4); opacity:0; transition:opacity .25s, transform .25s; pointer-events:none; max-width:140px; }
+.speech-bubble::after { content:''; position:absolute; left:50%; top:100%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#fff; }
+.speech-bubble.show { opacity:1; transform:translate(-50%,0); }
+.speech-bubble.mine { background:linear-gradient(180deg,#fff6d8,var(--gold-lt)); color:#3a2400; }
+.speech-bubble.mine::after { border-top-color:var(--gold-lt); }
+
+/* 快捷语面板 */
+.say-group { margin-bottom:12px; }
+.say-cat { color:var(--gold); font-size:12px; font-weight:800; margin-bottom:6px; }
+.say-wrap { display:flex; flex-wrap:wrap; gap:8px; }
+.say-chip { border:1px solid rgba(245,207,107,.45); background:rgba(255,255,255,.05); color:#eafff1; border-radius:999px;
+  padding:7px 13px; font-size:13px; font-weight:600; }
+.say-chip:active { background:rgba(245,207,107,.2); transform:translateY(1px); }
+.say-chip:disabled { opacity:.4; }
+
+/* 礼物面板 */
+.gift-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.gift-card { display:flex; flex-direction:column; align-items:center; gap:3px; padding:12px 6px; border-radius:14px;
+  border:1px solid rgba(245,207,107,.25); background:rgba(255,255,255,.04); color:#eafff1; }
+.gift-card:active { transform:translateY(1px); background:rgba(245,207,107,.12); }
+.gift-card:disabled { opacity:.45; }
+.gift-card .gift-ic { font-size:30px; line-height:1; filter:drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
+.gift-card b { font-size:13px; color:#fff; }
+.gift-card em { font-style:normal; font-size:11px; color:var(--gold); font-weight:800; }
+
+/* 礼物飞行 */
+.gift-fly { position:absolute; z-index:38; font-size:34px; pointer-events:none; transform:translate(-50%,-50%);
+  filter:drop-shadow(0 4px 8px rgba(0,0,0,.5)); animation:giftFly .76s cubic-bezier(.4,0,.5,1) forwards; }
+@keyframes giftFly { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 15%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}
+  100%{opacity:1;transform:translate(calc(-50% + var(--gx)),calc(-50% + var(--gy))) scale(.9) rotate(360deg)} }
+
+/* 连胜烈焰 */
+.streak-tint { position:absolute; inset:0; z-index:30; pointer-events:none;
+  background:radial-gradient(ellipse at 50% 100%, rgba(255,120,30,.45), transparent 60%); animation:streakTint 1.4s ease-out forwards; }
+.streak-tint.lv5, .streak-tint.lv6 { background:radial-gradient(ellipse at 50% 100%, rgba(255,80,20,.7), rgba(255,180,40,.25) 40%, transparent 65%); }
+@keyframes streakTint { 0%{opacity:0} 25%{opacity:1} 100%{opacity:0} }
+.streak-banner { position:absolute; left:50%; top:24%; transform:translate(-50%,-50%); z-index:34; pointer-events:none;
+  font-weight:900; white-space:nowrap; color:#fff; font-size:26px; text-shadow:0 0 14px #ff6a1e, 0 2px 6px #000; animation:celeBanner 1.9s ease forwards; }
+.streak-banner.lv3, .streak-banner.lv4 { font-size:34px; color:#ffd27f; text-shadow:0 0 20px #ff7a1e, 0 2px 8px #000; }
+.streak-banner.lv5, .streak-banner.lv6 { font-size:44px; background:linear-gradient(180deg,#fff,#ffb347 55%,#ff5e1a); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 22px #ff6a1e); }
+.flame-particle { position:absolute; pointer-events:none; z-index:33; will-change:transform; }
+@keyframes flameRise { 0%{opacity:0;transform:translate(-50%,0) scale(.6)} 15%{opacity:1} 100%{opacity:0;transform:translate(calc(-50% + var(--fx)),var(--fy)) scale(1.2)} }
+
 .coin-burst { position:absolute; width:16px; height:16px; border-radius:50%; margin:-8px; pointer-events:none; z-index:21;
   background:radial-gradient(circle at 38% 32%,#fff 0 3px,var(--gold) 4px 100%); border:1.5px solid #fff8; }
 @keyframes coinFall { from{transform:translateY(-30px) scale(.6);opacity:0} 20%{opacity:1} to{transform:translateY(60px) scale(1);opacity:0} }
