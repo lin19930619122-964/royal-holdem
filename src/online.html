@@ -43,6 +43,23 @@
     #report-pick button { background:rgba(255,90,90,.15); border-color:rgba(255,120,120,.4); color:#ffb0b0; font-size:12px; }
     .emote-fly { position:absolute; z-index:38; font-size:30px; pointer-events:none; transform:translate(-50%,-50%); animation:emoteUp 1.6s ease-out forwards; }
     @keyframes emoteUp { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.2)} 100%{opacity:0;transform:translate(-50%,-160%) scale(1)} }
+    /* 好友 / 俱乐部面板 */
+    #social-overlay { position:fixed; inset:0; z-index:130; background:rgba(0,0,0,.7); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:18px; }
+    #social-overlay.hidden { display:none; }
+    #social-card { width:100%; max-width:380px; max-height:84vh; overflow-y:auto; background:linear-gradient(180deg,#163123,#0a1410); border:1.5px solid rgba(245,207,107,.4); border-radius:16px; padding:16px; }
+    .soc-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; } .soc-head b { color:var(--gold); font-size:17px; }
+    #soc-close { background:none; border:none; color:#cfe7d8; font-size:18px; }
+    .soc-sec { margin-bottom:12px; } .soc-t { color:#bfe6cf; font-size:12px; font-weight:700; margin-bottom:5px; }
+    .my-code { font-size:20px; font-weight:900; letter-spacing:2px; color:var(--gold-lt); background:rgba(0,0,0,.35); border-radius:8px; padding:8px; text-align:center; }
+    .soc-row { display:flex; gap:6px; } .soc-row input { flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(245,207,107,.3); background:rgba(0,0,0,.35); color:#fff; font-size:14px; }
+    .soc-row button, #club-box button { border:none; border-radius:8px; padding:8px 12px; font-weight:800; font-size:13px; background:linear-gradient(180deg,var(--gold-lt),var(--gold-deep)); color:#3a2400; }
+    .soc-list { display:flex; flex-direction:column; gap:6px; }
+    .soc-friend { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:9px; background:rgba(255,255,255,.04); font-size:13px; color:#eafff1; }
+    .soc-friend .dot { width:8px; height:8px; border-radius:50%; background:#555; } .soc-friend .dot.on { background:#5fd38a; box-shadow:0 0 6px #5fd38a; }
+    .soc-friend .nm { flex:1; } .soc-friend .st { font-size:11px; color:#9fc4ae; }
+    #club-box .club-mem { display:flex; align-items:center; gap:8px; font-size:13px; color:#eafff1; padding:4px 0; }
+    .soc-msg { color:#ffb454; font-size:12px; min-height:16px; text-align:center; }
+    #btn-friends { background:rgba(245,207,107,.18); border:1px solid var(--gold); color:var(--gold); border-radius:9px; padding:4px 10px; font-weight:700; font-size:12px; }
   </style>
 </head>
 <body>
@@ -54,6 +71,7 @@
       </div>
       <div class="left">
         <button id="btn-lobby">大厅</button>
+        <button id="btn-friends">好友</button>
         <span id="seatInfo">座位 -/6</span>
         <span id="blindInfo">50/100</span>
       </div>
@@ -123,6 +141,17 @@
       <input type="text" id="join-name" placeholder="输入你的昵称" maxlength="8" />
       <button class="big-btn" id="join-go">进入大厅</button>
       <div id="lobby-list"></div>
+    </div>
+  </div>
+
+  <div id="social-overlay" class="hidden">
+    <div id="social-card">
+      <div class="soc-head"><b>好友 · 俱乐部</b><button id="soc-close">✕</button></div>
+      <div class="soc-sec"><div class="soc-t">我的好友码（发给朋友互加）</div><div id="my-code" class="my-code">—</div></div>
+      <div class="soc-sec"><div class="soc-t">添加好友</div><div class="soc-row"><input type="text" id="friend-code" placeholder="输入对方好友码" maxlength="12" /><button id="friend-add">添加</button></div></div>
+      <div class="soc-sec"><div class="soc-t">好友列表</div><div id="friend-list" class="soc-list"></div></div>
+      <div class="soc-sec"><div class="soc-t">俱乐部</div><div id="club-box"></div></div>
+      <div id="soc-msg" class="soc-msg"></div>
     </div>
   </div>
 

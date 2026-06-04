@@ -8,6 +8,9 @@
   ];
   const PHASE_LABEL = { flop: '翻 牌', turn: '转 牌', river: '河 牌', ended: '摊 牌' };
   const TOKEN_KEY = 'royal_mp_token';
+  const PID_KEY = 'royal_pid';
+  let pid = localStorage.getItem(PID_KEY);
+  if (!pid) { pid = 'P' + Math.random().toString(36).slice(2, 9).toUpperCase(); localStorage.setItem(PID_KEY, pid); }
 
   const seatsEl = $('seats'), boardEl = $('board'), dealerBtn = $('dealer-button');
   const fxLayer = $('fx-layer'), potEl = $('pot-display');
@@ -234,6 +237,23 @@
     fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600);
   }
 
+  function renderSocial(m) {
+    $('my-code').textContent = m.code || pid;
+    const fl = $('friend-list');
+    fl.innerHTML = (m.friends && m.friends.length)
+      ? m.friends.map((f) => `<div class="soc-friend"><span class="dot ${f.online ? 'on' : ''}"></span><span class="nm">${escapeHtml(f.name)}</span><span class="st">${f.online ? '在线' : '离线'}</span></div>`).join('')
+      : '<div class="soc-friend"><span class="st">还没有好友，把你的好友码发给朋友互加。</span></div>';
+    const cb = $('club-box');
+    if (m.club) {
+      cb.innerHTML = `<div class="soc-t" style="color:var(--gold-lt)">${escapeHtml(m.club.name)} · 码 ${m.club.code}</div>`
+        + m.club.members.map((mb) => `<div class="club-mem"><span class="dot ${mb.online ? 'on' : ''}"></span>${escapeHtml(mb.name)}${mb.owner ? ' 👑' : ''}${mb.online ? '' : ' <span class="st">(离线)</span>'}</div>`).join('')
+        + `<div style="margin-top:8px"><button data-club="leave">退出俱乐部</button></div>`;
+    } else {
+      cb.innerHTML = `<div class="soc-row" style="margin-bottom:6px"><input type="text" id="club-name" placeholder="新俱乐部名称" maxlength="12" /><button data-club="create">创建</button></div>
+        <div class="soc-row"><input type="text" id="club-code" placeholder="输入俱乐部码加入" maxlength="6" /><button data-club="join">加入</button></div>`;
+    }
+  }
+
   /* ---- 连接 ---- */
   function connect(name) {
     // 原生壳/独立部署可用 window.RH_SERVER 指定服务器(如 'm5.tail5255b4.ts.net')；网页版默认连当前主机
@@ -241,10 +261,12 @@
       ? `wss://${window.RH_SERVER}/ws`
       : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
     ws = new WebSocket(url);
-    ws.onopen = () => { $('conn-state').textContent = '已连接'; $('conn-state').className = 'ok'; send({ type: 'lobby' }); };
+    ws.onopen = () => { $('conn-state').textContent = '已连接'; $('conn-state').className = 'ok'; send({ type: 'hello', pid, name: myName }); send({ type: 'lobby' }); };
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.type === 'lobby') { renderLobby(m.rooms); }
+      else if (m.type === 'social') { renderSocial(m); }
+      else if (m.type === 'socialMsg') { $('soc-msg').textContent = m.msg || ''; }
       else if (m.type === 'joined') { localStorage.setItem(TOKEN_KEY, m.token); spectating = false; chatPopulated = false; $('join-overlay').classList.add('hidden'); }
       else if (m.type === 'spectating') { spectating = true; chatPopulated = false; $('join-overlay').classList.add('hidden'); }
       else if (m.type === 'state') { state = m; if (!chatPopulated && m.chat) { renderChat(m.chat); chatPopulated = true; } render(); }
@@ -292,6 +314,17 @@
       const b = e.target.closest('[data-rep]'); if (!b) return;
       send({ type: 'report', seat: +b.dataset.rep, reason: '不当行为' });
       $('report-pick').style.display = 'none';
+    });
+    // 好友 / 俱乐部面板
+    $('btn-friends').addEventListener('click', () => { Sfx.button(); $('soc-msg').textContent = ''; $('social-overlay').classList.remove('hidden'); if (ws && ws.readyState === 1) send({ type: 'social' }); });
+    $('soc-close').addEventListener('click', () => $('social-overlay').classList.add('hidden'));
+    $('friend-add').addEventListener('click', () => { const c = ($('friend-code').value || '').trim(); if (c) { send({ type: 'addFriend', code: c }); $('friend-code').value = ''; } });
+    $('club-box').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-club]'); if (!b) return;
+      Sfx.button();
+      if (b.dataset.club === 'create') { const n = ($('club-name') || {}).value || '皇家俱乐部'; send({ type: 'createClub', name: n }); }
+      else if (b.dataset.club === 'join') { const c = (($('club-code') || {}).value || '').trim(); if (c) send({ type: 'joinClub', code: c }); }
+      else if (b.dataset.club === 'leave') { send({ type: 'leaveClub' }); }
     });
 
     $('btn-addbot').addEventListener('click', () => { Sfx.button(); send({ type: 'addBot' }); });

@@ -4,3 +4,4 @@ ios/
 *.ipa
 royal-holdem.mobileconfig
 .DS_Store
+mp-data.json

@@ -68,5 +68,34 @@ ok(rooms.tableOf(S).members.has(S), 'r1 含 S');
 // 8) 断线清理
 rooms.disconnect(A); ok(!rooms.connRoom.has(A), 'A 断线后脱离房间映射');
 
+// 9) 持久化社交：好友 / 俱乐部
+const store = require('./mpstore.js');
+const PA = 'PAAA111', PB = 'PBBB222', PC = 'PCCC333';
+store.upsertPlayer(PA, '阿宝'); store.upsertPlayer(PB, '小强'); store.upsertPlayer(PC, '看客');
+const onSet = new Set([PA, PB]); // A、B 在线，C 离线
+const af = store.addFriend(PA, PB);
+ok(af.ok && af.friend.name === '小强', 'addFriend 成功且互为好友');
+let socA = store.getSocial(PA, onSet);
+ok(socA.code === PA && socA.friends.length === 1 && socA.friends[0].online === true, 'A 的好友含在线 B');
+ok(store.getSocial(PB, onSet).friends.some((f) => f.id === PA), '好友是双向的');
+ok(!store.addFriend(PA, 'NOPE').ok, '加不存在的好友码失败');
+const cc = store.createClub(PA, '皇家训练营');
+ok(cc.ok && cc.club, 'createClub 成功');
+const jc = store.joinClub(PB, cc.club);
+ok(jc.ok, 'B 加入俱乐部');
+const club = store.getSocial(PA, onSet).club;
+ok(club && club.members.length === 2 && club.owner === PA, '俱乐部含2成员且 A 是主');
+ok(club.members.find((m) => m.id === PC) == null, 'C 不在俱乐部');
+store.leaveClub(PB);
+ok(store.getSocial(PB, onSet).club === null, 'B 退出后无俱乐部');
+// 持久化：重载文件应保留 A 的好友与俱乐部
+store.saveNow();
+delete require.cache[require.resolve('./mpstore.js')];
+const store2 = require('./mpstore.js');
+const reload = store2.getSocial(PA, onSet);
+ok(reload.friends.length === 1 && reload.club && reload.club.owner === PA, '重载后好友/俱乐部持久化保留');
+// 清理测试数据文件
+try { require('fs').unlinkSync(store2._file); } catch (e) {}
+
 console.log(`\n联机服务端回归: ${pass} 通过, ${fail} 失败`);
 process.exit(fail ? 1 : 0);

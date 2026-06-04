@@ -45,6 +45,15 @@ try {
     relay(table, obj) { if (obj && obj.to != null) { send(obj.to, obj); return; } for (const connId of table.members) send(connId, obj); },
   };
   const rooms = new Rooms(io);
+
+  // 持久化社交：玩家身份 / 好友 / 俱乐部
+  const store = require('./mpstore.js');
+  const pidByConn = new Map();          // connId -> playerId
+  const onlineCount = new Map();        // playerId -> 连接数
+  const onlineSet = new Set();          // 在线 playerId 集合
+  function setOnline(pid, delta) { const n = (onlineCount.get(pid) || 0) + delta; if (n <= 0) { onlineCount.delete(pid); onlineSet.delete(pid); } else { onlineCount.set(pid, n); onlineSet.add(pid); } }
+  function sendSocial(connId) { const pid = pidByConn.get(connId); if (pid) send(connId, Object.assign({ type: 'social' }, store.getSocial(pid, onlineSet))); }
+
   const sendLobby = (connId) => send(connId, { type: 'lobby', rooms: rooms.lobby() });
   const broadcastLobby = () => { for (const connId of wsById.keys()) if (!rooms.tableOf(connId)) sendLobby(connId); };
 
@@ -72,9 +81,16 @@ try {
         case 'emote': rooms.emote(connId, msg.emoji); break;
         case 'gift': rooms.gift(connId, msg.toSeat, msg.gift); break;
         case 'report': rooms.report(connId, msg.seat, msg.reason); break;
+        case 'hello': { if (msg.pid) { pidByConn.set(connId, msg.pid); setOnline(msg.pid, 1); store.upsertPlayer(msg.pid, msg.name); } break; }
+        case 'social': sendSocial(connId); break;
+        case 'addFriend': { const pid = pidByConn.get(connId); if (pid) { const r = store.addFriend(pid, msg.code); send(connId, { type: 'socialMsg', ok: r.ok, msg: r.msg || ('已添加 ' + (r.friend ? r.friend.name : '')) }); sendSocial(connId); } break; }
+        case 'removeFriend': { const pid = pidByConn.get(connId); if (pid) { store.removeFriend(pid, msg.code); sendSocial(connId); } break; }
+        case 'createClub': { const pid = pidByConn.get(connId); if (pid) { const r = store.createClub(pid, msg.name); send(connId, { type: 'socialMsg', ok: r.ok, msg: r.ok ? '俱乐部已创建' : r.msg }); sendSocial(connId); } break; }
+        case 'joinClub': { const pid = pidByConn.get(connId); if (pid) { const r = store.joinClub(pid, msg.code); send(connId, { type: 'socialMsg', ok: r.ok, msg: r.ok ? '已加入俱乐部' : r.msg }); sendSocial(connId); } break; }
+        case 'leaveClub': { const pid = pidByConn.get(connId); if (pid) { store.leaveClub(pid); sendSocial(connId); } break; }
       }
     });
-    ws.on('close', () => { rooms.disconnect(connId); wsById.delete(connId); broadcastLobby(); });
+    ws.on('close', () => { const pid = pidByConn.get(connId); if (pid) { setOnline(pid, -1); pidByConn.delete(connId); } rooms.disconnect(connId); wsById.delete(connId); broadcastLobby(); });
     ws.on('error', () => {});
   });
   mpOn = true;
