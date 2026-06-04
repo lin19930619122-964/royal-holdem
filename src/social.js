@@ -34,5 +34,8 @@
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
-  window.Social = { PHRASES, GIFTS, AI_CHATTER, pickChatter };
+  // 桌面表情（原创集合，气泡形式冒出）
+  const EMOJIS = ['😀', '😎', '😭', '😡', '🤔', '😏', '👍', '👎', '🤯', '🥳', '😴', '🙏'];
+
+  window.Social = { PHRASES, GIFTS, AI_CHATTER, EMOJIS, pickChatter };
 })();

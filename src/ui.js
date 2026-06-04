@@ -11,6 +11,9 @@
   let game = null;            // 进入牌桌时按配置创建
   let SEAT_POS = [];          // 当前桌的座位坐标(按人数)
   let tableConfig = null;     // 当前牌桌规则
+  let sng = null;             // SNG 锦标赛状态(null=现金桌)
+  const SNG_HANDS_PER_LEVEL = 8;
+  const SNG_MULT = [1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24];
   let seatAvatars = [];       // 每个座位用的头像编号(1..12)
   let seatVoice = [];         // 每个座位的方言: 'db'(东北)/'cd'(成都)
   let seatProfiles = [];      // AI 对手画像(本桌):风格 + 本局观察统计
@@ -234,8 +237,9 @@
     const red = P.isRed(card) ? ' red' : '';
     const fl = flip ? ' flip-in' : '';
     const r = P.RANK_LABEL[card.rank], s = P.SUIT_SYMBOL[card.suit];
-    if (small) return `<div class="card small${red}${fl}"><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
-    return `<div class="card${red}${fl}"><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
+    const ck = ` data-ck="${card.rank}${card.suit}"`;
+    if (small) return `<div class="card small${red}${fl}"${ck}><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
+    return `<div class="card${red}${fl}"${ck}><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
   }
   const cardBackHTML = (small) => `<div class="card back${small ? ' small' : ''}"></div>`;
 
@@ -344,7 +348,25 @@
       hh.classList.remove('hidden');
     } else hh.classList.add('hidden');
 
+    highlightBest5();
     updateMessage();
+  }
+
+  // 摊牌时高亮组成最优 5 张的牌（公共牌 + 该玩家手牌描金边）
+  function highlightBest5() {
+    document.querySelectorAll('.card.hl5').forEach((el) => el.classList.remove('hl5'));
+    const result = game && game.result;
+    if (!result || !result.showdown || game.phase !== 'ended') return;
+    // 焦点玩家：你(若摊牌未弃)，否则最大赢家
+    const me = game.players[0];
+    let focus = (!me.folded && !me.out && me.hole && me.hole.length === 2) ? me : null;
+    if (!focus) focus = game.players.filter((p) => p.winThisHand > 0 && !p.folded && p.hole && p.hole.length === 2).sort((a, b) => b.winThisHand - a.winThisHand)[0];
+    if (!focus || game.board.length < 3) return;
+    const best = P.evaluateBest(focus.hole.concat(game.board)).cards;
+    const keys = new Set(best.map((c) => c.rank + c.suit));
+    const mark = (root) => { if (root) root.querySelectorAll('[data-ck]').forEach((el) => { if (keys.has(el.dataset.ck)) el.classList.add('hl5'); }); };
+    mark(boardEl);
+    mark(seatEls[focus.id] && seatEls[focus.id].querySelector('.player-cards'));
   }
 
   function flashAllIn() {
@@ -546,8 +568,8 @@
       if (lastSyncedHand !== game.handNo) {
         lastSyncedHand = game.handNo;
         const meP = game.players[0];
-        Store.get().coins = Math.max(0, meP.chips);
-        Store.save();
+        // 现金桌：钱包=你的筹码；SNG 锦标赛用的是赛事筹码，不写回钱包
+        if (!sng) { Store.get().coins = Math.max(0, meP.chips); Store.save(); }
         const sawShowdown = !!(game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]);
         const hc = sawShowdown ? game.result.handScores[0][0] : 0;
         Store.recordHand(meP.winThisHand > 0, game.pot, hc);
@@ -583,7 +605,7 @@
           });
         } catch (e) {}
         syncWallet(true); syncLevel();
-        if (up.leveled > 0) { setTimeout(() => { toast(`🎉 升到 ${up.level} 级！金币 +${(up.level * 10000).toLocaleString()}`); Store.addCoins(up.level * 10000); syncWallet(true); Sfx.reward(); }, 1200); }
+        if (up.leveled > 0) { setTimeout(() => { Fx.rewardPop(fxLayer, '🎉', `升到 ${up.level} 级`, `金币 +${fmtChips(up.level * 10000)}`); Store.addCoins(up.level * 10000); syncWallet(true); Sfx.reward(); }, 1200); }
       }
       if (lastDecoratedHand !== game.handNo) { lastDecoratedHand = game.handNo; decorateResult(); }
       hideHumanControls();
@@ -622,6 +644,7 @@
     humanWinPct = null; handAnalysis = null; handDecisions = [];
     Sfx.resume();
     $('result-banner').classList.add('hidden');
+    if (sng) return sngNextHand();
     // 破产救济（免费）
     if (Store.get().coins < game.bigBlind * 2) {
       const got = Store.relief();
@@ -640,6 +663,46 @@
     syncWallet();
     Sfx.deal();
     tick();
+  }
+
+  // SNG 锦标赛下一手：结算淘汰名次、升盲、判定冠军/出局，不补码
+  function sngNextHand() {
+    // 仅在已打过至少一手后才结算淘汰/升盲（首次发牌直接开局）
+    if (game.result) {
+      const alive = game.players.filter((p) => p.chips > 0);
+      const bustedNow = game.players.filter((p) => p.chips <= 0 && sng.places[p.id] == null);
+      if (bustedNow.length) {
+        bustedNow.sort((a, b) => b.chips - a.chips); // 同时出局者按筹码决定名次先后
+        bustedNow.forEach((p, k) => { sng.places[p.id] = alive.length + 1 + k; });
+      }
+      if (game.players[0].chips <= 0) { endSng(sng.places[0] || (alive.length + 1), false); return; }
+      if (alive.length <= 1) { const champ = alive[0] || game.players[0]; sng.places[champ.id] = 1; endSng(1, champ.isHuman); return; }
+      sng.hands++;
+      if (sng.hands >= SNG_HANDS_PER_LEVEL && sng.level < SNG_MULT.length - 1) {
+        sng.level++; sng.hands = 0;
+        game.bigBlind = Math.round(sng.baseBb * SNG_MULT[sng.level]);
+        game.smallBlind = Math.max(1, Math.round(game.bigBlind / 2));
+        toast(`⏫ 盲注升至 ${game.smallBlind}/${game.bigBlind}`);
+      }
+    }
+    game.startHand();
+    Sfx.deal();
+    tick();
+  }
+  function endSng(humanPlace, won) {
+    const isSng = !!sng; sng = null;        // 清除锦标赛态，回到普通逻辑
+    if (!isSng) return;
+    hideHumanControls();
+    $('start-area').classList.add('hidden');
+    let reward = 0;
+    if (won) reward = 200000;
+    else if (humanPlace === 2) reward = 100000;
+    else if (humanPlace === 3) reward = 50000;
+    if (reward) { Store.addCoins(reward); syncWallet(true); }
+    if (won) { Fx.rewardPop(fxLayer, '🏆', 'SNG 冠军！', `奖励 🪙${fmtChips(reward)}`); Sfx.win(); Fx.vibrate(60); }
+    else { Fx.rewardPop(fxLayer, '🎖️', `第 ${humanPlace} 名`, reward ? `奖励 🪙${fmtChips(reward)}` : '再接再厉'); Sfx.lose(); }
+    toast(won ? '🏆 恭喜夺冠！' : `本场第 ${humanPlace} 名`);
+    setTimeout(() => SceneRouter.go('hall'), 3200);
   }
 
   /* ---------- 人类操作 ---------- */
@@ -1247,6 +1310,9 @@
           g.items.map((t) => `<button class="say-chip" data-say="${t}"${inTable ? '' : ' disabled'}>${t}</button>`).join('') +
           `</div></div>`;
       });
+      html += `<div class="say-group"><div class="say-cat">表情</div><div class="say-wrap">` +
+        (Social.EMOJIS || []).map((em) => `<button class="emoji-chip" data-emoji="${em}"${inTable ? '' : ' disabled'}>${em}</button>`).join('') +
+        `</div></div>`;
     } else if (kind === 'tableGift') {
       const inTable = currentScreen === 'table' && game;
       html = `<div class="panel-hero"><b>牌桌礼物</b><span>${inTable ? '送给对手一份礼物，看它飞过牌桌命中爆开。免费礼物不花筹码。' : '进入牌桌后可向对手赠送互动礼物。'}</span><em>🪙 ${fmtChips(Store.get().coins)}</em></div>
@@ -1465,6 +1531,7 @@
     { ic: '👑', name: '九人桌', desc: '盲注 100/200 · 9人 · 买入 3万 · 含前注', sb: 100, bb: 200, players: 9, buyin: 30000, ante: 20 },
     { ic: '🦈', name: '高手场', desc: '紧凶鲨鱼 · 会读你打法 · 200/400 · 6人', sb: 200, bb: 400, players: 6, buyin: 60000, ante: 0, level: 'hard' },
     { ic: '🏆', name: '大师场', desc: '最强 AI · 极限剥削 · 500/1000 · 6人', sb: 500, bb: 1000, players: 6, buyin: 150000, ante: 50, level: 'master' },
+    { ic: '🏅', name: 'SNG 锦标赛', desc: '6人单桌淘汰 · 盲注递增 · 训练赛制 · 冠军领奖', sb: 50, bb: 100, players: 6, buyin: 10000, ante: 0, level: 'hard', mode: 'sng' },
   ];
   // 盲注档位（供 SceneRouter.go('table',{blindLevel}) 外部 API 解析）
   const BLIND_LEVELS = [
@@ -1521,6 +1588,8 @@
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
     game = new window.Game({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
+    // SNG 锦标赛：所有人等额起始筹码，盲注递增，淘汰制
+    sng = (cfg.mode === 'sng') ? { level: 0, hands: 0, places: {}, baseSb: cfg.sb, baseBb: cfg.bb } : null;
     // 按难度配置 AI：高手/大师=鲨鱼，更准的模拟
     game.players.forEach((pl) => { if (!pl.isHuman) pl.ai = AI.makePersona(cfg.level); });
     AI.setSims(cfg.level === 'master' ? 260 : cfg.level === 'hard' ? 220 : 170);
@@ -1656,6 +1725,7 @@
     $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); SceneRouter.go('select'); });
     $('btn-select-back').addEventListener('click', () => { Sfx.button(); SceneRouter.go('hall'); });
     $('btn-table-back').addEventListener('click', () => { Sfx.button(); SceneRouter.go('hall'); });
+    $('btn-rematch').addEventListener('click', () => { if (!tableConfig) return; Sfx.button(); startTable(tableConfig); toast('🔄 已换桌，对手已更换'); });
     $('room-list').addEventListener('click', (e) => {
       const card = e.target.closest('[data-room],[data-custom]'); if (!card) return;
       Sfx.button();
@@ -1723,8 +1793,9 @@
       else if (back) { $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (oh) { openPanel('tableHistory'); }
       else if (row) { $('panel-body').innerHTML = renderHandDetail(parseInt(row.dataset.hand, 10)); try { Sfx.button(); } catch (_) {} }
-      else { const say = e.target.closest('[data-say]'), gift = e.target.closest('[data-gift]'), tg = e.target.closest('[data-toggle]');
+      else { const say = e.target.closest('[data-say]'), gift = e.target.closest('[data-gift]'), tg = e.target.closest('[data-toggle]'), emo = e.target.closest('[data-emoji]');
         if (say && !say.disabled) { closeModal(); sayPhrase(say.dataset.say); }
+        else if (emo && !emo.disabled) { closeModal(); sayPhrase(emo.dataset.emoji); }
         else if (gift && !gift.disabled) { sendGift(gift.dataset.gift); }
         else if (tg) {
           const which = tg.dataset.toggle;

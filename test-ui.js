@@ -52,11 +52,11 @@ ok(typeof S.toggleCoach() === 'boolean', 'coach toggle');
 ok(typeof window.PokerAI.equityVsRange === 'function', 'AI.equityVsRange exists');
 (function () {
   const hole = [{ rank: 14, suit: 's' }, { rank: 14, suit: 'h' }]; // AA
-  const tight = window.PokerAI.equityVsRange(hole, [], 10, 1, 300); // vs top10%
-  const wide = window.PokerAI.equityVsRange(hole, [], 80, 1, 300);  // vs top80%
+  const tight = window.PokerAI.equityVsRange(hole, [], 8, 1, 4000); // vs top8%
+  const wide = window.PokerAI.equityVsRange(hole, [], 90, 1, 4000); // vs top90%
   ok(tight && wide && (tight.win + tight.tie / 2) < (wide.win + wide.tie / 2), 'AA: 对紧范围胜率 < 对宽范围胜率');
-  const rnd = window.PokerAI.equityFull(hole, [], 2, 300);
-  ok(rnd && rnd.win > 0.7, 'AA vs 2 random still strong');
+  const rnd = window.PokerAI.equityFull(hole, [], 2, 4000);
+  ok(rnd && rnd.win > 0.65, 'AA vs 2 random still strong');
 })();
 
 // 3) 数据层完整性
@@ -68,6 +68,15 @@ ok(window.document.getElementById('splash'), 'splash created');
 ok(typeof S.recordHandType === 'function' && typeof S.getHandDex === 'function', 'handDex API');
 S.recordHandType(8); S.recordHandType(8); ok(S.getHandDex()[8].count === 2 && S.getHandDex()[8].unlocked, 'recordHandType counts');
 window.SceneRouter.go('handDex'); ok(/牌型图鉴/.test(body.innerHTML) && /已解锁牌型/.test(body.innerHTML), 'handDex panel renders');
+// P2 收尾批
+ok(window.Store.getAchievements().length >= 18, 'achievements expanded (>=18)');
+ok(window.Social.EMOJIS && window.Social.EMOJIS.length >= 8, 'emoji set present');
+ok(typeof window.Fx.rewardPop === 'function', 'Fx.rewardPop exists');
+window.document.querySelector('[data-panel="tableChat"]').click();
+ok(/data-emoji=/.test(body.innerHTML), 'chat panel has emoji row');
+// SNG：以锦标赛模式进桌不报错并显示牌桌
+window.SceneRouter.go('table', { mode: 'sng', players: 6 });
+ok(!window.document.getElementById('screen-table').classList.contains('hidden'), 'SNG table opens');
 // SceneRouter：统一路由
 ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
 ['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));

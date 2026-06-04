@@ -1,5 +1,9 @@
 /* 视觉特效 —— 筹码飞行、卡牌翻转、赢家光效、震动。纯 DOM/CSS，原创。 */
 (function () {
+  // 无障碍：系统开启"减少动态效果"时，粒子数量按比例缩减，震动关闭
+  const REDUCE = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const pCount = (n) => REDUCE ? Math.max(2, Math.round(n * 0.3)) : n;
+
   function centerOf(el, container) {
     const r = el.getBoundingClientRect();
     const c = container.getBoundingClientRect();
@@ -49,6 +53,7 @@
   }
 
   function vibrate(ms) {
+    if (REDUCE) return;
     if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} }
   }
 
@@ -56,7 +61,7 @@
   function coinBurst(targetEl, layer, count) {
     if (!targetEl || !layer) return;
     const p = centerOf(targetEl, layer);
-    count = count || 10;
+    count = pCount(count || 10);
     for (let i = 0; i < count; i++) {
       const c = document.createElement('div');
       c.className = 'coin-burst';
@@ -76,7 +81,7 @@
     b.textContent = label;
     layer.appendChild(b);
     setTimeout(() => b.remove(), 2200);
-    const n = 5 + tier * 5;
+    const n = pCount(5 + tier * 5);
     const set = tier >= 8 ? ['👑', '💎', '⭐', '🪙'] : tier >= 6 ? ['💎', '⭐', '🪙'] : tier >= 4 ? ['⭐', '🪙'] : ['✨', '⭐'];
     const r = layer.getBoundingClientRect();
     const cx = r.width / 2, cy = r.height * 0.4;
@@ -127,7 +132,7 @@
       g.remove();
       // 命中爆开
       const burst = ['✨', '💥', icon];
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0, gn = pCount(10); i < gn; i++) {
         const p = document.createElement('div');
         p.className = 'cele-particle'; p.textContent = burst[i % burst.length];
         const ang = Math.random() * Math.PI * 2, dist = 30 + Math.random() * 50;
@@ -157,7 +162,7 @@
     setTimeout(() => banner.remove(), 1900);
     // 底部升腾火苗，数量随级别
     const r = layer.getBoundingClientRect();
-    const n = 6 + L * 6;
+    const n = pCount(6 + L * 6);
     for (let i = 0; i < n; i++) {
       const f = document.createElement('div');
       f.className = 'flame-particle';
@@ -174,6 +179,25 @@
     return L;
   }
 
+  // 升级 / 成就解锁专属弹层：中心光环 + 标题 + 环绕星屑（程序化）
+  function rewardPop(layer, icon, title, sub) {
+    if (!layer) return;
+    const wrap = document.createElement('div'); wrap.className = 'reward-pop';
+    wrap.innerHTML = `<div class="rp-ring"></div><div class="rp-ic">${icon}</div><div class="rp-title">${title}</div>${sub ? `<div class="rp-sub">${sub}</div>` : ''}`;
+    layer.appendChild(wrap);
+    const r = layer.getBoundingClientRect(), cx = r.width / 2, cy = r.height * 0.42;
+    for (let i = 0, n = pCount(16); i < n; i++) {
+      const p = document.createElement('div'); p.className = 'cele-particle'; p.textContent = i % 3 === 0 ? '⭐' : '✨';
+      const ang = (i / n) * Math.PI * 2, dist = 60 + Math.random() * 60;
+      p.style.left = cx + 'px'; p.style.top = cy + 'px'; p.style.fontSize = '16px';
+      p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+      p.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+      p.style.animation = `celeFly ${0.9 + Math.random() * 0.5}s ease-out forwards`;
+      layer.appendChild(p); setTimeout(() => p.remove(), 1500);
+    }
+    setTimeout(() => wrap.remove(), 2100);
+  }
+
   // 顶级全场通告：横幅从右向左滑过牌桌顶部（程序化）
   function topBanner(layer, text) {
     if (!layer || !text) return;
@@ -183,5 +207,5 @@
     setTimeout(() => b.remove(), 4200);
   }
 
-  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake, speechBubble, flyGift, streakFlame, topBanner };
+  window.Fx = { flyChip, pulseWin, floatText, vibrate, coinBurst, handCelebration, shake, speechBubble, flyGift, streakFlame, topBanner, rewardPop };
 })();

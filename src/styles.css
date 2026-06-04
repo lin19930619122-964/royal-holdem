@@ -328,6 +328,22 @@ html, body {
 #turn-timer i { display:block; height:100%; width:100%; background:linear-gradient(90deg,var(--gold),var(--gold-lt)); border-radius:3px; }
 #turn-timer i.warn { background:linear-gradient(90deg,#ff7a1e,#ff4d4d); animation:turnWarn .5s ease-in-out infinite alternate; }
 @keyframes turnWarn { from{opacity:.6} to{opacity:1} }
+/* 最优5张高亮 */
+.card.hl5 { box-shadow:0 0 0 2px var(--gold), 0 0 12px rgba(245,207,107,.9); z-index:5; animation:hl5pulse 1.1s ease-in-out infinite alternate; }
+@keyframes hl5pulse { from{box-shadow:0 0 0 2px var(--gold),0 0 8px rgba(245,207,107,.6)} to{box-shadow:0 0 0 2px var(--gold-lt),0 0 16px rgba(245,207,107,1)} }
+/* 表情快捷按钮 */
+.emoji-chip { font-size:22px; line-height:1; padding:5px 8px; border:1px solid rgba(245,207,107,.3); border-radius:10px; background:rgba(255,255,255,.05); }
+.emoji-chip:active { transform:translateY(1px); background:rgba(245,207,107,.15); }
+.emoji-chip:disabled { opacity:.4; }
+/* 升级 / 解锁弹层 */
+.reward-pop { position:absolute; left:50%; top:42%; transform:translate(-50%,-50%); z-index:36; pointer-events:none; text-align:center; animation:rpIn 2.1s ease forwards; }
+.reward-pop .rp-ring { position:absolute; left:50%; top:36px; width:120px; height:120px; transform:translate(-50%,-50%); border-radius:50%;
+  border:3px solid var(--gold); box-shadow:0 0 30px var(--gold); animation:rpRing 2.1s ease-out forwards; }
+.reward-pop .rp-ic { font-size:54px; filter:drop-shadow(0 0 18px var(--gold)); }
+.reward-pop .rp-title { color:#fff; font-weight:900; font-size:22px; -webkit-text-stroke:1px var(--gold-deep); text-shadow:0 0 16px var(--gold); margin-top:4px; }
+.reward-pop .rp-sub { color:var(--gold-lt); font-weight:800; font-size:14px; margin-top:2px; }
+@keyframes rpIn { 0%{opacity:0;transform:translate(-50%,-50%) scale(.4)} 18%{opacity:1;transform:translate(-50%,-50%) scale(1.12)} 32%{transform:translate(-50%,-50%) scale(1)} 80%{opacity:1} 100%{opacity:0;transform:translate(-50%,-62%) scale(1)} }
+@keyframes rpRing { 0%{opacity:.9;width:30px;height:30px} 100%{opacity:0;width:200px;height:200px} }
 /* 座位牌型标签(摊牌) */
 .seat .hand-name {
   position: absolute; top: -31px; left: 50%; transform: translateX(-50%);

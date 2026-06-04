@@ -255,6 +255,16 @@
     { id: 'flush', name: '同花高手', desc: '做成同花或更大', ok: (p) => (p.bestHand || 0) >= 5, coins: 60000, diamonds: 6 },
     { id: 'allin10', name: '全下狂魔', desc: '全下 10 次', ok: (p) => (p.allinTotal || 0) >= 10, coins: 60000, diamonds: 6 },
     { id: 'streak5', name: '五连胜', desc: '连胜 5 手', ok: (p) => (p.bestStreak || 0) >= 5, coins: 80000, diamonds: 8 },
+    { id: 'streak8', name: '八连绝尘', desc: '连胜 8 手', ok: (p) => (p.bestStreak || 0) >= 8, coins: 150000, diamonds: 15 },
+    { id: 'fullhouse', name: '葫芦成型', desc: '做成葫芦或更大', ok: (p) => (p.bestHand || 0) >= 6, coins: 80000, diamonds: 8 },
+    { id: 'quads', name: '四条降临', desc: '做成四条或更大', ok: (p) => (p.bestHand || 0) >= 7, coins: 150000, diamonds: 15 },
+    { id: 'strflush', name: '同花顺王者', desc: '做成同花顺', ok: (p) => (p.bestHand || 0) >= 8, coins: 300000, diamonds: 30 },
+    { id: 'lv25', name: '渐入佳境', desc: '达到 25 级', ok: (p) => p.level >= 25, coins: 200000, diamonds: 20 },
+    { id: 'lv50', name: '皇家大师', desc: '达到 50 级', ok: (p) => p.level >= 50, coins: 500000, diamonds: 50 },
+    { id: 'rich', name: '腰缠万贯', desc: '训练筹码达 100 万', ok: (p) => (p.coins || 0) >= 1000000, coins: 100000, diamonds: 10 },
+    { id: 'win100', name: '百胜将军', desc: '累计获胜 100 手', ok: (p) => (p.handsWon || 0) >= 100, coins: 120000, diamonds: 12 },
+    { id: 'dex', name: '牌型收藏家', desc: '集齐 9 种牌型', ok: (p) => (p.handTypeCounts || []).filter((x) => x > 0).length >= 9, coins: 200000, diamonds: 20 },
+    { id: 'reviewer', name: '复盘达人', desc: '累计记录 20 手牌谱', ok: (p) => (p.handSeq || 0) >= 20, coins: 60000, diamonds: 6 },
   ];
   function getAchievements() {
     return ACHV.map((a) => ({ id: a.id, name: a.name, desc: a.desc, unlocked: a.ok(profile), claimed: profile.achvClaimed.includes(a.id), coins: a.coins, diamonds: a.diamonds }));
