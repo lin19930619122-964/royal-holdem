@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "皇室德州 Royal Hold'em — 手机端 PWA 德州扑克，对战 AI",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test-engine.js && node test-ui.js"
   },
   "author": "",
   "license": "MIT",
