@@ -23,6 +23,26 @@
     #join-card p { color:#bfe6cf; font-size:12px; margin-bottom:16px; }
     #join-name { width:100%; padding:12px; border-radius:10px; border:1px solid rgba(245,207,107,.4); background:rgba(0,0,0,.4); color:#fff; font-size:15px; text-align:center; margin-bottom:14px; }
     .back-link { position:absolute; left:12px; }
+    /* 大厅房间列表 */
+    #lobby-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; max-height:50vh; overflow-y:auto; }
+    .room-card2 { display:flex; align-items:center; gap:10px; padding:12px; border-radius:12px; border:1px solid rgba(245,207,107,.25); background:rgba(255,255,255,.04); }
+    .room-card2 .rinfo { flex:1; text-align:left; } .room-card2 .rname { color:#fff; font-weight:800; font-size:14px; }
+    .room-card2 .rdesc { color:#9fc4ae; font-size:11px; margin-top:2px; }
+    .room-card2 button { border:none; border-radius:9px; padding:7px 11px; font-weight:800; font-size:12px; margin-left:4px; }
+    .r-sit { background:linear-gradient(180deg,var(--gold-lt),var(--gold-deep)); color:#3a2400; }
+    .r-spec { background:rgba(255,255,255,.1); color:#cfe7d8; }
+    #btn-lobby { background:rgba(245,207,107,.18); border:1px solid var(--gold); color:var(--gold); border-radius:9px; padding:4px 10px; font-weight:700; font-size:12px; }
+    /* 社交条 */
+    #mp-social { padding:4px 10px 6px; border-top:1px solid rgba(245,207,107,.12); }
+    #chat-log { max-height:74px; overflow-y:auto; font-size:12px; color:#dfeee6; line-height:1.5; margin-bottom:5px; }
+    #chat-log .ci-seat { color:var(--gold-lt); font-weight:800; } #chat-log .ci-sys { color:#ffb454; }
+    #social-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    #chat-input { flex:1; min-width:90px; padding:7px 10px; border-radius:9px; border:1px solid rgba(245,207,107,.3); background:rgba(0,0,0,.35); color:#fff; font-size:13px; }
+    #social-row button { border:1px solid rgba(245,207,107,.25); background:rgba(255,255,255,.05); color:#eafff1; border-radius:9px; padding:6px 9px; font-size:14px; font-weight:700; }
+    #report-pick { display:none; flex-wrap:wrap; gap:6px; margin-top:6px; }
+    #report-pick button { background:rgba(255,90,90,.15); border-color:rgba(255,120,120,.4); color:#ffb0b0; font-size:12px; }
+    .emote-fly { position:absolute; z-index:38; font-size:30px; pointer-events:none; transform:translate(-50%,-50%); animation:emoteUp 1.6s ease-out forwards; }
+    @keyframes emoteUp { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1.2)} 100%{opacity:0;transform:translate(-50%,-160%) scale(1)} }
   </style>
 </head>
 <body>
@@ -33,6 +53,7 @@
         <span id="conn-state" class="bad">连接中…</span>
       </div>
       <div class="left">
+        <button id="btn-lobby">大厅</button>
         <span id="seatInfo">座位 -/6</span>
         <span id="blindInfo">50/100</span>
       </div>
@@ -54,6 +75,19 @@
     </main>
 
     <footer id="controls">
+      <div id="mp-social">
+        <div id="chat-log"></div>
+        <div id="social-row">
+          <input type="text" id="chat-input" maxlength="80" placeholder="说点什么…" />
+          <button id="chat-send">发送</button>
+          <button class="emo" data-emo="😀">😀</button>
+          <button class="emo" data-emo="😎">😎</button>
+          <button class="emo" data-emo="😭">😭</button>
+          <button class="emo" data-emo="👍">👍</button>
+          <button id="btn-report">🚩</button>
+        </div>
+        <div id="report-pick"></div>
+      </div>
       <div id="message-bar">连接服务器中…</div>
       <div id="host-area" class="host-ctl hidden">
         <button id="btn-addbot">+ 机器人</button>
@@ -84,10 +118,11 @@
 
   <div id="join-overlay">
     <div id="join-card">
-      <h2>真人对战</h2>
-      <p>同一 Tailnet 的朋友打开本页面即可同桌。<br>不够人时点「+机器人」补位。</p>
+      <h2>真人对战 · 大厅</h2>
+      <p>同一 Tailnet 的朋友打开本页即可同桌。先取昵称，再选房间入座或旁观；人不够点「+机器人」补位。</p>
       <input type="text" id="join-name" placeholder="输入你的昵称" maxlength="8" />
-      <button class="big-btn" id="join-go">坐下入桌</button>
+      <button class="big-btn" id="join-go">进入大厅</button>
+      <div id="lobby-list"></div>
     </div>
   </div>
 

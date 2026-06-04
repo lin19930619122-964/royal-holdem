@@ -28,47 +28,53 @@ const server = http.createServer((req, res) => {
   });
 });
 
-// ---- 真人对战 WebSocket ----
+// ---- 真人对战 WebSocket（多房间 Hub）----
 let mpOn = false;
 try {
   const WebSocket = require('ws');
-  const { Table } = require('./mp.js');
+  const { Rooms } = require('./mp.js');
   const wss = new WebSocket.Server({ server, path: '/ws' });
-  const clients = new Map(); // ws -> connId
+  const wsById = new Map();   // connId -> ws
   let nextId = 1;
 
-  const table = new Table(broadcast);
+  const send = (connId, obj) => { const ws = wsById.get(connId); if (ws && ws.readyState === WebSocket.OPEN) { try { ws.send(JSON.stringify(obj)); } catch (e) {} } };
 
-  function broadcast() {
-    for (const [ws, connId] of clients) {
-      if (ws.readyState !== WebSocket.OPEN) continue;
-      const meta = table.seatByConn(connId);
-      const forSeat = meta ? meta.seat : -1;
-      try { ws.send(JSON.stringify(table.buildState(forSeat))); } catch (e) {}
-    }
-  }
+  // io：mp.js 通过它把状态/事件发给房间成员
+  const io = {
+    sendState(table) { for (const connId of table.members) { const m = table.seatByConn(connId); send(connId, table.buildState(m ? m.seat : -1)); } },
+    relay(table, obj) { if (obj && obj.to != null) { send(obj.to, obj); return; } for (const connId of table.members) send(connId, obj); },
+  };
+  const rooms = new Rooms(io);
+  const sendLobby = (connId) => send(connId, { type: 'lobby', rooms: rooms.lobby() });
+  const broadcastLobby = () => { for (const connId of wsById.keys()) if (!rooms.tableOf(connId)) sendLobby(connId); };
 
   wss.on('connection', (ws) => {
     const connId = nextId++;
-    clients.set(ws, connId);
+    wsById.set(ws.connId = connId, ws);
+    sendLobby(connId);
     ws.on('message', (raw) => {
       let msg; try { msg = JSON.parse(raw); } catch (e) { return; }
       switch (msg.type) {
+        case 'lobby': sendLobby(connId); break;
         case 'join': {
-          const meta = table.sit(connId, msg.name, msg.token);
-          ws.send(JSON.stringify(meta
-            ? { type: 'joined', seat: meta.seat, token: meta.token }
-            : { type: 'full' }));
-          broadcast();
+          const r = rooms.join(connId, msg.room, msg.name, msg.token, !!msg.spectate);
+          send(connId, r.meta ? { type: 'joined', room: r.table.id, seat: r.meta.seat, token: r.meta.token }
+            : { type: 'spectating', room: r.table.id });
+          r.table.emit(); broadcastLobby();
           break;
         }
-        case 'start': table.startHand(); break;
-        case 'addBot': table.addBot(); break;
-        case 'action': table.playerAction(connId, msg.action, msg.amount); break;
-        case 'leave': { const m = table.seatByConn(connId); if (m) table.removeSeat(m.seat); break; }
+        case 'changeTable': { const r = rooms.changeTable(connId, msg.room, msg.name, msg.token); send(connId, r.meta ? { type: 'joined', room: r.table.id, seat: r.meta.seat, token: r.meta.token } : { type: 'spectating', room: r.table.id }); r.table.emit(); broadcastLobby(); break; }
+        case 'leave': rooms.leave(connId); sendLobby(connId); broadcastLobby(); break;
+        case 'start': rooms.start(connId); break;
+        case 'addBot': rooms.addBot(connId); break;
+        case 'action': rooms.action(connId, msg.action, msg.amount); break;
+        case 'chat': rooms.chat(connId, msg.text); break;
+        case 'emote': rooms.emote(connId, msg.emoji); break;
+        case 'gift': rooms.gift(connId, msg.toSeat, msg.gift); break;
+        case 'report': rooms.report(connId, msg.seat, msg.reason); break;
       }
     });
-    ws.on('close', () => { table.disconnect(connId); clients.delete(ws); });
+    ws.on('close', () => { rooms.disconnect(connId); wsById.delete(connId); broadcastLobby(); });
     ws.on('error', () => {});
   });
   mpOn = true;

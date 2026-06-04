@@ -14,6 +14,7 @@
   const seatEls = [], betEls = [], seatSig = [], prevBet = [];
   let boardCount = -1, lastResultHand = -1, raiseMode = false;
   let ws = null, state = null, mySeat = -1, deadlineTimer = null;
+  let myName = '玩家', spectating = false, chatPopulated = false;
 
   function buildSeats() {
     seatsEl.innerHTML = '';
@@ -47,7 +48,7 @@
   function render() {
     if (!state) return;
     mySeat = state.youSeat;
-    $('seatInfo').textContent = `座位 ${mySeat >= 0 ? mySeat + 1 : '-'}/6 · ${state.seatedCount}人`;
+    $('seatInfo').textContent = state.youSpectator ? `👁旁观 · ${state.seatedCount}人` : `座位 ${mySeat >= 0 ? mySeat + 1 : '-'}/6 · ${state.seatedCount}人`;
     $('blindInfo').textContent = `${state.smallBlind}/${state.bigBlind}`;
     $('pot-amount').textContent = (state.pot || 0).toLocaleString();
 
@@ -126,6 +127,7 @@
 
   function updateMessage() {
     const msg = $('message-bar');
+    if (state.youSpectator) { msg.textContent = state.running ? '👁 旁观中…（可聊天）' : '👁 旁观中 · 等待开局'; return; }
     if (state.phase === 'idle' || !state.running) {
       msg.textContent = state.seatedCount < 2 ? '等待玩家加入…（可加机器人）' : (state.hostSeat === mySeat ? '可以开始了' : '等待房主开始');
       return;
@@ -138,6 +140,7 @@
   }
 
   function updateControls() {
+    if (state.youSpectator) { $('host-area').classList.add('hidden'); $('action-area').classList.add('hidden'); return; }
     // 房主控制
     const host = state.hostSeat === mySeat && !state.running && state.seatedCount >= 1;
     $('host-area').classList.toggle('hidden', !host);
@@ -203,6 +206,34 @@
   }
   const roundToBB = (v) => Math.round(v / state.bigBlind) * state.bigBlind;
 
+  /* ---- 大厅 / 社交 ---- */
+  function renderLobby(rooms) {
+    const box = $('lobby-list'); if (!box) return;
+    box.innerHTML = (rooms || []).map((r) =>
+      `<div class="room-card2"><div class="rinfo"><div class="rname">${r.name}</div>
+        <div class="rdesc">盲注 ${r.blinds} · ${r.seated}人在座 · ${r.bots}机器人 · 👁${r.spectators}${r.running ? ' · 进行中' : ''}</div></div>
+        <button class="r-sit" data-room="${r.id}" ${r.full ? 'disabled' : ''}>${r.full ? '满' : '入座'}</button>
+        <button class="r-spec" data-room="${r.id}" data-spec="1">旁观</button></div>`).join('');
+  }
+  function appendChat(ev) {
+    const log = $('chat-log'); if (!log) return;
+    const div = document.createElement('div');
+    if (ev.sys) div.innerHTML = `<span class="ci-sys">${ev.text}</span>`;
+    else div.innerHTML = `<span class="ci-seat">${ev.name || ('座位' + ((ev.seat | 0) + 1))}</span>：${escapeHtml(ev.text)}`;
+    log.appendChild(div);
+    while (log.children.length > 30) log.removeChild(log.firstChild);
+    log.scrollTop = log.scrollHeight;
+  }
+  function renderChat(list) { const log = $('chat-log'); if (log) { log.innerHTML = ''; (list || []).forEach(appendChat); } }
+  function escapeHtml(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+  function flyEmote(seat, txt) {
+    if (seat == null || seat < 0 || !seatEls[seat]) return;
+    const r = seatEls[seat].getBoundingClientRect(), c = fxLayer.getBoundingClientRect();
+    const el = document.createElement('div'); el.className = 'emote-fly'; el.textContent = txt;
+    el.style.left = (r.left + r.width / 2 - c.left) + 'px'; el.style.top = (r.top + r.height / 2 - c.top) + 'px';
+    fxLayer.appendChild(el); setTimeout(() => el.remove(), 1600);
+  }
+
   /* ---- 连接 ---- */
   function connect(name) {
     // 原生壳/独立部署可用 window.RH_SERVER 指定服务器(如 'm5.tail5255b4.ts.net')；网页版默认连当前主机
@@ -210,15 +241,17 @@
       ? `wss://${window.RH_SERVER}/ws`
       : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
     ws = new WebSocket(url);
-    ws.onopen = () => {
-      $('conn-state').textContent = '已连接'; $('conn-state').className = 'ok';
-      send({ type: 'join', name, token: localStorage.getItem(TOKEN_KEY) || null });
-    };
+    ws.onopen = () => { $('conn-state').textContent = '已连接'; $('conn-state').className = 'ok'; send({ type: 'lobby' }); };
     ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
-      if (m.type === 'joined') { localStorage.setItem(TOKEN_KEY, m.token); $('join-overlay').classList.add('hidden'); }
-      else if (m.type === 'full') { $('message-bar').textContent = '牌桌已满（6人），请稍后'; }
-      else if (m.type === 'state') { state = m; render(); }
+      if (m.type === 'lobby') { renderLobby(m.rooms); }
+      else if (m.type === 'joined') { localStorage.setItem(TOKEN_KEY, m.token); spectating = false; chatPopulated = false; $('join-overlay').classList.add('hidden'); }
+      else if (m.type === 'spectating') { spectating = true; chatPopulated = false; $('join-overlay').classList.add('hidden'); }
+      else if (m.type === 'state') { state = m; if (!chatPopulated && m.chat) { renderChat(m.chat); chatPopulated = true; } render(); }
+      else if (m.type === 'chat') { appendChat(m); }
+      else if (m.type === 'sys') { appendChat({ sys: true, text: m.text }); }
+      else if (m.type === 'emote') { flyEmote(m.seat, m.emoji); }
+      else if (m.type === 'gift') { flyEmote(m.toSeat, m.gift); }
     };
     ws.onclose = () => {
       $('conn-state').textContent = '已断开，重连中…'; $('conn-state').className = 'bad';
@@ -230,11 +263,36 @@
   /* ---- 事件 ---- */
   function setup() {
     $('join-go').addEventListener('click', () => {
-      const name = ($('join-name').value || '玩家').trim().slice(0, 8);
+      myName = ($('join-name').value || '玩家').trim().slice(0, 8) || '玩家';
       Sfx.resume();
-      connect(name);
+      $('join-name').parentNode && ($('join-go').textContent = '选择下方房间 ↓');
+      if (!ws || ws.readyState > 1) connect(myName); else send({ type: 'lobby' });
     });
     $('join-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('join-go').click(); });
+    // 大厅房间选择：入座 / 旁观
+    $('lobby-list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-room]'); if (!b || b.disabled) return;
+      Sfx.button();
+      send({ type: 'join', room: b.dataset.room, name: myName, token: localStorage.getItem(TOKEN_KEY) || null, spectate: !!b.dataset.spec });
+    });
+    // 返回大厅
+    $('btn-lobby').addEventListener('click', () => { Sfx.button(); send({ type: 'leave' }); state = null; chatPopulated = false; $('join-overlay').classList.remove('hidden'); $('join-go').textContent = '刷新房间'; });
+    // 聊天 / 表情 / 举报
+    $('chat-send').addEventListener('click', () => { const v = $('chat-input').value.trim(); if (v) { send({ type: 'chat', text: v }); $('chat-input').value = ''; } });
+    $('chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('chat-send').click(); });
+    document.querySelectorAll('.emo').forEach((b) => b.addEventListener('click', () => { Sfx.button(); send({ type: 'emote', emoji: b.dataset.emo }); }));
+    $('btn-report').addEventListener('click', () => {
+      const pick = $('report-pick');
+      if (pick.style.display === 'flex') { pick.style.display = 'none'; return; }
+      const opps = (state ? state.seats : []).filter((s) => s.kind === 'human' && s.seat !== mySeat);
+      pick.innerHTML = opps.length ? opps.map((s) => `<button data-rep="${s.seat}">举报 ${s.name}</button>`).join('') : '<span class="ci-sys" style="font-size:12px">暂无可举报的真人玩家</span>';
+      pick.style.display = 'flex';
+    });
+    $('report-pick').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-rep]'); if (!b) return;
+      send({ type: 'report', seat: +b.dataset.rep, reason: '不当行为' });
+      $('report-pick').style.display = 'none';
+    });
 
     $('btn-addbot').addEventListener('click', () => { Sfx.button(); send({ type: 'addBot' }); });
     $('btn-startmp').addEventListener('click', () => { Sfx.button(); send({ type: 'start' }); });
