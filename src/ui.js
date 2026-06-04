@@ -831,22 +831,20 @@
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
   }
 
-  function openPanel(kind) {
-    const p = Store.get();
-    const hands = p.handsPlayed || 0, wins = p.handsWon || 0;
-    const rate = hands ? Math.round(wins / hands * 100) : 0;
-    const titleMap = {
-      profile: '玩家资料', missions: '每日任务', rank: '排行榜', mail: '邮件中心',
-      club: '俱乐部', vault: '保险箱', support: '客服中心', notice: '系统公告',
-      season: '皇家赛季', tourney: '锦标赛', vip: '贵宾中心', security: '牌局安全',
-      events: '活动中心', gifts: '牌桌礼物', coach: '训练营', achievements: '成就殿堂',
-      friends: '好友中心', analytics: '数据中心', settings: '系统设置',
-      activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
-      goldenPig: '金库钱罐', invite: '邀请礼', tableChat: '牌桌聊天',
-      tableGift: '牌桌礼物', tableHistory: '牌局记录', jackpot: '皇家奖池',
-      voiceCenter: '语音中心',
-    };
-    $('panel-title').textContent = titleMap[kind] || '详情';
+  // 面板标题注册表（数据驱动，集中维护）
+  const PANEL_TITLES = {
+    profile: '玩家资料', missions: '每日任务', rank: '排行榜', mail: '邮件中心',
+    club: '俱乐部', vault: '保险箱', support: '客服中心', notice: '系统公告',
+    season: '皇家赛季', tourney: '锦标赛', vip: '贵宾中心', security: '牌局安全',
+    events: '活动中心', gifts: '牌桌礼物', coach: '训练营', achievements: '成就殿堂',
+    friends: '好友中心', analytics: '数据中心', settings: '系统设置',
+    activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
+    goldenPig: '金库钱罐', invite: '邀请礼', tableChat: '牌桌聊天',
+    tableGift: '牌桌礼物', tableHistory: '牌局记录', jackpot: '皇家奖池',
+    voiceCenter: '语音中心',
+  };
+  // 渲染面板正文 HTML（与弹窗/后置钩子解耦，便于单测与后续逐面板拆分）
+  function renderPanelHTML(kind, p, hands, wins, rate) {
     let html = '';
     if (kind === 'profile') {
       html = `<div class="panel-hero"><b>皇家玩家档案</b><span>当前档案保存在本机，包含金币、钻石、等级、牌局记录和已装备外观。</span></div>
@@ -1136,7 +1134,15 @@
           ${panelRow('⚔️', '单挑王', 'Heads-up 淘汰赛，适合练习压迫打法。', '报名')}
         </div>`;
     }
-    $('panel-body').innerHTML = html;
+    return html;
+  }
+
+  function openPanel(kind) {
+    const p = Store.get();
+    const hands = p.handsPlayed || 0, wins = p.handsWon || 0;
+    const rate = hands ? Math.round(wins / hands * 100) : 0;
+    $('panel-title').textContent = PANEL_TITLES[kind] || '详情';
+    $('panel-body').innerHTML = renderPanelHTML(kind, p, hands, wins, rate);
     openModal('modal-panel');
     if (kind === 'analytics') drawProfitCurve();
   }
