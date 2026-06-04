@@ -20,7 +20,7 @@ window.HTMLCanvasElement.prototype.getContext = () => ({ scale() {}, clearRect()
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
 
-const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js', 'ui.js'];
+const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js', 'router.js', 'ui.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
 const S = window.Store, body = window.document.getElementById('panel-body');
@@ -53,6 +53,17 @@ ok(typeof S.toggleCoach() === 'boolean', 'coach toggle');
 ['speechBubble', 'flyGift', 'streakFlame'].forEach((fn) => ok(typeof window.Fx[fn] === 'function', 'Fx.' + fn));
 ok(Object.keys(window.Skins.backs).length > 30, 'backs themes');
 ok(window.document.getElementById('splash'), 'splash created');
+// SceneRouter：统一路由
+ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
+['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));
+window.SceneRouter.go('hall'); ok(window.SceneRouter.current() === 'hall', 'go(hall) sets current');
+window.SceneRouter.go('select'); ok(!window.document.getElementById('screen-select').classList.contains('hidden'), 'go(select) shows select screen');
+window.SceneRouter.go('strategyLab'); ok(/策略实验室/.test(body.innerHTML), 'go(strategyLab) opens lab');
+ok(/底池赔率速查/.test(body.innerHTML) && /对手风格图鉴/.test(body.innerHTML), 'strategyLab has range/odds/profiles');
+window.SceneRouter.go('table', { blindLevel: 2, botProfileSet: 'hard', players: 6 });
+ok(window.SceneRouter.current() === 'table' && !window.document.getElementById('screen-table').classList.contains('hidden'), 'go(table) starts table');
+window.SceneRouter.go('replay', {}); ok(/牌局复盘/.test(body.innerHTML), 'go(replay) opens replay');
+window.SceneRouter.back(); ok(typeof window.SceneRouter.current() === 'string', 'back() works');
 // tutorial: support panel offers it, and forcing it builds an overlay
 window.document.querySelector('[data-panel="support"]').click();
 ok(/data-tutorial/.test(body.innerHTML), 'support offers tutorial');

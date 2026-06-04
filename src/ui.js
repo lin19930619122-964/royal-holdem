@@ -860,7 +860,7 @@
     activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
     goldenPig: '金库钱罐', invite: '邀请礼', tableChat: '牌桌聊天',
     tableGift: '牌桌礼物', tableHistory: '牌局记录', jackpot: '皇家奖池',
-    voiceCenter: '语音中心',
+    voiceCenter: '语音中心', strategyLab: '策略实验室',
   };
   // 渲染面板正文 HTML（与弹窗/后置钩子解耦，便于单测与后续逐面板拆分）
   function renderPanelHTML(kind, p, hands, wins, rate) {
@@ -960,7 +960,8 @@
           <div class="panel-row"><div class="pr-ic">${coachOn ? '🎓' : '📝'}</div>
             <div><b>${coachOn ? '训练模式（提示开启）' : '考试模式（提示隐藏）'}</b>
             <div class="pr-text">${coachOn ? '牌桌实时显示胜率、底池赔率、起手牌范围与行动建议。' : '不显示任何提示，复盘时再看对错分析。'}</div></div>
-            <button class="pr-claim" data-toggle="coach">${coachOn ? '切到考试' : '切到训练'}</button></div>`;
+            <button class="pr-claim" data-toggle="coach">${coachOn ? '切到考试' : '切到训练'}</button></div>
+          <div class="panel-row rc-row" data-scene="strategyLab"><div class="pr-ic">🧪</div><div><b>策略实验室</b><div class="pr-text">起手范围 / 底池赔率 / 对手风格图鉴 / 复盘，集中速查。</div></div><em>进入</em></div>`;
       // 当前牌桌的对手画像
       if (currentScreen === 'table' && game && seatProfiles.length) {
         html += `<div class="panel-title-sm">本桌对手画像</div>`;
@@ -976,6 +977,34 @@
       } else {
         html += `<div class="panel-list">${panelRow('🦈', '对手画像', '进入牌桌后，这里实时显示每个对手的风格标签与本局打法统计。', '进桌可见')}</div>`;
       }
+    } else if (kind === 'strategyLab') {
+      const coachOn = Store.get().coachMode;
+      const ranges = [
+        ['顶级强牌', 'QQ+ / AK', '任何位置可强开/再加注'],
+        ['强开牌', '99-JJ / AQ / AJs / KQs', '前中位开牌，后位加注'],
+        ['可玩对子', '22-88', '后位或便宜进场，主打中牌/暗三'],
+        ['投机同花连张', '如 7♠8♠', '位置好、便宜时进，搏听牌'],
+        ['边缘可玩', 'Ax / 大牌组合', '看位置与对手，谨慎'],
+        ['偏弱牌', '其余杂牌', '多数情况弃牌'],
+      ];
+      const odds = [['¼ 池', '≈17%'], ['⅓ 池', '≈20%'], ['½ 池', '≈25%'], ['¾ 池', '≈30%'], ['1 池', '≈33%'], ['2 池', '≈40%']];
+      html = `<div class="panel-hero"><b>策略实验室</b><span>训练工具集中处：起手范围、底池赔率、对手风格、复盘与考试模式，随用随查。</span></div>
+        <div class="panel-list">
+          <div class="panel-row"><div class="pr-ic">${coachOn ? '🎓' : '📝'}</div><div><b>${coachOn ? '训练模式（提示开启）' : '考试模式（提示隐藏）'}</b><div class="pr-text">${coachOn ? '牌桌实时显示胜率/赔率/范围/建议。' : '隐藏全部提示，自测真实水平。'}</div></div><button class="pr-claim" data-toggle="coach">${coachOn ? '切到考试' : '切到训练'}</button></div>
+          <div class="panel-row rc-row" data-open-history="1"><div class="pr-ic">🔍</div><div><b>牌局复盘</b><div class="pr-text">逐手回看你的决策对错与对手摊牌。</div></div><em>进入</em></div>
+        </div>
+        <div class="panel-title-sm">起手牌范围（原创简化）</div>
+        <div class="panel-list">` +
+        ranges.map((r) => `<div class="panel-row"><div class="pr-ic">🂡</div><div><b>${r[0]}</b><div class="pr-text">${r[1]} · ${r[2]}</div></div></div>`).join('') +
+        `</div>
+        <div class="panel-title-sm">底池赔率速查（面对下注需要的最低胜率）</div>
+        <div class="gift-grid">` +
+        odds.map((o) => `<div class="gift-card"><b>${o[0]}</b><em>${o[1]}</em></div>`).join('') +
+        `</div>
+        <div class="panel-title-sm">对手风格图鉴</div>
+        <div class="panel-list">` +
+        Object.values(STYLE_INFO).map((si) => `<div class="panel-row"><div class="pr-ic"><span class="style-tag" style="background:${si.color}">${si.label}</span></div><div><b>${si.label} · ${si.tag}</b><div class="pr-text">${si.desc}</div></div></div>`).join('') +
+        `</div>`;
     } else if (kind === 'activityMap') {
       html = `<div class="panel-hero"><b>成熟运营骨架</b><span>按商业 App 的结构拆成成长、活动、社交、牌桌互动和安全五条线，先用轻量面板承载，后续可逐个接服务端。</span></div>
         <div class="panel-list">
@@ -1156,10 +1185,12 @@
     return html;
   }
 
+  let _curPanel = null;
   function openPanel(kind) {
     const p = Store.get();
     const hands = p.handsPlayed || 0, wins = p.handsWon || 0;
     const rate = hands ? Math.round(wins / hands * 100) : 0;
+    _curPanel = kind;
     $('panel-title').textContent = PANEL_TITLES[kind] || '详情';
     $('panel-body').innerHTML = renderPanelHTML(kind, p, hands, wins, rate);
     openModal('modal-panel');
@@ -1324,6 +1355,29 @@
     { ic: '🦈', name: '高手场', desc: '紧凶鲨鱼 · 会读你打法 · 200/400 · 6人', sb: 200, bb: 400, players: 6, buyin: 60000, ante: 0, level: 'hard' },
     { ic: '🏆', name: '大师场', desc: '最强 AI · 极限剥削 · 500/1000 · 6人', sb: 500, bb: 1000, players: 6, buyin: 150000, ante: 50, level: 'master' },
   ];
+  // 盲注档位（供 SceneRouter.go('table',{blindLevel}) 外部 API 解析）
+  const BLIND_LEVELS = [
+    { sb: 50, bb: 100, buyin: 10000 }, { sb: 100, bb: 200, buyin: 20000 },
+    { sb: 200, bb: 400, buyin: 60000 }, { sb: 500, bb: 1000, buyin: 150000 }, { sb: 1000, bb: 2000, buyin: 200000 },
+  ];
+  // 把 SceneRouter 参数解析成 startTable 需要的配置
+  function resolveTableConfig(pm) {
+    pm = pm || {};
+    if (pm.room != null && ROOMS[pm.room]) return Object.assign({ mode: 'cash-training' }, ROOMS[pm.room]);
+    if (pm.custom) { const c = pm.custom; return { mode: 'cash-training', sb: Math.round(c.bb / 2), bb: c.bb, players: c.players, ante: c.ante || 0, buyin: Math.max(20000, c.bb * 100) }; }
+    const bl = BLIND_LEVELS[pm.blindLevel | 0] || BLIND_LEVELS[0];
+    const level = pm.botProfileSet || 'casual';
+    return { mode: pm.mode || 'cash-training', sb: bl.sb, bb: bl.bb, buyin: bl.buyin, players: pm.players || 6, ante: pm.ante || 0, level };
+  }
+  // 复盘场景：按 handId 打开牌谱并定位到该手详情
+  function openReplay(handId) {
+    openPanel('tableHistory');
+    if (handId != null) {
+      const log = Store.getHandLog();
+      const idx = log.findIndex((h) => h.no === +handId);
+      if (idx >= 0) $('panel-body').innerHTML = renderHandDetail(idx);
+    }
+  }
   function renderRooms() {
     $('room-list').innerHTML = ROOMS.map((r, i) =>
       `<div class="room-card" data-room="${i}"><div class="room-ic">${r.ic}</div>
@@ -1379,7 +1433,26 @@
     // 入场特效：牌桌放大 + 座驾驶过 + 发牌音
     const tf = $('table-felt'); tf.classList.remove('enter'); void tf.offsetWidth; tf.classList.add('enter');
     Sfx.resume(); playVehicleEntrance(); setTimeout(() => Sfx.deal(), 120);
-    if (!Store.get().tutorialDone) setTimeout(() => runTutorial(false), 500);
+    // 教学桌(TutorialTable)强制弹教程；否则仅首次进桌弹
+    if (cfg.mode === 'tutorial') setTimeout(() => runTutorial(true), 500);
+    else if (!Store.get().tutorialDone) setTimeout(() => runTutorial(false), 500);
+  }
+
+  /* ---------- 场景注册（统一 SceneRouter，取代写死跳转） ---------- */
+  function registerScenes() {
+    if (!window.SceneRouter) return;
+    SceneRouter.register('launch', () => { runSplash(); });
+    SceneRouter.register('login', () => { SceneRouter.go('hall'); });          // 本地训练无账号，直接进大厅
+    SceneRouter.register('hall', (pm) => {
+      if (scheduled) { clearTimeout(scheduled); scheduled = null; }
+      showScreen('home'); syncWallet();
+      if (pm.panel) openPanel(pm.panel);                                       // hall 可直接带出某个面板
+    });
+    SceneRouter.register('select', () => { renderRooms(); showScreen('select'); });
+    SceneRouter.register('table', (pm) => { startTable(resolveTableConfig(pm)); });  // CashTrainingTable / TutorialTable
+    SceneRouter.register('tutorial', (pm) => { runTutorial(true, pm.lessonId); });   // TutorialScene
+    SceneRouter.register('replay', (pm) => { showScreen('home'); openReplay(pm.handId); }); // ReplayScene / HandReviewOverlay
+    SceneRouter.register('strategyLab', () => { showScreen('home'); openPanel('strategyLab'); }); // StrategyLabScene
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -1442,9 +1515,9 @@
     { ic: '🎮', t: '行动方式', b: '弃牌 / 过牌 / 跟注 / 加注。加注可拖滑杆，或用 ½池、1 池等快捷比例。' },
     { ic: '🔍', t: '牌谱复盘', b: '每手牌自动记录。到「牌谱」逐步回看你的每个决策，系统按胜率 vs 赔率判定对错，帮你找漏洞。' },
   ];
-  function runTutorial(force) {
+  function runTutorial(force, lessonId) {
     if (!force && Store.get().tutorialDone) return;
-    let i = 0;
+    let i = Math.max(0, Math.min(TUTORIAL.length - 1, lessonId | 0));
     const ov = document.createElement('div'); ov.id = 'tut-ov';
     const card = document.createElement('div'); card.className = 'tut-card'; ov.appendChild(card);
     document.body.appendChild(ov);
@@ -1468,14 +1541,14 @@
 
   function setupEvents() {
     // 路由
-    $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); renderRooms(); showScreen('select'); });
-    $('btn-select-back').addEventListener('click', () => { Sfx.button(); showScreen('home'); });
-    $('btn-table-back').addEventListener('click', () => { if (scheduled) { clearTimeout(scheduled); scheduled = null; } Sfx.button(); showScreen('home'); syncWallet(); });
+    $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); SceneRouter.go('select'); });
+    $('btn-select-back').addEventListener('click', () => { Sfx.button(); SceneRouter.go('hall'); });
+    $('btn-table-back').addEventListener('click', () => { Sfx.button(); SceneRouter.go('hall'); });
     $('room-list').addEventListener('click', (e) => {
       const card = e.target.closest('[data-room],[data-custom]'); if (!card) return;
       Sfx.button();
       if (card.dataset.custom) { renderCustom(); openModal('modal-custom'); }
-      else startTable(ROOMS[+card.dataset.room]);
+      else SceneRouter.go('table', { room: +card.dataset.room });
     });
     $('custom-body').addEventListener('click', (e) => {
       const b = e.target.closest('.cf-opt'); if (!b) return;
@@ -1483,7 +1556,13 @@
     });
     $('custom-start').addEventListener('click', () => {
       closeModal();
-      startTable({ sb: Math.round(custom.bb / 2), bb: custom.bb, players: custom.players, ante: custom.ante, buyin: Math.max(20000, custom.bb * 100) });
+      SceneRouter.go('table', { custom: { bb: custom.bb, players: custom.players, ante: custom.ante } });
+    });
+    // 任意元素声明 data-scene 即可走统一路由（含可选 JSON 参数 data-scene-params）
+    document.body.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-scene]'); if (!el) return;
+      let pm = {}; try { pm = el.dataset.sceneParams ? JSON.parse(el.dataset.sceneParams) : {}; } catch (_) {}
+      Sfx.button(); SceneRouter.go(el.dataset.scene, pm);
     });
 
     $('btn-start').addEventListener('click', () => { Sfx.resume(); nextHand(); });
@@ -1525,7 +1604,7 @@
       const ev = e.target.closest('[data-claim-event]');
       if (ev) { const r = Store.claimEvent(ev.dataset.claimEvent); if (r) { Sfx.reward(); toast(`活动奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('events'); } return; }
       const tut = e.target.closest('[data-tutorial]');
-      if (tut) { closeModal(); runTutorial(true); return; }
+      if (tut) { closeModal(); SceneRouter.go('tutorial', {}); return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
       else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
@@ -1536,11 +1615,11 @@
         if (say && !say.disabled) { closeModal(); sayPhrase(say.dataset.say); }
         else if (gift && !gift.disabled) { sendGift(gift.dataset.gift); }
         else if (tg) {
-          const which = tg.dataset.toggle, src = $('panel-title').textContent === '训练营' ? 'coach' : 'settings';
+          const which = tg.dataset.toggle;
           if (which === 'coach') { const on = Store.toggleCoach(); toast(on ? '已切到训练模式' : '已切到考试模式'); if (game) render(); }
           else if (which === 'sound') { const m = !Store.get().muted; Store.get().muted = m; Store.save(); Sfx.setMuted(m); if (window.Voice) Voice.setMuted(m); $('sound-icon') && ($('sound-icon').textContent = m ? '🔇' : '🔊'); }
           try { Sfx.button(); } catch (_) {}
-          openPanel(src);
+          openPanel(_curPanel || 'settings');  // 重开当前面板，刷新开关状态
         }
       }
     });
@@ -1635,11 +1714,12 @@
   if (window.Music) Music.setMuted(Store.get().muted);
   if (window.Voice) Voice.setMuted(Store.get().muted);
   $('sound-icon').textContent = Store.get().muted ? '🔇' : '🔊';
+  registerScenes();
   setupEvents();
   syncWallet();
   syncLevel();
-  showScreen('home');
-  runSplash();
+  SceneRouter.go('hall');   // 统一路由入口（取代写死 showScreen）
+  runSplash();              // 开屏覆盖层（LaunchScene）
 
   // 预览模式(仅用于截图调试，?preview 或 ?preview=4 指定场次)：摆静态演示局，不启动循环
   const pv = location.search.match(/preview=?(\d+)?/);
