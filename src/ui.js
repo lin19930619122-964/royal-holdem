@@ -1066,11 +1066,12 @@
           ${panelRow('📉', '面对下注弃牌', `你面对下注的弃牌率约 ${foldRate}%，过高会被对手频繁施压。`, '诊断')}
         </div>`;
     } else if (kind === 'support') {
-      html = `<div class="panel-list">
-        ${panelRow('🎧', '在线客服', '处理安装、联机、账号、奖励发放等问题。', '模拟')}
-        ${panelRow('📘', '规则说明', '德州扑克采用标准 Hold’em 规则，支持单挑、六人桌、九人桌。', '帮助')}
-        ${panelRow('🛠️', '问题反馈', '崩溃上报和日志系统接入后可自动定位问题。', '待接入')}
-        ${panelRow('⚖️', '公平申诉', '可对异常牌局提交牌局编号和回放。', '规划')}
+      html = `<div class="panel-hero"><b>帮助中心</b><span>新手教程、规则说明与训练建议。</span></div>
+        <div class="panel-list">
+        <div class="panel-row achv-ready"><div class="pr-ic">🎓</div><div><b>新手教程</b><div class="pr-text">用图文引导带你认识牌桌、训练提示、行动与复盘。</div></div><button class="pr-claim" data-tutorial="1">重新观看</button></div>
+        ${panelRow('📘', '规则说明', '标准德州扑克（Hold’em），支持单挑、6 人桌、9 人桌；7 张取最优 5 张比大小。')}
+        ${panelRow('🧮', '训练建议', '先看胜率与底池赔率再决策；多用牌谱复盘找出偏误；不确定时切考试模式自测。')}
+        ${panelRow('🔒', '本地说明', '纯本地训练 App，不接真钱、不联网必需、不采集数据。')}
       </div>`;
     } else if (kind === 'settings') {
       const muted = Store.get().muted, coachOn = Store.get().coachMode;
@@ -1353,6 +1354,7 @@
     // 入场特效：牌桌放大 + 座驾驶过 + 发牌音
     const tf = $('table-felt'); tf.classList.remove('enter'); void tf.offsetWidth; tf.classList.add('enter');
     Sfx.resume(); playVehicleEntrance(); setTimeout(() => Sfx.deal(), 120);
+    if (!Store.get().tutorialDone) setTimeout(() => runTutorial(false), 500);
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -1405,6 +1407,38 @@
     function finish() { if (raf) cancelAnimationFrame(raf); ov.remove(); }
     ov.addEventListener('click', finish);
     raf = requestAnimationFrame(frame);
+  }
+
+  // 新手引导：首次进桌的图文分页教程（原创，可在帮助中心重看）
+  const TUTORIAL = [
+    { ic: '🎓', t: '欢迎来到训练场', b: '这是纯本地德州扑克训练 App，所有筹码都是训练筹码。放心大胆地练，不涉及任何真钱。' },
+    { ic: '🪑', t: '认识牌桌', b: '底部正中是你，四周是 AI 对手。点「训练营」可查看每个对手的风格画像和对策建议。' },
+    { ic: '🎯', t: '实时训练提示', b: '轮到你时，上方显示你的实时胜率、底池赔率、起手牌范围与行动建议。想自测真实水平？到设置切到「考试模式」隐藏提示。' },
+    { ic: '🎮', t: '行动方式', b: '弃牌 / 过牌 / 跟注 / 加注。加注可拖滑杆，或用 ½池、1 池等快捷比例。' },
+    { ic: '🔍', t: '牌谱复盘', b: '每手牌自动记录。到「牌谱」逐步回看你的每个决策，系统按胜率 vs 赔率判定对错，帮你找漏洞。' },
+  ];
+  function runTutorial(force) {
+    if (!force && Store.get().tutorialDone) return;
+    let i = 0;
+    const ov = document.createElement('div'); ov.id = 'tut-ov';
+    const card = document.createElement('div'); card.className = 'tut-card'; ov.appendChild(card);
+    document.body.appendChild(ov);
+    function paint() {
+      const s = TUTORIAL[i];
+      const dots = TUTORIAL.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
+      card.innerHTML = `<div class="tut-ic">${s.ic}</div><h3>${s.t}</h3><p>${s.b}</p>
+        <div class="tut-dots">${dots}</div>
+        <div class="tut-btns"><button class="pr-ghost" data-tut="skip">跳过</button>
+        <button class="pr-claim" data-tut="next">${i === TUTORIAL.length - 1 ? '开始训练' : '下一步'}</button></div>`;
+    }
+    function finish() { Store.get().tutorialDone = true; Store.save(); ov.remove(); }
+    ov.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tut]'); if (!b) return;
+      try { Sfx.button(); } catch (_) {}
+      if (b.dataset.tut === 'skip') return finish();
+      if (i < TUTORIAL.length - 1) { i++; paint(); } else finish();
+    });
+    paint();
   }
 
   function setupEvents() {
@@ -1465,6 +1499,8 @@
       if (cv && !cv.disabled) { const r = Store.crackVault(); if (r) { Sfx.reward(); toast(`敲碎金库 🪙+${fmtChips(r.coins)}`); syncWallet(true); openPanel('goldenPig'); } return; }
       const ev = e.target.closest('[data-claim-event]');
       if (ev) { const r = Store.claimEvent(ev.dataset.claimEvent); if (r) { Sfx.reward(); toast(`活动奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('events'); } return; }
+      const tut = e.target.closest('[data-tutorial]');
+      if (tut) { closeModal(); runTutorial(true); return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
       else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }

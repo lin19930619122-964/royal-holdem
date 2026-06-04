@@ -53,6 +53,12 @@ ok(typeof S.toggleCoach() === 'boolean', 'coach toggle');
 ['speechBubble', 'flyGift', 'streakFlame'].forEach((fn) => ok(typeof window.Fx[fn] === 'function', 'Fx.' + fn));
 ok(Object.keys(window.Skins.backs).length > 30, 'backs themes');
 ok(window.document.getElementById('splash'), 'splash created');
+// tutorial: support panel offers it, and forcing it builds an overlay
+window.document.querySelector('[data-panel="support"]').click();
+ok(/data-tutorial/.test(body.innerHTML), 'support offers tutorial');
+body.querySelector('[data-tutorial]').click();
+ok(window.document.getElementById('tut-ov'), 'tutorial overlay opens');
+ok(/欢迎来到训练场/.test(window.document.getElementById('tut-ov').innerHTML), 'tutorial first page');
 ok(!/传奇/.test(window.document.body.innerHTML), 'no 传奇 trademark in DOM');
 
 console.log(`\nUI 回归: ${pass} 通过, ${fail} 失败`);

@@ -48,6 +48,7 @@
     vault: 0,            // 金库钱罐累计
     vaultCracked: 0,     // 金库累计敲碎次数
     mailClaimed: [],     // 已领邮件 id
+    tutorialDone: false, // 新手教程是否已看
   };
   const VAULT_MIN = 20000; // 金库最低可敲碎额
   const SEASON_LEN = 30;          // 赛季 30 级

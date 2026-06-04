@@ -388,6 +388,19 @@ html, body {
   box-shadow:0 2px 12px rgba(245,207,107,.5); animation:topBannerIn 4.2s ease forwards; }
 @keyframes topBannerIn { 0%{opacity:0;transform:translateY(-14px) scale(.9)} 10%{opacity:1;transform:none} 85%{opacity:1} 100%{opacity:0;transform:translateY(-10px)} }
 
+/* ---------- 新手引导 ---------- */
+#tut-ov { position:fixed; inset:0; z-index:9998; background:rgba(4,16,10,.82); display:flex; align-items:center; justify-content:center; padding:24px; }
+.tut-card { width:100%; max-width:340px; background:linear-gradient(180deg,#143726,#0c2418); border:1px solid var(--gold); border-radius:18px;
+  padding:22px 20px; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .3s ease; }
+.tut-card .tut-ic { font-size:46px; line-height:1; }
+.tut-card h3 { color:var(--gold); font-size:18px; margin:10px 0 6px; }
+.tut-card p { color:#dff3e7; font-size:13px; line-height:1.6; margin:0 0 14px; }
+.tut-dots { display:flex; justify-content:center; gap:6px; margin-bottom:14px; }
+.tut-dots i { width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.25); }
+.tut-dots i.on { background:var(--gold); width:18px; border-radius:4px; }
+.tut-btns { display:flex; gap:10px; justify-content:center; }
+.tut-btns .pr-claim, .tut-btns .pr-ghost { flex:1; }
+
 .coin-burst { position:absolute; width:16px; height:16px; border-radius:50%; margin:-8px; pointer-events:none; z-index:21;
   background:radial-gradient(circle at 38% 32%,#fff 0 3px,var(--gold) 4px 100%); border:1.5px solid #fff8; }
 @keyframes coinFall { from{transform:translateY(-30px) scale(.6);opacity:0} 20%{opacity:1} to{transform:translateY(60px) scale(1);opacity:0} }
