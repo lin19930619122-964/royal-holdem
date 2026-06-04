@@ -42,7 +42,12 @@
     seasonLevel: 1,      // 赛季等级
     seasonClaimed: [],   // 已领赛季奖励等级
     rankPoints: 0,       // 段位积分(赢+/输-)
+    lastDailyGift: null, // 每日礼包领取日期
+    vault: 0,            // 金库钱罐累计
+    vaultCracked: 0,     // 金库累计敲碎次数
+    mailClaimed: [],     // 已领邮件 id
   };
+  const VAULT_MIN = 20000; // 金库最低可敲碎额
   const SEASON_LEN = 30;          // 赛季 30 级
   // 段位阶梯(原创命名)
   const RANK_TIERS = [
@@ -334,6 +339,44 @@
     return n ? { coins, diamonds, n } : null;
   }
 
+  // ---- 每日礼包（免费，每日一次）----
+  function canDailyGift() { return profile.lastDailyGift !== todayStr(); }
+  function claimDailyGift() {
+    if (!canDailyGift()) return null;
+    const coins = 30000 + Math.floor(Math.random() * 4) * 10000, diamonds = 3 + Math.floor(Math.random() * 4);
+    profile.coins += coins; profile.diamonds += diamonds; profile.lastDailyGift = todayStr(); save();
+    return { coins, diamonds };
+  }
+
+  // ---- 金库钱罐（每手累积，敲碎收取）----
+  function addVault(pot) { profile.vault = (profile.vault || 0) + Math.max(300, Math.round((pot || 0) * 0.02)); save(); }
+  function getVault() { return { amount: profile.vault || 0, min: VAULT_MIN, canCrack: (profile.vault || 0) >= VAULT_MIN, cracked: profile.vaultCracked || 0 }; }
+  function crackVault() {
+    if ((profile.vault || 0) < VAULT_MIN) return null;
+    const got = profile.vault; profile.coins += got; profile.vault = 0; profile.vaultCracked = (profile.vaultCracked || 0) + 1; save();
+    return { coins: got };
+  }
+
+  // ---- 邮件中心（本地，条件解锁，可领附件）----
+  function getMail() {
+    const claimed = profile.mailClaimed || [];
+    const defs = [
+      { id: 'welcome', title: '欢迎来到皇室德州训练场', body: '这是一款纯本地训练 App，所有筹码均为训练筹码。祝你练成高手！', coins: 50000, diamonds: 10, cond: () => true },
+      { id: 'lv10', title: '段位新星', body: '恭喜达到 10 级，奖励已附上。', coins: 80000, diamonds: 8, cond: () => (profile.level || 1) >= 10 },
+      { id: 'bigpot', title: '大底池纪念', body: '你赢下过 10 万以上的底池，收下这份纪念奖励。', coins: 100000, diamonds: 12, cond: () => (profile.biggestPot || 0) >= 100000 },
+      { id: 'veteran', title: '百战礼包', body: '完成 100 手对局，老牌手的勋章奖励。', coins: 120000, diamonds: 15, cond: () => (profile.handsPlayed || 0) >= 100 },
+    ];
+    return defs.filter((m) => m.cond()).map((m) => ({ id: m.id, title: m.title, body: m.body, coins: m.coins, diamonds: m.diamonds, claimed: claimed.includes(m.id) }));
+  }
+  function claimMail(id) {
+    const m = getMail().find((x) => x.id === id);
+    if (!m || m.claimed) return null;
+    profile.coins += m.coins; profile.diamonds += m.diamonds;
+    profile.mailClaimed = profile.mailClaimed || []; profile.mailClaimed.push(id); save();
+    return { coins: m.coins, diamonds: m.diamonds };
+  }
+  function mailUnreadCount() { return getMail().filter((m) => !m.claimed).length; }
+
   // ---- 段位（原创积分阶梯）----
   function rankInfo() {
     const pts = profile.rankPoints || 0;
@@ -399,6 +442,8 @@
     getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
     nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach,
     addSeasonXp, getSeason, claimSeason, claimSeasonAll, rankInfo, recordRank,
+    canDailyGift, claimDailyGift, addVault, getVault, crackVault,
+    getMail, claimMail, mailUnreadCount,
     CHECKIN,
   };
 })();

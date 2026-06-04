@@ -485,6 +485,7 @@
         if (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) xp += game.result.handScores[0][0] * 6;
         const up = Store.addXp(xp);
         Store.addSeasonXp(xp);  // 赛季经验同步累计
+        Store.addVault(game.pot);  // 金库钱罐每手累积
         const promo = Store.recordRank(meP.winThisHand > 0);  // 段位积分，晋升则提示
         if (promo) setTimeout(() => { toast(`🏆 段位晋升：${promo}！`); Sfx.reward(); }, 1600);
         // 牌局复盘记录：编号、公共牌、你的手牌、净盈亏、摊牌信息、你的决策与对错
@@ -883,20 +884,28 @@
           ${panelRow('🌐', '断线重连', '真人对战已有 token 重连基础，可继续加超时托管。', '基础')}
         </div>`;
     } else if (kind === 'rank') {
-      const me = Math.max(6, 18 - Math.min(12, wins));
-      html = `<div class="panel-hero"><b>财富榜 · 本周</b><span>展示完整排行榜体验，当前包含本机玩家和模拟榜单。</span></div>
-        <div class="panel-list">
-          <div class="panel-row rank-row"><div class="pr-ic">1</div><div><b>澳门金鲨</b><span>胜率 68% · 连胜 9</span></div><em>8.8亿</em></div>
-          <div class="panel-row rank-row"><div class="pr-ic">2</div><div><b>拉斯维加斯王</b><span>胜率 63% · 连胜 6</span></div><em>6.2亿</em></div>
-          <div class="panel-row rank-row"><div class="pr-ic">3</div><div><b>游艇先生</b><span>胜率 59% · 连胜 5</span></div><em>4.9亿</em></div>
-          <div class="panel-row rank-row"><div class="pr-ic">${me}</div><div><b>皇家玩家</b><span>胜率 ${rate}% · 已玩 ${hands} 手</span></div><em>${fmtChips(p.coins)}</em></div>
-        </div>`;
+      // 本地榜：你与一组固定 AI 基准按身家排序（纯本地，不联网）
+      const bench = [
+        { n: '鲨王·影', wr: 67, c: 880000000 }, { n: '冷面荷官', wr: 61, c: 420000000 },
+        { n: '深夜豪客', wr: 58, c: 180000000 }, { n: '稳健老张', wr: 54, c: 76000000 },
+        { n: '激进小马', wr: 49, c: 32000000 }, { n: '新手阿强', wr: 41, c: 6000000 },
+      ];
+      const meRow = { n: '皇家玩家', wr: rate, c: p.coins, me: true };
+      const board = bench.concat([meRow]).sort((a, b) => b.c - a.c);
+      html = `<div class="panel-hero"><b>财富榜（本地）</b><span>你与训练基准对手按身家排名，纯本地计算、不联网、不上传。</span></div>
+        <div class="panel-list">` +
+        board.map((r, i) => `<div class="panel-row rank-row${r.me ? ' achv-ready' : ''}"><div class="pr-ic">${i + 1}</div>
+          <div><b>${r.n}${r.me ? ' （你）' : ''}</b><span>胜率 ${r.wr}%${r.me ? ' · 已玩 ' + hands + ' 手' : ''}</span></div><em>${fmtChips(r.c)}</em></div>`).join('') +
+        `</div>`;
     } else if (kind === 'mail') {
-      html = `<div class="panel-list">
-        ${panelRow('🎁', '欢迎礼包', '感谢加入皇室德州，礼包码入口已放在大厅。', '未领取')}
-        ${panelRow('📣', '赛季公告', '皇家赛季开放，完成每日任务可获得额外奖励。', '新')}
-        ${panelRow('🛠️', '系统通知', '当前版本强化了大厅、商店、任务、排行榜与活动面板。', '已读')}
-      </div>`;
+      const mails = Store.getMail();
+      html = `<div class="panel-hero"><b>邮件中心</b><span>系统邮件与里程碑奖励，达成条件即可领取附件（全部为训练筹码）。</span></div>
+        <div class="panel-list">` +
+        mails.map((m) => {
+          const btn = m.claimed ? `<em class="rc-ok">已领</em>` : `<button class="pr-claim" data-claim-mail="${m.id}">领取</button>`;
+          return `<div class="panel-row ${m.claimed ? '' : 'achv-ready'}"><div class="pr-ic">${m.claimed ? '📭' : '📬'}</div>
+            <div><b>${m.title}</b><div class="pr-text">${m.body}<br>附件 🪙${fmtChips(m.coins)} · 💎${m.diamonds}</div></div>${btn}</div>`;
+        }).join('') + `</div>`;
     } else if (kind === 'events') {
       html = `<div class="panel-hero"><b>限时活动中心</b><span>原创活动体系，用于承载首胜、连胜、节日活动和回流奖励。</span></div>
         <div class="panel-list">
@@ -948,25 +957,26 @@
     } else if (kind === 'passport') {
       html = renderSeasonTrack();
     } else if (kind === 'mysteryShop') {
-      html = `<div class="panel-hero"><b>秘宝商店</b><span>用于承载周期折扣和外观轮换，做成皇室自己的轻奢货架。</span></div>
+      const canGift = Store.canDailyGift();
+      html = `<div class="panel-hero"><b>限时礼架</b><span>每日免费礼包，含训练筹码与钻石，每日 0 点刷新。</span></div>
         <div class="panel-list">
-          ${panelRow('🃏', '鎏金牌背', '限时 7 折，适合赛季奖励或钻石购买。', '今日')}
-          ${panelRow('🟩', '翡翠桌布', '桌面皮肤轮换，保持牌桌新鲜感。', '热卖')}
-          ${panelRow('🎩', '绅士头像框', '身份装饰，和 VIP、成就联动展示。', '稀有')}
-          ${panelRow('⏱️', '刷新机制', '商业版可接每日刷新、库存、折扣和购买限制。', '体系')}
+          <div class="panel-row ${canGift ? 'achv-ready' : ''}"><div class="pr-ic">🎁</div>
+            <div><b>今日免费礼包</b><div class="pr-text">${canGift ? '随机 3-6 万训练筹码 + 3-6 钻石，点击领取。' : '今日已领取，明天再来。'}</div></div>
+            ${canGift ? `<button class="pr-claim" data-daily-gift="1">领取</button>` : `<em class="rc-ok">已领</em>`}</div>
+          ${panelRow('🛍️', '外观货架', '商店内可用训练筹码购买牌背/桌布/头像框等 9 类外观，每日轮换展示。', '常驻')}
+          ${panelRow('🔄', '刷新说明', '礼包按本地日期刷新，纯本地、不接真钱。', '说明')}
         </div>`;
     } else if (kind === 'goldenPig') {
-      const saved = Math.min(500000, hands * 8000 + wins * 22000);
-      html = `<div class="panel-hero"><b>金库钱罐</b><span>把日常活跃转成可见积累，形成“越玩越满”的反馈。</span></div>
+      const v = Store.getVault();
+      html = `<div class="panel-hero"><b>金库钱罐</b><span>每手对局自动向金库存入训练筹码，达到 ${fmtChips(v.min)} 即可敲碎收取，"越玩越满"。</span></div>
         <div class="metric-grid">
-          <div class="metric"><b>${fmtChips(saved)}</b><span>累计金币</span></div>
-          <div class="metric"><b>${Math.min(100, Math.round(saved / 5000))}%</b><span>储蓄进度</span></div>
-          <div class="metric"><b>${hands}</b><span>贡献牌局</span></div>
+          <div class="metric"><b>${fmtChips(v.amount)}</b><span>当前储蓄</span></div>
+          <div class="metric"><b>${pct(v.amount, v.min)}%</b><span>敲碎进度</span></div>
+          <div class="metric"><b>${v.cracked}</b><span>已敲碎次数</span></div>
         </div>
-        <div class="panel-list">
-          ${panelRow('💰', '活跃储蓄', `<div>每手牌局和胜利会增加钱罐容量</div><div class="progress-track"><i style="width:${pct(saved,500000)}%"></i></div>`, '成长')}
-          ${panelRow('💎', '开启奖励', '满额后可领取金币，商业版可叠加钻石开罐。', '预留')}
-        </div>`;
+        <div class="curve-wrap"><div class="curve-title">距可敲碎 ${v.canCrack ? '已可敲碎！' : fmtChips(Math.max(0, v.min - v.amount)) + ' 训练筹码'}</div>
+          <div class="progress-track"><i style="width:${pct(v.amount, v.min)}%"></i></div></div>
+        <div class="rc-actions"><button class="pr-claim" data-crack-vault="1"${v.canCrack ? '' : ' disabled'}>敲碎金库</button></div>`;
     } else if (kind === 'invite') {
       html = `<div class="panel-hero"><b>邀请礼</b><span>邀请体系连接真人对战、好友和俱乐部，是成熟棋牌 App 的关键社交入口。</span></div>
         <div class="panel-list">
@@ -1435,6 +1445,10 @@
       const sc = e.target.closest('[data-claim-season]'), sca = e.target.closest('[data-claim-season-all]');
       if (sc) { const r = Store.claimSeason(sc.dataset.claimSeason); if (r) { Sfx.reward(); toast(`赛季奖励 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
       if (sca) { const r = Store.claimSeasonAll(); if (r) { Sfx.reward(); toast(`领取 ${r.n} 级 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
+      const ml = e.target.closest('[data-claim-mail]'), dg = e.target.closest('[data-daily-gift]'), cv = e.target.closest('[data-crack-vault]');
+      if (ml) { const r = Store.claimMail(ml.dataset.claimMail); if (r) { Sfx.reward(); toast(`邮件附件 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('mail'); } return; }
+      if (dg) { const r = Store.claimDailyGift(); if (r) { Sfx.reward(); toast(`今日礼包 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('mysteryShop'); } return; }
+      if (cv && !cv.disabled) { const r = Store.crackVault(); if (r) { Sfx.reward(); toast(`敲碎金库 🪙+${fmtChips(r.coins)}`); syncWallet(true); openPanel('goldenPig'); } return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
       else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
