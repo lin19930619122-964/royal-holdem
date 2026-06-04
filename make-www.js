@@ -12,6 +12,7 @@ function rmrf(p) { if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: 
 function copyDir(s, d) {
   fs.mkdirSync(d, { recursive: true });
   for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+    if (e.isFile() && e.name.toLowerCase().endsWith('.ipa')) continue;
     const sp = path.join(s, e.name), dp = path.join(d, e.name);
     if (e.isDirectory()) copyDir(sp, dp);
     else fs.copyFileSync(sp, dp);

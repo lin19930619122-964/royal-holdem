@@ -82,6 +82,36 @@
     const dot = $('checkin-dot'); if (dot) dot.classList.toggle('hidden', !Store.canCheckin());
     const wd = $('wheel-dot'); if (wd) wd.classList.toggle('hidden', !Store.canSpin());
     if (bump) document.querySelectorAll('.cur.coins').forEach((e) => { e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); });
+    syncHome();
+  }
+
+  function syncHome() {
+    const p = Store.get();
+    const av = $('home-avatar');
+    if (av) av.src = `assets/av/${p.activeAvatar || 1}.png`;
+    const title = $('home-title');
+    if (title) {
+      const t = Skins.titles[p.activeTitle];
+      title.textContent = t && t.text ? t.text.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '') : '德州新秀';
+    }
+    const hands = p.handsPlayed || 0;
+    const wins = p.handsWon || 0;
+    const rate = hands ? Math.round(wins / hands * 100) : 0;
+    if ($('home-hands')) $('home-hands').textContent = `${hands}手`;
+    if ($('home-winrate')) $('home-winrate').textContent = `胜率 ${rate}%`;
+    if ($('home-pot')) $('home-pot').textContent = `最大底池 ${fmtChips(p.biggestPot || 0)}`;
+    const tasks = Store.getTasks();
+    const doneN = tasks.filter((t) => t.done).length;
+    const claimable = tasks.some((t) => t.done && !t.claimed) || Store.getAchievements().some((a) => a.unlocked && !a.claimed);
+    if ($('home-mission-line')) $('home-mission-line').textContent = claimable ? `有奖励可领取！(${doneN}/${tasks.length} 完成)` : `${doneN}/${tasks.length} 已完成，继续打牌领奖励`;
+    const vip = vipInfo(p);
+    if ($('home-vip')) $('home-vip').textContent = vip.level;
+    if ($('home-vip-next')) $('home-vip-next').textContent = vip.nextText;
+    if ($('home-vip-bar')) $('home-vip-bar').style.width = vip.progress + '%';
+    const season = seasonInfo(p);
+    if ($('home-season')) $('home-season').textContent = season.rank;
+    if ($('home-season-next')) $('home-season-next').textContent = `Lv.${p.level || 1} / 50`;
+    if ($('home-season-bar')) $('home-season-bar').style.width = season.progress + '%';
   }
 
   // 紧凑金额：1.5万 / 1.2亿，避免大额撑出座位框
@@ -320,7 +350,8 @@
         const meP = game.players[0];
         Store.get().coins = Math.max(0, meP.chips);
         Store.save();
-        Store.recordHand(meP.winThisHand > 0, game.pot);
+        const hc = (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) ? game.result.handScores[0][0] : 0;
+        Store.recordHand(meP.winThisHand > 0, game.pot, hc);
         // 经验：打一手 +12，赢了 +30，摊牌成大牌额外加成
         let xp = 12 + (meP.winThisHand > 0 ? 30 : 0);
         if (game.result && game.result.showdown && game.result.handScores && game.result.handScores[0]) xp += game.result.handScores[0][0] * 6;
@@ -445,12 +476,13 @@
     const facing = (game.currentBet - p.bet) > 0;
     window.OppModel.record(action, facing);
     game.act(action, amount);
+    if (p.lastAction === '全下') Store.recordAllin();
     actSound(p);
     tick();
   }
 
   /* ---------- 弹窗 ---------- */
-  const MODALS = ['modal-checkin', 'modal-shop', 'modal-redeem', 'modal-custom', 'modal-wheel'];
+  const MODALS = ['modal-checkin', 'modal-shop', 'modal-redeem', 'modal-custom', 'modal-wheel', 'modal-panel'];
   function openModal(id) {
     Sfx.button();
     $('modal-overlay').classList.remove('hidden');
@@ -470,6 +502,318 @@
     MODALS.forEach((m) => $(m).classList.add('hidden'));
     t.textContent = text; t.classList.remove('hidden');
     setTimeout(() => { t.classList.add('hidden'); if ([...$('modal-overlay').children].every((c) => c.classList.contains('hidden'))) $('modal-overlay').classList.add('hidden'); }, 1700);
+  }
+
+  function pct(n, d) { return Math.max(0, Math.min(100, d ? Math.round(n / d * 100) : 0)); }
+  function vipInfo(p) {
+    const hands = p.handsPlayed || 0;
+    const thresholds = [0, 20, 60, 140, 300, 600, 1000];
+    let level = 0;
+    for (let i = 0; i < thresholds.length; i++) if (hands >= thresholds[i]) level = i;
+    const next = thresholds[level + 1] || thresholds[thresholds.length - 1];
+    const prev = thresholds[level] || 0;
+    const progress = level >= thresholds.length - 1 ? 100 : pct(hands - prev, next - prev);
+    return {
+      level,
+      progress,
+      nextText: level >= thresholds.length - 1 ? '已达最高贵宾' : `距 VIP${level + 1} 还差 ${Math.max(0, next - hands)}局`,
+      rebate: [0, 2, 4, 6, 8, 10, 12][level] || 0,
+    };
+  }
+  function seasonInfo(p) {
+    const lv = p.level || 1;
+    const ranks = ['青铜 I', '青铜 II', '白银 I', '黄金 I', '铂金 I', '钻石 I', '皇家大师'];
+    const idx = Math.min(ranks.length - 1, Math.floor((lv - 1) / 8));
+    return { rank: ranks[idx], progress: pct(lv, 50), idx };
+  }
+  function panelRow(ic, title, text, tag) {
+    return `<div class="panel-row"><div class="pr-ic">${ic}</div><div><b>${title}</b><div class="pr-text">${text}</div></div><em>${tag || ''}</em></div>`;
+  }
+  function openPanel(kind) {
+    const p = Store.get();
+    const hands = p.handsPlayed || 0, wins = p.handsWon || 0;
+    const rate = hands ? Math.round(wins / hands * 100) : 0;
+    const titleMap = {
+      profile: '玩家资料', missions: '每日任务', rank: '排行榜', mail: '邮件中心',
+      club: '俱乐部', vault: '保险箱', support: '客服中心', notice: '系统公告',
+      season: '赛季通行证', tourney: '锦标赛', vip: '贵宾中心', security: '牌局安全',
+      events: '活动中心', gifts: '牌桌礼物', coach: '训练营', achievements: '成就殿堂',
+      friends: '好友中心', analytics: '数据中心', settings: '系统设置',
+      activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
+      goldenPig: '金库钱罐', invite: '邀请礼', tableChat: '牌桌聊天',
+      tableGift: '牌桌礼物', tableHistory: '牌局记录', jackpot: '皇家奖池',
+      voiceCenter: '语音中心',
+    };
+    $('panel-title').textContent = titleMap[kind] || '详情';
+    let html = '';
+    if (kind === 'profile') {
+      html = `<div class="panel-hero"><b>皇家玩家档案</b><span>当前档案保存在本机，包含金币、钻石、等级、牌局记录和已装备外观。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>${fmtChips(p.coins)}</b><span>金币</span></div>
+          <div class="metric"><b>${p.diamonds || 0}</b><span>钻石</span></div>
+          <div class="metric"><b>${rate}%</b><span>胜率</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('♠', '牌局履历', `已完成 ${hands} 手，获胜 ${wins} 手，最大底池 ${fmtChips(p.biggestPot || 0)}。`, '统计')}
+          ${panelRow('👑', '当前外观', `${Skins.scenes[p.activeScene]?.name || 'VIP包厢'} · ${Skins.backs[p.activeBack]?.name || '皇室红'} · ${Skins.felts[p.activeFelt]?.name || '翡翠绒'}`, '已装备')}
+          ${panelRow('📈', '成长等级', `Lv.${p.level || 1}，经验 ${p.xp || 0}/${Store.levelInfo().need}。`, '成长')}
+        </div>`;
+    } else if (kind === 'missions') {
+      const tasks = Store.getTasks();
+      html = `<div class="panel-hero"><b>今日任务</b><span>完成目标即可领取金币和钻石，每日 0 点刷新。</span></div>
+        <div class="panel-list">` +
+        tasks.map((t) => {
+          const btn = t.claimed ? `<em>已领</em>`
+            : t.done ? `<button class="pr-claim" data-claim-task="${t.id}">领取</button>`
+              : `<em>${t.cur}/${t.goal}</em>`;
+          return `<div class="panel-row"><div class="pr-ic">🎯</div>
+            <div><b>${t.name}</b><div class="pr-text"><div class="progress-track"><i style="width:${pct(t.cur, t.goal)}%"></i></div>奖励 🪙${fmtChips(t.coins)} · 💎${t.diamonds}</div></div>${btn}</div>`;
+        }).join('') + `</div>`;
+    } else if (kind === 'vip') {
+      const vip = vipInfo(p);
+      html = `<div class="panel-hero"><b>VIP${vip.level} 贵宾中心</b><span>贵宾体系按牌局活跃成长，提供身份、返利、专属活动和牌桌展示。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>VIP${vip.level}</b><span>当前等级</span></div>
+          <div class="metric"><b>${vip.rebate}%</b><span>模拟返水</span></div>
+          <div class="metric"><b>${p.winStreak || 0}</b><span>当前连胜</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('👑', '贵宾进度', `<div>${vip.nextText}</div><div class="progress-track"><i style="width:${vip.progress}%"></i></div>`, '成长')}
+          ${panelRow('💎', '专属权益', '头像框、称号、场景折扣、活动优先报名。', '权益')}
+          ${panelRow('🎁', '每日礼金', `当前 VIP${vip.level} 可领取 ${fmtChips(20000 + vip.level * 15000)} 金币体验礼。`, '模拟')}
+          ${panelRow('☎️', '专属客服', '高等级用户可进入专属服务通道。', vip.level >= 3 ? '开放' : '未开放')}
+        </div>`;
+    } else if (kind === 'security') {
+      html = `<div class="panel-hero"><b>公平牌局中心</b><span>面向成熟产品的安全与风控入口，用于展示洗牌、断线、反作弊和牌局记录能力。</span></div>
+        <div class="panel-list">
+          ${panelRow('🔀', '洗牌机制', '本地模式每手重新生成牌堆并随机洗牌；联机模式建议改为服务端权威发牌。', '通过')}
+          ${panelRow('🛡️', '反作弊策略', '限制客户端只提交操作，不提交结果；真人桌由服务端校验行动。', '规划')}
+          ${panelRow('📜', '牌局回放', '可扩展为每手记录按钮、公共牌、下注线和赢家。', '待接入')}
+          ${panelRow('🌐', '断线重连', '真人对战已有 token 重连基础，可继续加超时托管。', '基础')}
+        </div>`;
+    } else if (kind === 'rank') {
+      const me = Math.max(6, 18 - Math.min(12, wins));
+      html = `<div class="panel-hero"><b>财富榜 · 本周</b><span>展示完整排行榜体验，当前包含本机玩家和模拟榜单。</span></div>
+        <div class="panel-list">
+          <div class="panel-row rank-row"><div class="pr-ic">1</div><div><b>澳门金鲨</b><span>胜率 68% · 连胜 9</span></div><em>8.8亿</em></div>
+          <div class="panel-row rank-row"><div class="pr-ic">2</div><div><b>拉斯维加斯王</b><span>胜率 63% · 连胜 6</span></div><em>6.2亿</em></div>
+          <div class="panel-row rank-row"><div class="pr-ic">3</div><div><b>游艇先生</b><span>胜率 59% · 连胜 5</span></div><em>4.9亿</em></div>
+          <div class="panel-row rank-row"><div class="pr-ic">${me}</div><div><b>皇家玩家</b><span>胜率 ${rate}% · 已玩 ${hands} 手</span></div><em>${fmtChips(p.coins)}</em></div>
+        </div>`;
+    } else if (kind === 'mail') {
+      html = `<div class="panel-list">
+        ${panelRow('🎁', '欢迎礼包', '感谢加入皇室德州，礼包码入口已放在大厅。', '未领取')}
+        ${panelRow('📣', '赛季公告', '传奇赛季开放，完成每日任务可获得额外奖励。', '新')}
+        ${panelRow('🛠️', '系统通知', '当前版本强化了大厅、商店、任务、排行榜与活动面板。', '已读')}
+      </div>`;
+    } else if (kind === 'events') {
+      html = `<div class="panel-hero"><b>限时活动中心</b><span>原创活动体系，用于承载首胜、连胜、节日活动和回流奖励。</span></div>
+        <div class="panel-list">
+          ${panelRow('🔥', '首胜加奖', '每日第一手获胜额外奖励 5万金币。', wins > 0 ? '已达成' : '进行中')}
+          ${panelRow('⚡', '三连胜挑战', `当前连胜 ${p.winStreak || 0}/3，完成后奖励 10 钻石。`, (p.winStreak || 0) >= 3 ? '可领' : '挑战')}
+          ${panelRow('🎊', '周末豪客夜', '高额场、大师场结算经验提升 30%。', '周末')}
+          ${panelRow('🔁', '回流礼遇', '连续 3 天未登录后回归可领取补给。', '运营')}
+        </div>`;
+    } else if (kind === 'gifts') {
+      html = `<div class="panel-hero"><b>牌桌礼物</b><span>礼物体系增加社交氛围和付费承载点，当前先做产品入口和礼物目录。</span></div>
+        <div class="panel-list">
+          ${panelRow('🌹', '玫瑰', '轻量互动礼物，可在座位间飘动。', '5钻')}
+          ${panelRow('🍾', '香槟', '胜利时触发喷洒动效。', '18钻')}
+          ${panelRow('🚁', '空投', '全桌可见的高级礼物特效。', '66钻')}
+          ${panelRow('👑', '加冕', '为赢家播放皇冠登场动画。', '99钻')}
+        </div>`;
+    } else if (kind === 'coach') {
+      html = `<div class="panel-hero"><b>训练营</b><span>把现有胜率提示包装成训练体系，帮助玩家从新手向高手成长。</span></div>
+        <div class="panel-list">
+          ${panelRow('📚', '起手牌训练', '按位置学习强牌、边缘牌、弃牌范围。', '课程')}
+          ${panelRow('🧮', '底池赔率', '牌桌中已显示胜率和赔率建议，可继续扩展成练习题。', '已接入')}
+          ${panelRow('🎭', '诈唬识别', '结合对手模型记录你的弃牌率和激进度。', '进阶')}
+          ${panelRow('🦈', '鲨鱼模式', '高手场和大师场已启用更强 AI 策略。', '可玩')}
+        </div>`;
+    } else if (kind === 'activityMap') {
+      html = `<div class="panel-hero"><b>成熟运营骨架</b><span>按商业 App 的结构拆成成长、活动、社交、牌桌互动和安全五条线，先用轻量面板承载，后续可逐个接服务端。</span></div>
+        <div class="panel-list">
+          ${panelRow('🎖️', '成长线', '等级、VIP、赛季通行证、成就墙、称号和外观展示。', '已铺底')}
+          ${panelRow('🎊', '活动线', '首胜、连胜、转盘、签到、秘宝商店、金猪钱罐。', '已铺底')}
+          ${panelRow('🤝', '社交线', '好友、俱乐部、邀请、礼物、牌桌聊天。', '已铺底')}
+          ${panelRow('🃏', '牌桌线', '牌谱、奖池、语音、礼物、数据中心和训练营。', '已铺底')}
+          ${panelRow('🛡️', '安全线', '公平说明、回放、举报、断线重连、服务端权威发牌。', '路线')}
+        </div>`;
+    } else if (kind === 'passport') {
+      const lv = p.level || 1;
+      html = `<div class="panel-hero"><b>皇家征程</b><span>赛季通行证用 50 级成长承载长期留存，不复制任何外部赛季设定。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>Lv.${lv}</b><span>当前等级</span></div>
+          <div class="metric"><b>${Math.min(50, lv + 4)}</b><span>下个奖励</span></div>
+          <div class="metric"><b>${Math.max(0, 50 - lv)}</b><span>剩余等级</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('🎁', '免费路线', `<div>金币、钻石、基础头像框</div><div class="progress-track"><i style="width:${pct(lv,50)}%"></i></div>`, '开放')}
+          ${panelRow('👑', '高级路线', '高级牌背、入场特效、贵宾场景和专属称号。', '预留')}
+          ${panelRow('🃏', '周任务', '完成牌局、获胜、连胜、参加真人桌都可以积累通行证经验。', '任务')}
+        </div>`;
+    } else if (kind === 'mysteryShop') {
+      html = `<div class="panel-hero"><b>秘宝商店</b><span>用于承载周期折扣和外观轮换，做成皇室自己的轻奢货架。</span></div>
+        <div class="panel-list">
+          ${panelRow('🃏', '鎏金牌背', '限时 7 折，适合赛季奖励或钻石购买。', '今日')}
+          ${panelRow('🟩', '翡翠桌布', '桌面皮肤轮换，保持牌桌新鲜感。', '热卖')}
+          ${panelRow('🎩', '绅士头像框', '身份装饰，和 VIP、成就联动展示。', '稀有')}
+          ${panelRow('⏱️', '刷新机制', '商业版可接每日刷新、库存、折扣和购买限制。', '体系')}
+        </div>`;
+    } else if (kind === 'goldenPig') {
+      const saved = Math.min(500000, hands * 8000 + wins * 22000);
+      html = `<div class="panel-hero"><b>金库钱罐</b><span>把日常活跃转成可见积累，形成“越玩越满”的反馈。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>${fmtChips(saved)}</b><span>累计金币</span></div>
+          <div class="metric"><b>${Math.min(100, Math.round(saved / 5000))}%</b><span>储蓄进度</span></div>
+          <div class="metric"><b>${hands}</b><span>贡献牌局</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('💰', '活跃储蓄', `<div>每手牌局和胜利会增加钱罐容量</div><div class="progress-track"><i style="width:${pct(saved,500000)}%"></i></div>`, '成长')}
+          ${panelRow('💎', '开启奖励', '满额后可领取金币，商业版可叠加钻石开罐。', '预留')}
+        </div>`;
+    } else if (kind === 'invite') {
+      html = `<div class="panel-hero"><b>邀请礼</b><span>邀请体系连接真人对战、好友和俱乐部，是成熟棋牌 App 的关键社交入口。</span></div>
+        <div class="panel-list">
+          ${panelRow('🔗', '入桌邀请', '生成真人对战房间链接，让朋友直接进入同一桌。', '联机')}
+          ${panelRow('🎁', '首局奖励', '好友完成首局后，双方领取金币和钻石。', '奖励')}
+          ${panelRow('🏛️', '俱乐部邀请', '邀请好友加入俱乐部，进入内部排行榜和活动。', '社交')}
+          ${panelRow('🛡️', '反刷限制', '商业版需绑定设备、账号和风控规则。', '安全')}
+        </div>`;
+    } else if (kind === 'club') {
+      html = `<div class="panel-hero"><b>皇家俱乐部</b><span>俱乐部用于承载好友房、成员排行榜、俱乐部基金和内部锦标赛。</span></div>
+        <div class="panel-list">
+          ${panelRow('🏛️', '皇室训练营', '当前成员 28/50，今日活跃 12 人。', '已加入')}
+          ${panelRow('👥', '好友牌桌', '后续可把真人对战房间绑定到俱乐部。', '联机')}
+          ${panelRow('🏆', '俱乐部赛', '每晚 20:00 开赛，按积分发奖。', '预告')}
+        </div>`;
+    } else if (kind === 'vault') {
+      html = `<div class="panel-hero"><b>保险箱</b><span>把金币资产、钻石和贵宾权益集中展示，形成商业 App 的资产中心体验。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>${fmtChips(p.coins)}</b><span>可用金币</span></div>
+          <div class="metric"><b>${p.diamonds || 0}</b><span>钻石</span></div>
+          <div class="metric"><b>VIP0</b><span>贵宾</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('💼', '资产保护', '本地试玩模式下资产保存在浏览器档案。', '本机')}
+          ${panelRow('💳', '充值中心', '商业版可接入 IAP、订单、风控和发货流水。', '接口')}
+          ${panelRow('🔐', '服务端账户', '接入登录后可把资产迁移到云端账户。', '规划')}
+        </div>`;
+    } else if (kind === 'achievements') {
+      const list = Store.getAchievements();
+      html = `<div class="panel-hero"><b>成就殿堂</b><span>达成里程碑领取奖励，记录你的高手之路。</span></div>
+        <div class="panel-list">` +
+        list.map((a) => {
+          const btn = a.claimed ? `<em>已领</em>`
+            : a.unlocked ? `<button class="pr-claim" data-claim-achv="${a.id}">领取</button>`
+              : `<em>未达成</em>`;
+          return `<div class="panel-row ${a.unlocked && !a.claimed ? 'achv-ready' : ''}"><div class="pr-ic">${a.claimed ? '🏅' : a.unlocked ? '🎖️' : '🔒'}</div>
+            <div><b>${a.name}</b><div class="pr-text">${a.desc} · 奖励 🪙${fmtChips(a.coins)} · 💎${a.diamonds}</div></div>${btn}</div>`;
+        }).join('') + `</div>`;
+    } else if (kind === 'friends') {
+      html = `<div class="panel-hero"><b>好友中心</b><span>好友体系为真人桌、邀请、俱乐部和礼物互动做准备。</span></div>
+        <div class="panel-list">
+          ${panelRow('🤝', '最近牌友', '小敏、财神、黑桃J、老李。', '模拟')}
+          ${panelRow('📨', '邀请入桌', '生成真人对战链接或二维码，邀请同一网络/Tailnet 的朋友。', '联机')}
+          ${panelRow('🎁', '好友礼物', '每日互赠金币，形成轻社交循环。', '规划')}
+          ${panelRow('🚫', '黑名单', '商业版需要屏蔽、举报和禁言能力。', '安全')}
+        </div>`;
+    } else if (kind === 'analytics') {
+      const foldRate = window.OppModel.betsFaced ? Math.round(window.OppModel.folds / window.OppModel.betsFaced * 100) : 0;
+      html = `<div class="panel-hero"><b>数据中心</b><span>把玩家表现转成可读数据，形成高端牌手工具感。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>${rate}%</b><span>胜率</span></div>
+          <div class="metric"><b>${foldRate}%</b><span>面对下注弃牌</span></div>
+          <div class="metric"><b>${fmtChips(p.biggestPot || 0)}</b><span>最大底池</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('📊', '牌风画像', `样本 ${window.OppModel.acts || 0} 次，激进度 ${Math.round((window.OppModel.exploit().aggr || 0) * 100)}%。`, '模型')}
+          ${panelRow('🧠', 'AI 读牌', '高手场会根据你的弃牌率和激进度调整策略。', '已接入')}
+          ${panelRow('📈', '盈利曲线', '后续可记录每手净收益并展示曲线。', '扩展')}
+        </div>`;
+    } else if (kind === 'support') {
+      html = `<div class="panel-list">
+        ${panelRow('🎧', '在线客服', '处理安装、联机、账号、奖励发放等问题。', '模拟')}
+        ${panelRow('📘', '规则说明', '德州扑克采用标准 Hold’em 规则，支持单挑、六人桌、九人桌。', '帮助')}
+        ${panelRow('🛠️', '问题反馈', '崩溃上报和日志系统接入后可自动定位问题。', '待接入')}
+        ${panelRow('⚖️', '公平申诉', '可对异常牌局提交牌局编号和回放。', '规划')}
+      </div>`;
+    } else if (kind === 'settings') {
+      html = `<div class="panel-hero"><b>系统设置</b><span>成熟 App 需要把音效、隐私、网络和资源管理集中到设置中心。</span></div>
+        <div class="panel-list">
+          ${panelRow('🔊', '声音设置', `当前音效：${Store.get().muted ? '关闭' : '开启'}。`, '可切换')}
+          ${panelRow('🌐', '联机服务器', '真人对战默认连接 m5.tail5255b4.ts.net。', '当前')}
+          ${panelRow('🧹', '缓存管理', '图片与音频为内置资源，后续可加资源包更新。', '资源')}
+          ${panelRow('🔒', '隐私说明', '当前试玩版不接相机、定位、IDFA；商业版接入前需补说明。', '合规')}
+        </div>`;
+    } else if (kind === 'tableChat') {
+      html = `<div class="panel-hero"><b>牌桌聊天</b><span>先提供快捷语句和情绪反馈，真人桌上线后再接入真正聊天、禁言和举报。</span></div>
+        <div class="panel-list">
+          ${panelRow('💬', '快捷语句', '好牌、精彩、再来一手、跟到底、稳一点。', '可用')}
+          ${panelRow('🙂', '表情互动', '微笑、鼓掌、惊讶、思考、庆祝。', '目录')}
+          ${panelRow('🛡️', '聊天安全', '商业版需要敏感词、禁言、举报和聊天记录。', '规划')}
+        </div>`;
+    } else if (kind === 'tableGift') {
+      html = `<div class="panel-hero"><b>牌桌礼物</b><span>牌桌内礼物用于强化互动和赢家仪式感，当前保持轻量目录，不增加大体积资源。</span></div>
+        <div class="panel-list">
+          ${panelRow('🌹', '玫瑰飞送', '低价礼物，适合日常互动。', '5钻')}
+          ${panelRow('🍾', '香槟庆祝', '赢牌后播放庆祝提示。', '18钻')}
+          ${panelRow('👑', '皇家加冕', '赢家专属高光礼物。', '99钻')}
+          ${panelRow('🎬', '特效扩展', '后续用 CSS/Canvas 做轻量动画，避免体积膨胀。', '路线')}
+        </div>`;
+    } else if (kind === 'tableHistory') {
+      html = `<div class="panel-hero"><b>牌局记录</b><span>牌谱是安全、公平申诉和高手复盘的基础。当前展示本局概览，后续可保存每手行动线。</span></div>
+        <div class="panel-list">
+          ${panelRow('🃏', '当前手数', `本次档案累计 ${hands} 手，当前牌桌显示第 ${window.Game?.handNo || 0} 手。`, '记录')}
+          ${panelRow('💰', '最大底池', `历史最大底池 ${fmtChips(p.biggestPot || 0)}。`, '统计')}
+          ${panelRow('📜', '行动线', '可扩展记录：盲注、发牌、下注、公共牌、摊牌、分池。', '待接入')}
+          ${panelRow('⚖️', '申诉编号', '商业版每手生成唯一编号，供客服复核。', '安全')}
+        </div>`;
+    } else if (kind === 'jackpot') {
+      const jackpot = 880000 + hands * 12000 + wins * 46000;
+      html = `<div class="panel-hero"><b>皇家奖池</b><span>奖池入口增加高额目标感，先做展示与规则，后续可接真实计奖。</span></div>
+        <div class="metric-grid">
+          <div class="metric"><b>${fmtChips(jackpot)}</b><span>当前奖池</span></div>
+          <div class="metric"><b>皇家同花顺</b><span>大奖牌型</span></div>
+          <div class="metric"><b>1%</b><span>模拟注入</span></div>
+        </div>
+        <div class="panel-list">
+          ${panelRow('💰', '奖池规则', '指定牌型或活动桌触发奖励，按牌桌盲注区间分级。', '规则')}
+          ${panelRow('🎖️', '小奖触发', '四条、同花顺可触发小奖展示。', '预留')}
+          ${panelRow('🛡️', '结算要求', '真实奖池必须由服务端结算，客户端只展示结果。', '安全')}
+        </div>`;
+    } else if (kind === 'voiceCenter') {
+      html = `<div class="panel-hero"><b>语音中心</b><span>当前版本不请求麦克风权限，先保留语音入口和快捷语音结构；商业版再按合规流程接入。</span></div>
+        <div class="panel-list">
+          ${panelRow('🎙️', '快捷语音', '全下、跟注、漂亮、别跑、再来。', '目录')}
+          ${panelRow('🔇', '隐私默认', '未接麦克风权限，不采集用户语音。', '合规')}
+          ${panelRow('🧩', '接入路线', '真人桌可接语音房间、静音、举报、变声和音量控制。', '路线')}
+        </div>`;
+    } else if (kind === 'notice') {
+      html = `<div class="panel-list">
+        ${panelRow('✨', '大厅焕新', '新增玩家档案、活动横幅、任务、邮件、排行和俱乐部入口。', '今日')}
+        ${panelRow('🎮', '玩法保留', '经典牌桌、真人对战、签到、转盘、商店和礼包码均保留。', '稳定')}
+        ${panelRow('📦', '资源建议', '后续可继续补更多角色立绘、礼物动画、赛季通行证素材。', '建议')}
+        ${panelRow('🛡️', '安全路线', '服务端权威牌局、回放、举报、封禁是下一阶段重点。', '路线')}
+      </div>`;
+    } else if (kind === 'season') {
+      const lv = p.level || 1;
+      html = `<div class="panel-hero"><b>传奇赛季</b><span>赛季进度随等级、牌局和每日活跃提升。</span></div>
+        <div class="panel-list">
+          ${panelRow('🎖️', '赛季等级', `<div>Lv.${lv}/50</div><div class="progress-track"><i style="width:${pct(lv,50)}%"></i></div>`, '进行中')}
+          ${panelRow('💎', '免费奖励', '金币、钻石、头像框、牌背。', '已开放')}
+          ${panelRow('👑', '高级奖励', '豪华场景、称号、载具和特殊入场特效。', '规划')}
+        </div>`;
+    } else if (kind === 'tourney') {
+      html = `<div class="panel-hero"><b>锦标赛大厅</b><span>这里用于模拟商业 App 的赛事入口；真正开赛需要服务端报名、桌位调度和结算。</span></div>
+        <div class="panel-list">
+          ${panelRow('🌙', '午夜快速赛', '6人桌 · 10分钟一轮 · 奖池 50万金币。', '20:00')}
+          ${panelRow('👑', '皇家大师赛', '9人桌 · 积分制 · 奖励限定称号。', '周赛')}
+          ${panelRow('⚔️', '单挑王', 'Heads-up 淘汰赛，适合练习压迫打法。', '报名')}
+        </div>`;
+    }
+    $('panel-body').innerHTML = html;
+    openModal('modal-panel');
   }
 
   function renderCheckin() {
@@ -725,9 +1069,16 @@
       slider.value = target; $('raise-value').textContent = target.toLocaleString();
     }));
 
-    // 功能栏
-    $('btn-checkin').addEventListener('click', () => openModal('modal-checkin'));
-    $('btn-wheel').addEventListener('click', () => openModal('modal-wheel'));
+    // 大厅功能入口
+    document.querySelectorAll('[data-panel]').forEach((el) => el.addEventListener('click', () => openPanel(el.dataset.panel)));
+    // 面板内领取(任务/成就)
+    $('panel-body').addEventListener('click', (e) => {
+      const tk = e.target.closest('[data-claim-task]'), ac = e.target.closest('[data-claim-achv]');
+      if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
+      else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
+    });
+    $('home-task-checkin').addEventListener('click', () => openModal('modal-checkin'));
+    $('home-task-wheel').addEventListener('click', () => openModal('modal-wheel'));
     $('wheel-spin').addEventListener('click', spinWheel);
     $('btn-shop').addEventListener('click', () => openModal('modal-shop'));
     $('btn-redeem').addEventListener('click', () => openModal('modal-redeem'));

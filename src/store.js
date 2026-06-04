@@ -27,6 +27,13 @@
     level: 1,            // 等级
     lastSpin: null,      // 每日幸运转盘日期
     winStreak: 0,
+    bestStreak: 0,       // 最高连胜
+    bestHand: 0,         // 最佳牌型类别(0..8)
+    allinTotal: 0,       // 全下总次数
+    dailyDate: null,     // 每日任务日期
+    dHands: 0, dWins: 0, dAllin: 0,  // 今日进度
+    taskClaimed: [],     // 今日已领任务
+    achvClaimed: [],     // 已领成就
   };
 
   // 7 天签到奖励（免费、慷慨）
@@ -176,12 +183,68 @@
   const _scene = mkCosmetic('scenes', 'ownedScenes', 'activeScene');
 
   function setMuted(m) { profile.muted = !!m; save(); }
-  function recordHand(won, pot) {
-    profile.handsPlayed++;
-    if (won) { profile.handsWon++; profile.winStreak = (profile.winStreak || 0) + 1; }
+
+  function dailyReset() {
+    if (profile.dailyDate !== todayStr()) {
+      profile.dailyDate = todayStr();
+      profile.dHands = 0; profile.dWins = 0; profile.dAllin = 0; profile.taskClaimed = [];
+    }
+  }
+  function recordHand(won, pot, handCat) {
+    dailyReset();
+    profile.handsPlayed++; profile.dHands++;
+    if (won) { profile.handsWon++; profile.dWins++; profile.winStreak = (profile.winStreak || 0) + 1; if (profile.winStreak > (profile.bestStreak || 0)) profile.bestStreak = profile.winStreak; }
     else profile.winStreak = 0;
     if (pot > profile.biggestPot) profile.biggestPot = pot;
+    if ((handCat || 0) > (profile.bestHand || 0)) profile.bestHand = handCat || 0;
     save();
+  }
+  function recordAllin() { dailyReset(); profile.dAllin++; profile.allinTotal = (profile.allinTotal || 0) + 1; save(); }
+
+  // ---- 每日任务 ----
+  const TASKS = [
+    { id: 'play', name: '今日对局 10 手', goal: 10, prog: (p) => p.dHands, coins: 30000, diamonds: 2 },
+    { id: 'win', name: '今日获胜 3 手', goal: 3, prog: (p) => p.dWins, coins: 50000, diamonds: 3 },
+    { id: 'allin', name: '今日全下 1 次', goal: 1, prog: (p) => p.dAllin, coins: 40000, diamonds: 2 },
+  ];
+  function getTasks() {
+    dailyReset();
+    return TASKS.map((t) => { const cur = Math.min(t.prog(profile), t.goal); return { id: t.id, name: t.name, cur, goal: t.goal, done: cur >= t.goal, claimed: profile.taskClaimed.includes(t.id), coins: t.coins, diamonds: t.diamonds }; });
+  }
+  function claimTask(id) {
+    dailyReset();
+    const t = TASKS.find((x) => x.id === id); if (!t) return null;
+    if (t.prog(profile) < t.goal || profile.taskClaimed.includes(id)) return null;
+    profile.taskClaimed.push(id); profile.coins += t.coins; profile.diamonds += t.diamonds; save();
+    return { coins: t.coins, diamonds: t.diamonds };
+  }
+
+  // ---- 成就 ----
+  const ACHV = [
+    { id: 'firstwin', name: '首胜', desc: '赢得 1 手', ok: (p) => p.handsWon >= 1, coins: 20000, diamonds: 2 },
+    { id: 'hands100', name: '百战之身', desc: '游玩 100 手', ok: (p) => p.handsPlayed >= 100, coins: 50000, diamonds: 5 },
+    { id: 'hands1000', name: '千锤百炼', desc: '游玩 1000 手', ok: (p) => p.handsPlayed >= 1000, coins: 200000, diamonds: 20 },
+    { id: 'bigpot', name: '大赢家', desc: '单手底池 10 万', ok: (p) => p.biggestPot >= 100000, coins: 80000, diamonds: 8 },
+    { id: 'lv10', name: '崭露头角', desc: '达到 10 级', ok: (p) => p.level >= 10, coins: 100000, diamonds: 10 },
+    { id: 'flush', name: '同花高手', desc: '做成同花或更大', ok: (p) => (p.bestHand || 0) >= 5, coins: 60000, diamonds: 6 },
+    { id: 'allin10', name: '全下狂魔', desc: '全下 10 次', ok: (p) => (p.allinTotal || 0) >= 10, coins: 60000, diamonds: 6 },
+    { id: 'streak5', name: '五连胜', desc: '连胜 5 手', ok: (p) => (p.bestStreak || 0) >= 5, coins: 80000, diamonds: 8 },
+  ];
+  function getAchievements() {
+    return ACHV.map((a) => ({ id: a.id, name: a.name, desc: a.desc, unlocked: a.ok(profile), claimed: profile.achvClaimed.includes(a.id), coins: a.coins, diamonds: a.diamonds }));
+  }
+  function claimAchv(id) {
+    const a = ACHV.find((x) => x.id === id); if (!a || !a.ok(profile) || profile.achvClaimed.includes(id)) return null;
+    profile.achvClaimed.push(id); profile.coins += a.coins; profile.diamonds += a.diamonds; save();
+    return { coins: a.coins, diamonds: a.diamonds };
+  }
+  function hasClaimable() {
+    return getTasks().some((t) => t.done && !t.claimed) || getAchievements().some((a) => a.unlocked && !a.claimed);
+  }
+  const HANDNAMES = ['高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺'];
+  function getStats() {
+    const wr = profile.handsPlayed ? Math.round(profile.handsWon / profile.handsPlayed * 100) : 0;
+    return { hands: profile.handsPlayed, wins: profile.handsWon, winrate: wr, biggest: profile.biggestPot, level: profile.level, bestStreak: profile.bestStreak || 0, allin: profile.allinTotal || 0, bestHand: HANDNAMES[profile.bestHand || 0] };
   }
 
   // 经验/等级：升级所需经验随等级递增
@@ -226,8 +289,9 @@
     buyVehicle: _veh.buy, setVehicle: _veh.set,
     buyWatch: _watch.buy, setWatch: _watch.set,
     buyScene: _scene.buy, setScene: _scene.set,
-    setMuted, recordHand, addXp, levelInfo,
+    setMuted, recordHand, recordAllin, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
+    getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
     CHECKIN,
   };
 })();

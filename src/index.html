@@ -25,20 +25,117 @@
           <span class="cur diamonds"><i>💎</i><b class="diamond-val">0</b></span>
         </div>
       </header>
-      <div class="hero">
-        <div class="hero-logo">♠</div>
-        <div class="hero-title">皇室德州</div>
-        <div class="hero-sub">ROYAL HOLD'EM</div>
-        <button class="big-btn play-btn" id="btn-play">开始游戏</button>
-        <a class="big-btn online-btn" id="btn-online" href="online.html">👥 真人对战</a>
-      </div>
-      <nav class="lobby-feats">
-        <button class="feat" id="btn-checkin"><i>🎁</i><span>签到</span><em id="checkin-dot" class="dot hidden"></em></button>
-        <button class="feat" id="btn-wheel"><i>🎡</i><span>转盘</span><em id="wheel-dot" class="dot hidden"></em></button>
-        <button class="feat" id="btn-shop"><i>🛒</i><span>商店</span></button>
-        <button class="feat" id="btn-redeem"><i>🎟️</i><span>兑换码</span></button>
-        <button class="feat" id="btn-sound"><i id="sound-icon">🔊</i><span>音效</span></button>
-      </nav>
+      <main class="lobby-scroll">
+        <section class="profile-strip">
+          <div class="profile-avatar"><img id="home-avatar" src="assets/av/1.png" alt="" /></div>
+          <div class="profile-main">
+            <div class="profile-name">皇家玩家 <span id="home-title">德州新秀</span></div>
+            <div class="profile-stats">
+              <span id="home-hands">0手</span>
+              <span id="home-winrate">胜率 0%</span>
+              <span id="home-pot">最大底池 0</span>
+            </div>
+          </div>
+          <button class="mini-btn" data-panel="profile">资料</button>
+        </section>
+
+        <section class="status-deck">
+          <button class="status-card" data-panel="vip">
+            <span>VIP</span><b id="home-vip">0</b><em id="home-vip-next">距 VIP1 还差 20局</em>
+            <i><u id="home-vip-bar"></u></i>
+          </button>
+          <button class="status-card" data-panel="season">
+            <span>赛季</span><b id="home-season">青铜 I</b><em id="home-season-next">Lv.1 / 50</em>
+            <i><u id="home-season-bar"></u></i>
+          </button>
+          <button class="status-card" data-panel="security">
+            <span>牌局安全</span><b>公平</b><em>本地洗牌可审计</em>
+            <i><u style="width:86%"></u></i>
+          </button>
+        </section>
+
+        <section class="hero">
+          <div class="hero-copy">
+            <div class="hero-kicker">SEASON 08</div>
+            <div class="hero-title">皇室德州</div>
+            <div class="hero-sub">ROYAL HOLD'EM CLUB</div>
+          </div>
+          <div class="hero-logo">♠</div>
+        </section>
+
+        <section class="event-banner" data-panel="season">
+          <div>
+            <b>传奇赛季开启</b>
+            <span>完成牌局、连胜与签到任务，解锁钻石、称号和场景奖励。</span>
+          </div>
+          <button class="mini-btn">查看</button>
+        </section>
+
+        <section class="ops-strip">
+          <button data-panel="events"><b>限时活动</b><span>首胜加奖</span></button>
+          <button data-panel="gifts"><b>牌桌礼物</b><span>互动特效</span></button>
+          <button data-panel="coach"><b>训练营</b><span>胜率教练</span></button>
+        </section>
+
+        <section class="liveops-board">
+          <div class="panel-title"><span>成长与活动</span><button data-panel="activityMap">总览</button></div>
+          <div class="liveops-grid">
+            <button data-panel="passport"><span>通行证</span><b>皇家征程</b><em>50 级成长奖励</em></button>
+            <button data-panel="mysteryShop"><span>特惠</span><b>秘宝商店</b><em>外观折扣轮换</em></button>
+            <button data-panel="goldenPig"><span>储蓄</span><b>金库钱罐</b><em>活跃累计金币</em></button>
+            <button data-panel="invite"><span>社交</span><b>邀请礼</b><em>好友入桌奖励</em></button>
+          </div>
+        </section>
+
+        <section class="mode-grid">
+          <button class="mode-card main-mode" id="btn-play">
+            <span class="mode-ic">♠</span>
+            <b>经典牌桌</b>
+            <em>单机 AI · 多难度 · 练牌</em>
+          </button>
+          <a class="mode-card online-mode" id="btn-online" href="online.html">
+            <span class="mode-ic">👥</span>
+            <b>真人对战</b>
+            <em>WebSocket 联机牌桌</em>
+          </a>
+          <button class="mode-card" data-panel="tourney">
+            <span class="mode-ic">🏆</span>
+            <b>锦标赛</b>
+            <em>限时排名奖励</em>
+          </button>
+        </section>
+
+        <section class="lobby-panel">
+          <div class="panel-title"><span>今日事务</span><button data-panel="notice">公告</button></div>
+          <div class="task-list">
+            <button class="task-row" id="home-task-checkin">
+              <span>🎁</span><b>每日签到</b><em>可领取金币和钻石</em><i id="checkin-dot" class="dot hidden"></i>
+            </button>
+            <button class="task-row" id="home-task-wheel">
+              <span>🎡</span><b>幸运转盘</b><em>每天免费抽一次</em><i id="wheel-dot" class="dot hidden"></i>
+            </button>
+            <button class="task-row" data-panel="missions">
+              <span>📋</span><b>每日任务</b><em id="home-mission-line">完成 3 个目标领宝箱</em>
+            </button>
+          </div>
+        </section>
+
+        <nav class="app-grid">
+          <button id="btn-shop"><span>🛒</span><b>商店</b></button>
+          <button id="btn-redeem"><span>🎟️</span><b>礼包</b></button>
+          <button data-panel="rank"><span>🏅</span><b>排行</b></button>
+          <button data-panel="mail"><span>✉️</span><b>邮件</b></button>
+          <button data-panel="club"><span>🏛️</span><b>俱乐部</b></button>
+          <button data-panel="vault"><span>💼</span><b>保险箱</b></button>
+          <button data-panel="vip"><span>👑</span><b>贵宾</b></button>
+          <button data-panel="achievements"><span>🎖️</span><b>成就</b></button>
+          <button data-panel="friends"><span>🤝</span><b>好友</b></button>
+          <button data-panel="analytics"><span>📊</span><b>数据</b></button>
+          <button data-panel="support"><span>🎧</span><b>客服</b></button>
+          <button data-panel="settings"><span>⚙️</span><b>设置</b></button>
+          <button id="btn-sound"><span id="sound-icon">🔊</span><b>音效</b></button>
+        </nav>
+      </main>
     </section>
 
     <!-- ===== 选桌 / 选规则 ===== -->
@@ -75,6 +172,13 @@
           <div id="fx-layer"></div>
           <div id="result-banner" class="hidden"></div>
           <div id="allin-flash" class="hidden">ALL IN</div>
+          <nav id="table-tools">
+            <button data-panel="tableChat"><span>💬</span><b>聊天</b></button>
+            <button data-panel="tableGift"><span>🎁</span><b>礼物</b></button>
+            <button data-panel="tableHistory"><span>📜</span><b>牌谱</b></button>
+            <button data-panel="jackpot"><span>💰</span><b>奖池</b></button>
+            <button data-panel="voiceCenter"><span>🎙️</span><b>语音</b></button>
+          </nav>
         </div>
       </main>
 
@@ -152,6 +256,10 @@
         <div class="wheel-wrap"><div id="wheel" class="wheel"></div><div class="wheel-pin">▼</div></div>
       </div>
       <button class="big-btn" id="wheel-spin">免费抽一次</button>
+    </div>
+    <div id="modal-panel" class="modal hidden">
+      <div class="modal-head"><span id="panel-title">详情</span><button class="modal-close" data-close>✕</button></div>
+      <div class="modal-body" id="panel-body"></div>
     </div>
     <div id="modal-toast" class="toast hidden"></div>
   </div>
