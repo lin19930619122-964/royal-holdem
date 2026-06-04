@@ -48,6 +48,17 @@ ok(S.claimSeasonAll() && S.getSeason().claimable === false, 'season claim all');
 for (let i = 0; i < 9; i++) S.recordRank(true); ok(S.rankInfo().points === 225, 'rank points');
 ok(typeof S.toggleCoach() === 'boolean', 'coach toggle');
 
+// 2b) 训练算法：对手范围胜率 + 建议
+ok(typeof window.PokerAI.equityVsRange === 'function', 'AI.equityVsRange exists');
+(function () {
+  const hole = [{ rank: 14, suit: 's' }, { rank: 14, suit: 'h' }]; // AA
+  const tight = window.PokerAI.equityVsRange(hole, [], 10, 1, 300); // vs top10%
+  const wide = window.PokerAI.equityVsRange(hole, [], 80, 1, 300);  // vs top80%
+  ok(tight && wide && (tight.win + tight.tie / 2) < (wide.win + wide.tie / 2), 'AA: 对紧范围胜率 < 对宽范围胜率');
+  const rnd = window.PokerAI.equityFull(hole, [], 2, 300);
+  ok(rnd && rnd.win > 0.7, 'AA vs 2 random still strong');
+})();
+
 // 3) 数据层完整性
 ['PHRASES', 'GIFTS'].forEach((k) => ok(window.Social[k].length > 0, 'Social.' + k));
 ['speechBubble', 'flyGift', 'streakFlame'].forEach((fn) => ok(typeof window.Fx[fn] === 'function', 'Fx.' + fn));

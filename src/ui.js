@@ -71,6 +71,7 @@
   let handAnalysis = null;
   let handDecisions = [];   // 本手牌内你的每个决策(用于复盘/错误分析)
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
+  let _rngKey = null, _rng = null;  // 对手范围胜率缓存
   const prevLA = [];
 
   // 牌局复盘：把一张牌渲染成带花色颜色的小标签
@@ -102,6 +103,16 @@
     }
     if (action === 'check') return { tag: '○ 过牌', good: null, why: `胜率 ${winPct}%，免费看牌` };
     return { tag: '—', good: null, why: '' };
+  }
+  // 给出"建议行动"（与你的实际行动对比，用于复盘 #3）
+  function recommendAction(winPct, toCall, pot) {
+    if (winPct == null) return null;
+    const eq = winPct / 100, po = toCall > 0 ? toCall / (pot + toCall) : 0;
+    if (toCall === 0) return eq > 0.62 ? '下注要价值' : eq > 0.45 ? '过牌/小注控池' : '过牌';
+    if (eq > po + 0.18) return '加注（强价值）';
+    if (eq > po + 0.04) return '跟注';
+    if (eq > po - 0.02) return '边缘跟注/可弃';
+    return '弃牌';
   }
 
   // 听牌/改善张数(outs)：枚举剩余牌，能提升牌型类别的张数
@@ -321,9 +332,13 @@
       const a = handAnalysis;
       const draw = (a.outs && a.outs > 0) ? `听牌 ${a.outs} outs · ` : '';
       const odds = a.po != null ? `底池赔率 ${a.po}% · ` : '';
+      const range = a.rangeEq != null
+        ? `<div class="hh3">⚔ ${a.aggrName}${a.aggrStyle ? '(' + a.aggrStyle + ')' : ''} 范围≈前 ${a.rangePct}% · 对其范围胜率 <b>${a.rangeEq}%</b></div>`
+        : '';
       hh.innerHTML =
         `<div class="hh1">你的牌型 · ${a.name} · 胜率 <b>${a.winPct}%</b></div>` +
-        `<div class="hh2">赢${a.winPct} 平${a.tiePct} 输${a.losePct}% · ${draw}${odds}${a.opp}人 · <em>${a.rec}</em></div>`;
+        `<div class="hh2">赢${a.winPct} 平${a.tiePct} 输${a.losePct}% · ${draw}${odds}${a.opp}人 · <em>${a.rec}</em></div>` +
+        range;
       hh.classList.remove('hidden');
     } else hh.classList.add('hidden');
 
@@ -351,6 +366,19 @@
   }
   // 顶部座位的气泡朝下，避免顶出牌桌
   function seatIsTop(id) { return !!(SEAT_POS && SEAT_POS[id] && SEAT_POS[id].y < 38); }
+  // 估计进攻者范围（前百分之多少的起手牌）：按街道+加注尺度+风格
+  function estimateRangePct(aggr) {
+    const street = game.board.length;
+    let base = street === 0 ? 22 : street === 3 ? 45 : street === 4 ? 38 : 32;
+    if (street === 0) { // 翻前按加注大小收紧
+      if (game.currentBet >= game.bigBlind * 6) base = 9;
+      else if (game.currentBet >= game.bigBlind * 3) base = 16;
+    }
+    const mult = { nit: 0.5, tag: 0.8, lag: 1.3, station: 1.25, maniac: 1.9, shark: 0.9 };
+    const style = seatProfiles[aggr.id] && seatProfiles[aggr.id].style;
+    base *= (mult[style] || 1);
+    return Math.max(5, Math.min(90, Math.round(base)));
+  }
   // 你说一句快捷语：座位上方冒泡，随机对手回应
   function sayPhrase(text) {
     if (!game || !seatEls[0]) return;
@@ -616,7 +644,22 @@
       let rec, po = null;
       if (toCall === 0) rec = eq > 0.6 ? '强牌 · 下注要价值' : eq > 0.45 ? '中等 · 可过牌或小注' : '偏弱 · 过牌为主';
       else { po = Math.round(toCall / (pot + toCall) * 100); rec = eq * 100 > po + 12 ? '有利 · 跟注，强可加注' : eq * 100 > po ? '勉强 · 便宜可跟' : '不利 · 建议弃牌'; }
-      handAnalysis = { winPct, tiePct, losePct, name, outs, po, rec, opp };
+      // 对手范围推断（#2）：面对真实加注(超过大盲)时，估进攻者范围并算"对其范围胜率"
+      let rangeEq = null, rangePct = null, aggrName = null, aggrStyle = null;
+      if (toCall > 0 && game.currentBet > game.bigBlind) {
+        const aggr = game.players.find((q) => !q.isHuman && !q.folded && !q.out && q.bet === game.currentBet);
+        if (aggr) {
+          rangePct = estimateRangePct(aggr);
+          const numOther = Math.max(0, opp - 1);
+          const rk = `${game.handNo}|${game.board.length}|${game.currentBet}|${aggr.id}`;
+          if (rk !== _rngKey) { _rng = AI.equityVsRange(meP.hole, game.board, rangePct, numOther, 1400); _rngKey = rk; }
+          rangeEq = Math.round((_rng.win + _rng.tie / 2) * 100);
+          aggrName = aggr.name;
+          const si = seatProfiles[aggr.id] && STYLE_INFO[seatProfiles[aggr.id].style];
+          aggrStyle = si ? si.label : '';
+        }
+      }
+      handAnalysis = { winPct, tiePct, losePct, name, outs, po, rec, opp, rangeEq, rangePct, aggrName, aggrStyle };
       humanWinPct = winPct;
       render();
     }
@@ -666,6 +709,8 @@
       street: STREET_CN(game.board.length), action: ACTION_CN[action] || action,
       winPct: humanWinPct, toCall, pot: potNow,
       tag: v.tag, good: v.good, why: v.why,
+      suggest: recommendAction(humanWinPct, toCall, potNow),   // 复盘对比：建议行动
+      rangeEq: (handAnalysis && handAnalysis.rangeEq != null) ? handAnalysis.rangeEq : null,
     });
     window.OppModel.record(action, facing);
     game.act(action, amount);
@@ -777,10 +822,15 @@
       h.decisions.forEach((d, i) => {
         const badge = d.good === true ? 'rc-good' : d.good === false ? 'rc-bad' : 'rc-neutral';
         const wp = d.winPct != null ? `胜率 ${d.winPct}%` : '';
+        const reqEq = d.rangeEq != null ? ` · 对范围 ${d.rangeEq}%` : '';
         const odds = d.toCall > 0 ? ` · 跟${fmtChips(d.toCall)}/池${fmtChips(d.pot)}` : '';
+        // 建议 vs 实际对比（#3）
+        const match = d.suggest && d.suggest.indexOf(d.action) >= 0;
+        const cmp = d.suggest ? `<div class="rc-cmp${match ? ' ok' : ''}">建议：<b>${d.suggest}</b> ｜ 你选：<b>${d.action}</b>${match ? ' ✓' : ''}</div>` : '';
         html += `<div class="rc-step">
           <div class="rc-step-h"><b>${i + 1}. ${d.street} · ${d.action}</b><span class="rc-tag ${badge}">${d.tag}</span></div>
-          <div class="rc-sub">${wp}${odds}</div>
+          <div class="rc-sub">${wp}${reqEq}${odds}</div>
+          ${cmp}
           ${d.why ? `<div class="rc-why">${d.why}</div>` : ''}</div>`;
       });
     }

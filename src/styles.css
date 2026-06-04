@@ -315,6 +315,12 @@ html, body {
 #hand-hint .hh1 b { color: #7fe3a0; font-size: 15px; }
 #hand-hint .hh2 { font-size: 11px; font-weight: 600; color: #cfe7d8; margin-top: 2px; }
 #hand-hint .hh2 em { font-style: normal; color: var(--gold-lt); font-weight: 800; }
+#hand-hint .hh3 { font-size: 11px; font-weight: 700; color: #ffc6a0; margin-top: 3px; border-top: 1px solid rgba(245,207,107,.2); padding-top: 3px; }
+#hand-hint .hh3 b { color: #ff9d6b; font-size: 13px; }
+/* 复盘建议对比 */
+.rc-cmp { font-size: 11px; font-weight: 600; color: #ffd9b0; margin-top: 4px; padding: 3px 7px; border-radius: 7px; background: rgba(255,150,80,.12); }
+.rc-cmp.ok { color: #bdf0cf; background: rgba(95,211,138,.12); }
+.rc-cmp b { color: #fff; }
 /* 座位牌型标签(摊牌) */
 .seat .hand-name {
   position: absolute; top: -31px; left: 50%; transform: translateX(-50%);
