@@ -85,6 +85,7 @@
   let humanWinPct = null;
   let handAnalysis = null;
   let handDecisions = [];   // 本手牌内你的每个决策(用于复盘/错误分析)
+  let sessionHands = 0;     // 本次进桌已打手数(每10手弹 Session 小结)
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
   const prevLA = [];
@@ -674,6 +675,23 @@
             decisions: handDecisions.slice(),
             mistakes,
           });
+          // V4 战绩统计：从本手英雄决策序列推导 VPIP/PFR/激进度/摊牌
+          if (handDecisions.length) {
+            const pre = handDecisions.filter((d) => d.street === '翻牌前');
+            const vpip = pre.some((d) => d.action === '跟注' || d.action === '加注');
+            const pfr = pre.some((d) => d.action === '加注');
+            const aggr = handDecisions.filter((d) => d.action === '加注').length;
+            const passive = handDecisions.filter((d) => d.action === '跟注').length;
+            const sawShowdown = showdown && !meP.folded;
+            Store.recordStatHand({
+              vpip, pfr, aggr, passive, sawShowdown,
+              wonShowdown: sawShowdown && (meP.winThisHand || 0) > 0,
+              goodDecisions: handDecisions.filter((d) => d.good === true).length,
+              badDecisions: mistakes,
+            });
+            sessionHands++;
+            if (sessionHands % 10 === 0) showSessionSummary();
+          }
         } catch (e) {}
         updateHandStrip();
         syncWallet(true); syncLevel();
@@ -926,6 +944,16 @@
     MODALS.forEach((m) => $(m).classList.add('hidden'));
     t.textContent = text; t.classList.remove('hidden');
     setTimeout(() => { t.classList.add('hidden'); if ([...$('modal-overlay').children].every((c) => c.classList.contains('hidden'))) $('modal-overlay').classList.add('hidden'); }, 1700);
+  }
+
+  // V4 Session 小结：每 10 手弹一次终身战绩快照 + 当前最大漏洞
+  function showSessionSummary() {
+    try {
+      const s = Store.getPokerStats();
+      const line = `VPIP ${s.vpip}% · PFR ${s.pfr}% · 激进 ${s.af} · 摊牌 ${s.wtsd}% · 正确率 ${s.correct}%`;
+      if (Fx && typeof Fx.rewardPop === 'function') Fx.rewardPop(fxLayer, '📊', `本场小结(已打 ${sessionHands} 手)`, `${line}　｜　漏洞：${s.leak}`);
+      else toast(`本场小结：${line}`);
+    } catch (e) {}
   }
 
   function pct(n, d) { return Math.max(0, Math.min(100, d ? Math.round(n / d * 100) : 0)); }
@@ -1348,12 +1376,23 @@
       log.forEach((h) => { netSum += (h.net || 0); (h.decisions || []).forEach((d) => { if (d.good === true || d.good === false) { dN++; if (d.good) dG++; } }); });
       const acc = dN ? Math.round(dG / dN * 100) : 0;
       const netCls = netSum > 0 ? 'pr-net-up' : netSum < 0 ? 'pr-net-down' : '';
+      const ps = Store.getPokerStats();
       html = `<div class="panel-hero"><b>数据中心</b><span>把玩家表现转成可读数据，形成高端牌手工具感。点"牌局复盘"逐手回看你的决策对错。</span></div>
         <div class="metric-grid">
           <div class="metric"><b>${rate}%</b><span>胜率</span></div>
           <div class="metric"><b>${acc}%</b><span>决策正确率</span></div>
           <div class="metric"><b class="${netCls}">${netSum >= 0 ? '+' : ''}${fmtChips(netSum)}</b><span>近${log.length}手净收益</span></div>
         </div>
+        <div class="curve-title" style="margin:10px 0 4px">扑克打法指标（终身 ${ps.hands} 手）</div>
+        <div class="metric-grid">
+          <div class="metric"><b>${ps.vpip}%</b><span>VPIP 入池率</span></div>
+          <div class="metric"><b>${ps.pfr}%</b><span>PFR 翻前加注</span></div>
+          <div class="metric"><b>${ps.af}</b><span>AF 激进度</span></div>
+          <div class="metric"><b>${ps.wtsd}%</b><span>WTSD 摊牌率</span></div>
+          <div class="metric"><b>${ps.wsd}%</b><span>W$SD 摊牌胜</span></div>
+          <div class="metric"><b>${ps.correct}%</b><span>决策正确率</span></div>
+        </div>
+        <div class="panel-row" style="margin-top:6px"><div class="pr-ic">🩺</div><div><b>当前最大漏洞</b><div class="pr-text">${ps.leak}</div></div></div>
         ${log.length >= 2 ? `<div class="curve-wrap"><div class="curve-title">盈利曲线（近 ${log.length} 手累计净收益）</div><canvas id="profit-curve" width="300" height="110"></canvas></div>` : ''}
         <div class="panel-list">
           <div class="panel-row rc-row" data-open-history="1"><div class="pr-ic">🔍</div><div><b>牌局复盘</b><div class="pr-text">逐手回看公共牌、你的决策与对手摊牌，附胜率/赔率对错判定。</div></div><em>${log.length} 手</em></div>
@@ -1661,6 +1700,7 @@
   /* ---------- 进入牌桌 ---------- */
   function startTable(cfg) {
     if (scheduled) { clearTimeout(scheduled); scheduled = null; }
+    sessionHands = 0;
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
     // 牌桌引擎：由 reducer 核心驱动（经 GameAdapter，接口仍兼容旧 game.js）

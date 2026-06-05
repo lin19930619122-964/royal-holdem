@@ -31,6 +31,8 @@
     bestHand: 0,         // 最佳牌型类别(0..8)
     allinTotal: 0,       // 全下总次数
     dailyDate: null,     // 每日任务日期
+    // 战绩统计(终身累计)：入池/翻前加注/激进被动/摊牌/正确决策
+    st_pre: 0, st_vpip: 0, st_pfr: 0, st_aggr: 0, st_passive: 0, st_wtsd: 0, st_wsd: 0, st_decGood: 0, st_decBad: 0,
     dHands: 0, dWins: 0, dAllin: 0,  // 今日进度
     dMaxStreak: 0, dBestHand: 0,     // 今日最高连胜 / 今日最佳牌型
     eventClaimed: [],    // 今日已领活动
@@ -283,6 +285,42 @@
     const wr = profile.handsPlayed ? Math.round(profile.handsWon / profile.handsPlayed * 100) : 0;
     return { hands: profile.handsPlayed, wins: profile.handsWon, winrate: wr, biggest: profile.biggestPot, level: profile.level, bestStreak: profile.bestStreak || 0, allin: profile.allinTotal || 0, bestHand: HANDNAMES[profile.bestHand || 0] };
   }
+  // 战绩统计：每手结算调用(s = {vpip,pfr,aggr,passive,sawShowdown,wonShowdown,goodDecisions,badDecisions})
+  function recordStatHand(s) {
+    s = s || {};
+    profile.st_pre = (profile.st_pre || 0) + 1;
+    if (s.vpip) profile.st_vpip = (profile.st_vpip || 0) + 1;
+    if (s.pfr) profile.st_pfr = (profile.st_pfr || 0) + 1;
+    profile.st_aggr = (profile.st_aggr || 0) + (s.aggr || 0);
+    profile.st_passive = (profile.st_passive || 0) + (s.passive || 0);
+    if (s.sawShowdown) profile.st_wtsd = (profile.st_wtsd || 0) + 1;
+    if (s.wonShowdown) profile.st_wsd = (profile.st_wsd || 0) + 1;
+    profile.st_decGood = (profile.st_decGood || 0) + (s.goodDecisions || 0);
+    profile.st_decBad = (profile.st_decBad || 0) + (s.badDecisions || 0);
+    save();
+  }
+  // 汇总(终身)：VPIP/PFR/激进度 AF/WTSD/W$SD/正确决策率 + 最大漏洞
+  function getPokerStats() {
+    const n = profile.st_pre || 0;
+    const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
+    const vpip = pct(profile.st_vpip || 0, n), pfr = pct(profile.st_pfr || 0, n);
+    const af = (profile.st_passive || 0) ? +((profile.st_aggr || 0) / profile.st_passive).toFixed(2) : (profile.st_aggr ? 9 : 0);
+    const wtsd = pct(profile.st_wtsd || 0, n);
+    const wsd = (profile.st_wtsd || 0) ? pct(profile.st_wsd || 0, profile.st_wtsd) : 0;
+    const decTotal = (profile.st_decGood || 0) + (profile.st_decBad || 0);
+    const correct = decTotal ? pct(profile.st_decGood || 0, decTotal) : 0;
+    // 最大漏洞启发式
+    let leak = '样本不足，多打几手';
+    if (n >= 12) {
+      if (vpip >= 45) leak = '入池过宽：很多边缘牌不该进场';
+      else if (vpip - pfr >= 18) leak = '太被动：入池多但翻前加注少，多主动加注';
+      else if (af < 1 && (profile.st_passive || 0) > 8) leak = '翻后过于被动：跟注多、下注/加注少';
+      else if (wtsd >= 38) leak = '摊牌太频繁：该弃则弃，避免昂贵跟注';
+      else if (correct && correct < 60) leak = '决策正确率偏低：多看复盘的赔率与建议';
+      else leak = '打法较均衡，继续保持并打磨边缘场景';
+    }
+    return { hands: n, vpip, pfr, af, wtsd, wsd, correct, leak };
+  }
 
   // 牌局复盘：记录每手牌(牌局编号、公共牌、手牌、决策序列与对错判定、结果)
   function nextHandNo() { profile.handSeq = (profile.handSeq || 0) + 1; return profile.handSeq; }
@@ -489,7 +527,7 @@
     buyScene: _scene.buy, setScene: _scene.set,
     setMuted, recordHand, recordAllin, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
-    getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats,
+    getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats, recordStatHand, getPokerStats,
     nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach, recordHandType, getHandDex,
     addSeasonXp, getSeason, claimSeason, claimSeasonAll, rankInfo, recordRank,
     canDailyGift, claimDailyGift, addVault, getVault, crackVault,

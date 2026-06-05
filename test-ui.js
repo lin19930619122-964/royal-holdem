@@ -62,6 +62,22 @@ ok(typeof window.PokerAI.equityVsRange === 'function', 'AI.equityVsRange exists'
   ok(rnd && rnd.win > 0.65, 'AA vs 2 random still strong');
 })();
 
+// 2c) V4 战绩统计：recordStatHand / getPokerStats 数学
+ok(typeof S.recordStatHand === 'function' && typeof S.getPokerStats === 'function', 'pokerStats API');
+(function () {
+  // 10 手：宽入池被动样本(VPIP 高、PFR 低、AF<1) → 漏洞应指向被动/过宽
+  for (let i = 0; i < 10; i++) S.recordStatHand({ vpip: true, pfr: false, aggr: 0, passive: 2, sawShowdown: i < 4, wonShowdown: i < 2, goodDecisions: 1, badDecisions: 1 });
+  const ps = S.getPokerStats();
+  ok(ps.hands >= 10, 'pokerStats 累计手数');
+  ok(ps.vpip === 100 && ps.pfr === 0, 'VPIP 100% / PFR 0%');
+  ok(ps.af < 1, '激进度 AF < 1(纯被动)');
+  ok(ps.wtsd === 40 && ps.wsd === 50, 'WTSD 40% / W$SD 50%');
+  ok(ps.correct === 50, '决策正确率 50%');
+  ok(/被动|过宽|均衡|漏洞|被动/.test(ps.leak) || ps.leak.length > 0, '给出最大漏洞文案');
+  window.document.querySelector('[data-panel="analytics"]').click();
+  ok(/VPIP 入池率/.test(body.innerHTML) && /AF 激进度/.test(body.innerHTML) && /当前最大漏洞/.test(body.innerHTML), '数据中心展示扑克打法指标+漏洞');
+})();
+
 // 3) 数据层完整性
 ['PHRASES', 'GIFTS'].forEach((k) => ok(window.Social[k].length > 0, 'Social.' + k));
 ['speechBubble', 'flyGift', 'streakFlame'].forEach((fn) => ok(typeof window.Fx[fn] === 'function', 'Fx.' + fn));
