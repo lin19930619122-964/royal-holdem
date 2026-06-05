@@ -127,6 +127,31 @@ ok(/底池赔率速查/.test(body.innerHTML) && /对手风格图鉴/.test(body.i
 window.SceneRouter.go('table', { blindLevel: 2, botProfileSet: 'hard', players: 6 });
 ok(window.SceneRouter.current() === 'table' && !window.document.getElementById('screen-table').classList.contains('hidden'), 'go(table) starts table');
 window.SceneRouter.go('replay', {}); ok(/牌局复盘/.test(body.innerHTML), 'go(replay) opens replay');
+// Phase 6 逐步回放：注入一手带决策的牌谱 → 进详情 → 逐步回放 → 翻页 → 结果步
+(function () {
+  S.clearHandLog();
+  S.addHandRecord({ no: S.nextHandNo(), board: [{ rank: 14, suit: 's' }, { rank: 13, suit: 's' }, { rank: 2, suit: 'h' }, { rank: 7, suit: 'd' }, { rank: 9, suit: 'c' }],
+    hole: [{ rank: 14, suit: 'h' }, { rank: 14, suit: 'd' }], net: 800, won: true, folded: false, showdown: true,
+    summary: '英雄获胜', oppShow: [{ name: 'Bot1', hole: [{ rank: 13, suit: 'h' }, { rank: 13, suit: 'd' }], hand: '一对K' }],
+    decisions: [{ street: '翻牌前', action: '加注', winPct: 85, toCall: 100, pot: 150, tag: '价值', good: true, why: 'AA 翻前加注', suggest: '加注' },
+                { street: '翻牌', action: '跟注', winPct: 78, toCall: 200, pot: 400, tag: '合理', good: true, why: '顶对好踢脚', suggest: '加注' }],
+    mistakes: 0 });
+  window.SceneRouter.go('replay', {});
+  body.querySelector('[data-hand]').click();
+  ok(/逐步回放/.test(body.innerHTML), '复盘详情含逐步回放入口');
+  body.querySelector('[data-replay]').click();
+  ok(/进度/.test(body.innerHTML) && /1 \/ 2/.test(body.innerHTML) && /翻牌前\(未发公共牌\)/.test(body.innerHTML), '逐步回放第1步: 翻前未发公共牌');
+  body.querySelector('[data-replay-step]:not([disabled])').click(); // 下一步 → step1(翻牌)
+  ok(/2 \/ 2/.test(body.innerHTML), '逐步回放到第2步(翻牌)');
+  // 翻牌步应翻出3张公共牌
+  ok((body.innerHTML.match(/rc-card/g) || []).length >= 3, '翻牌步翻出公共牌(≥3张)');
+  // 推进到结果步
+  const nextBtns = [...body.querySelectorAll('[data-replay-step]')].filter((b) => !b.disabled && /结果|下一步/.test(b.textContent));
+  nextBtns[nextBtns.length - 1].click();
+  ok(/结果/.test(body.innerHTML) && /对手摊牌/.test(body.innerHTML), '逐步回放结果步显示结果+对手摊牌');
+  body.querySelector('[data-replay-exit]').click();
+  ok(/逐步回放/.test(body.innerHTML) && /返回列表/.test(body.innerHTML), '退出逐步回到详情');
+})();
 window.SceneRouter.back(); ok(typeof window.SceneRouter.current() === 'string', 'back() works');
 // tutorial: support panel offers it, and forcing it builds an overlay
 window.document.querySelector('[data-panel="support"]').click();

@@ -86,6 +86,7 @@
   let handAnalysis = null;
   let handDecisions = [];   // 本手牌内你的每个决策(用于复盘/错误分析)
   let sessionHands = 0;     // 本次进桌已打手数(每10手弹 Session 小结)
+  let replayState = null;    // 逐步回放游标 {idx, step}
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
   const prevLA = [];
@@ -1025,7 +1026,7 @@
     const hole = (h.hole || []).map(cardChip).join(' ');
     const sign = h.net > 0 ? '+' : '';
     const netCls = h.net > 0 ? 'pr-net-up' : h.net < 0 ? 'pr-net-down' : '';
-    let html = `<div class="rc-back"><button class="pr-ghost" data-hand-back="1">← 返回列表</button><span>第 ${h.no} 手复盘</span></div>
+    let html = `<div class="rc-back"><button class="pr-ghost" data-hand-back="1">← 返回列表</button><span>第 ${h.no} 手复盘</span>${(h.decisions || []).length ? `<button class="pr-claim" data-replay="${idx}" style="margin-left:auto">▶ 逐步回放</button>` : ''}</div>
       <div class="rc-board"><div class="rc-line"><span class="rc-label">公共牌</span>${board}</div>
         <div class="rc-line"><span class="rc-label">你的手牌</span>${hole} ${h.myHand ? `<span class="rc-sub">(${h.myHand})</span>` : ''}</div>
         <div class="rc-line"><span class="rc-label">结果</span><b class="${netCls}">${sign}${fmtChips(h.net)}</b> <span class="rc-sub">${h.summary || ''}</span></div></div>`;
@@ -1054,6 +1055,52 @@
         h.oppShow.map((o) => `<div class="rc-line"><span class="rc-sub" style="min-width:64px">${o.name}</span>${(o.hole || []).map(cardChip).join(' ')} <span class="rc-sub">${o.hand}</span></div>`).join('') +
         `</div>`;
     }
+    return html;
+  }
+
+  // 逐步回放：按行动时间线推进，公共牌随街面逐步翻出，高亮当前这一步
+  const STREET_CARDS = { '翻牌前': 0, '翻牌': 3, '转牌': 4, '河牌': 5 };
+  function renderHandReplay(idx, step) {
+    const log = Store.getHandLog();
+    const h = log[idx];
+    if (!h || !(h.decisions || []).length) return renderHandDetail(idx);
+    const decs = h.decisions, total = decs.length;
+    step = Math.max(0, Math.min(total, step));   // 0..total，total=结果步
+    const isResult = step === total;
+    const reveal = isResult ? 5 : (STREET_CARDS[decs[step].street] || 0);
+    const fullBoard = (h.board || []);
+    const shown = fullBoard.slice(0, Math.min(reveal, fullBoard.length));
+    const boardHtml = shown.length ? shown.map(cardChip).join(' ') : '<span class="rc-sub">翻牌前(未发公共牌)</span>';
+    const hole = (h.hole || []).map(cardChip).join(' ');
+    let html = `<div class="rc-back"><button class="pr-ghost" data-replay-exit="${idx}">← 退出逐步</button><span>第 ${h.no} 手 · 逐步回放</span></div>
+      <div class="rc-board">
+        <div class="rc-line"><span class="rc-label">进度</span><b>${isResult ? '结果' : (step + 1) + ' / ' + total}</b> <span class="rc-sub">${isResult ? '本手结束' : decs[step].street}</span></div>
+        <div class="rc-line"><span class="rc-label">公共牌</span>${boardHtml}</div>
+        <div class="rc-line"><span class="rc-label">你的手牌</span>${hole}</div></div>`;
+    if (!isResult) {
+      const d = decs[step];
+      const badge = d.good === true ? 'rc-good' : d.good === false ? 'rc-bad' : 'rc-neutral';
+      const wp = d.winPct != null ? `胜率 ${d.winPct}%` : '';
+      const reqEq = d.rangeEq != null ? ` · 对范围 ${d.rangeEq}%` : '';
+      const odds = d.toCall > 0 ? ` · 跟${fmtChips(d.toCall)}/池${fmtChips(d.pot)}` : '';
+      const match = d.suggest && d.suggest.indexOf(d.action) >= 0;
+      const cmp = d.suggest ? `<div class="rc-cmp${match ? ' ok' : ''}">建议：<b>${d.suggest}</b> ｜ 你选：<b>${d.action}</b>${match ? ' ✓' : ''}</div>` : '';
+      html += `<div class="rc-steps"><div class="rc-step rc-step-cur">
+        <div class="rc-step-h"><b>${d.street} · 你选择 ${d.action}</b><span class="rc-tag ${badge}">${d.tag}</span></div>
+        <div class="rc-sub">${wp}${reqEq}${odds}</div>${cmp}
+        ${d.why ? `<div class="rc-why">${d.why}</div>` : ''}</div></div>`;
+    } else {
+      const sign = h.net > 0 ? '+' : '', netCls = h.net > 0 ? 'pr-net-up' : h.net < 0 ? 'pr-net-down' : '';
+      html += `<div class="rc-board"><div class="rc-line"><span class="rc-label">结果</span><b class="${netCls}">${sign}${fmtChips(h.net)}</b> <span class="rc-sub">${h.summary || ''}</span></div>`;
+      if (h.showdown && h.oppShow && h.oppShow.length) {
+        html += `<div class="rc-line"><span class="rc-label">对手摊牌</span></div>` +
+          h.oppShow.map((o) => `<div class="rc-line"><span class="rc-sub" style="min-width:64px">${o.name}</span>${(o.hole || []).map(cardChip).join(' ')} <span class="rc-sub">${o.hand}</span></div>`).join('');
+      }
+      html += `</div>`;
+    }
+    html += `<div class="rc-actions">
+      <button class="pr-ghost" data-replay-step="${idx}:${step - 1}" ${step === 0 ? 'disabled' : ''}>◀ 上一步</button>
+      <button class="pr-claim" data-replay-step="${idx}:${step + 1}" ${isResult ? 'disabled' : ''}>${step === total - 1 ? '查看结果 ▶' : '下一步 ▶'}</button></div>`;
     return html;
   }
 
@@ -1906,6 +1953,10 @@
     $('panel-body').addEventListener('click', (e) => {
       const tk = e.target.closest('[data-claim-task]'), ac = e.target.closest('[data-claim-achv]');
       const row = e.target.closest('[data-hand]'), back = e.target.closest('[data-hand-back]'), clr = e.target.closest('[data-hand-clear]'), oh = e.target.closest('[data-open-history]');
+      const rpEnter = e.target.closest('[data-replay]'), rpStep = e.target.closest('[data-replay-step]'), rpExit = e.target.closest('[data-replay-exit]');
+      if (rpEnter) { replayState = { idx: parseInt(rpEnter.dataset.replay, 10), step: 0 }; $('panel-body').innerHTML = renderHandReplay(replayState.idx, 0); try { Sfx.button(); } catch (_) {} return; }
+      if (rpStep && !rpStep.disabled) { const [i, s] = rpStep.dataset.replayStep.split(':').map((x) => parseInt(x, 10)); replayState = { idx: i, step: s }; $('panel-body').innerHTML = renderHandReplay(i, s); try { Sfx.button(); } catch (_) {} return; }
+      if (rpExit) { replayState = null; $('panel-body').innerHTML = renderHandDetail(parseInt(rpExit.dataset.replayExit, 10)); try { Sfx.button(); } catch (_) {} return; }
       const sc = e.target.closest('[data-claim-season]'), sca = e.target.closest('[data-claim-season-all]');
       if (sc) { const r = Store.claimSeason(sc.dataset.claimSeason); if (r) { Sfx.reward(); toast(`赛季奖励 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
       if (sca) { const r = Store.claimSeasonAll(); if (r) { Sfx.reward(); toast(`领取 ${r.n} 级 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
