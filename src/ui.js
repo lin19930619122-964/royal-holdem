@@ -1775,9 +1775,9 @@
     game = window.RHCore.GameAdapter.create({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
     // SNG 锦标赛：所有人等额起始筹码，盲注递增，淘汰制
     sng = (cfg.mode === 'sng') ? { level: 0, hands: 0, places: {}, baseSb: cfg.sb, baseBb: cfg.bb } : null;
-    // 按难度配置 AI：bot 用 V4 PokerBrain 画像决策；ai.js 仍供人类胜率提示
+    // 按难度配置 AI：bot 决策一律走 V4 PokerBrain 画像(BotDecisionEngine)；ai.js 仅供人类胜率提示
     const BDE = window.RHCore.BotDecisionEngine;
-    game.players.forEach((pl, i) => { if (!pl.isHuman) { pl.botProfile = BDE.profileForSeat(cfg.level, i); pl.ai = AI.makePersona(cfg.level); } });
+    game.players.forEach((pl, i) => { if (!pl.isHuman) { pl.botProfile = BDE.profileForSeat(cfg.level, i); } });
     AI.setSims(cfg.level === 'master' ? 260 : cfg.level === 'hard' ? 220 : 170);
     // 对手画像：记录每个 bot 的 V4 画像 + 本局观察统计(入池/加注/弃牌/全下)
     seatProfiles = game.players.map((pl) => pl.isHuman ? null : {

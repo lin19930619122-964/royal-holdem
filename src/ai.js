@@ -139,96 +139,9 @@
     return m.exploit();
   }
 
-  function decide(player, ctx) {
-    const me = player, board = ctx.board, bb = ctx.bigBlind;
-    const N = ctx.players.length;
-    const numOpp = ctx.players.filter((p) => !p.folded && !p.out && p !== me).length || 1;
-    const toCall = Math.max(0, ctx.currentBet - me.bet);
-    const canCheck = toCall === 0;
-    const pot = ctx.pot, minRaiseTo = ctx.currentBet + ctx.minRaise, maxTo = me.bet + me.chips;
-    const canRaise = me.chips > toCall;
-    const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
-    const persona = me.ai || { aggression: 0.6, bluff: 0.14, tight: 0.05, skill: 0.5 };
-    const aggro = persona.aggression, tight = persona.tight || 0, skill = persona.skill || 0.5;
-    const rng = Math.random();
-
-    // —— 针对人类的剥削调整 ——
-    const ex = exploit();
-    let bluffAdj = 0, callAdj = 0;
-    if (ex.samples > 6) {
-      bluffAdj += clamp((ex.fold - 0.45) * 0.6, -0.05, 0.22) * skill;   // 你越爱弃，越诈唬你
-      if (ex.aggr < 0.12) { callAdj += 0.05 * skill; bluffAdj += 0.05 * skill; } // 你太被动→尊重你的注、偷你
-      else if (ex.aggr > 0.30) { callAdj -= 0.06 * skill; }            // 你太凶(多诈唬)→更轻松抓诈
-    }
-    const bluff = clamp((persona.bluff || 0.12) + bluffAdj, 0.02, 0.45);
-
-    const mkRaiseTo = (t) => ({ action: 'raise', amount: clamp(Math.round(t / bb) * bb, minRaiseTo, maxTo) });
-    const betFrac = (f) => mkRaiseTo(ctx.currentBet + Math.max(ctx.minRaise, Math.round((pot + toCall) * f)));
-    const shoveAll = () => ({ action: 'raise', amount: maxTo });
-
-    if (board.length === 0) {
-      // ===== 翻牌前 =====
-      const sHU = equity(me.hole, [], 1);
-      const [a, b] = me.hole;
-      const pair = a.rank === b.rank, suited = a.suit === b.suit;
-      const hi = Math.max(a.rank, b.rank), lo = Math.min(a.rank, b.rank);
-      const connector = !pair && (hi - lo) <= 2 && lo >= 5;
-      const dist = (((ctx.button - me.id) % N) + N) % N;
-      const isSB = dist === N - 1, isBB = dist === N - 2;
-      const late = dist <= 1, middle = dist === 2 || dist === 3;
-      const raised = ctx.currentBet > bb * 1.5, bigRaise = ctx.currentBet > bb * 3.5;
-      const shortBB = me.chips / bb;
-      const speculative = (pair && lo <= 8) || (suited && connector) || (suited && hi === 14);
-
-      if (shortBB < 12) {
-        if (!raised) { if (sHU > 0.57 || (pair && lo >= 6) || (late && sHU > 0.52)) return shoveAll(); return canCheck ? { action: 'check' } : { action: 'fold' }; }
-        if (sHU > 0.61) return shoveAll();
-        return canCheck ? { action: 'check' } : { action: 'fold' };
-      }
-
-      // 高手更紧的开牌门槛
-      let openT = (late ? 0.50 : middle ? 0.55 : 0.61) + tight * 0.04 + skill * 0.05 - (aggro - 0.5) * 0.04;
-      if (isSB) openT = 0.52 + tight * 0.04 + skill * 0.04; if (isBB) openT = 0.50 + skill * 0.03;
-
-      if (!raised) {
-        if (sHU > 0.66) return betFrac(0.9);
-        if (sHU > openT || (speculative && late)) return betFrac(0.7);
-        if (canCheck) return { action: 'check' };
-        if (speculative && toCall <= bb && rng < 0.4) return { action: 'call' };
-        return { action: 'fold' };
-      } else {
-        if (sHU > 0.70) return betFrac(0.95);                                  // 价值 3bet
-        if (sHU > 0.63 && !bigRaise) return { action: 'call' };
-        if ((pair || (suited && (connector || hi === 14))) && (late || isBB) && toCall <= me.chips * 0.06) return { action: 'call' };
-        // 平衡诈唬 3bet（高手+剥削）
-        if (canRaise && late && !bigRaise && rng < (bluff * 0.6 + skill * 0.05) && (suited || sHU > 0.54)) return betFrac(0.95);
-        if (isBB && toCall <= bb * 2 && sHU > 0.5 && rng < 0.5) return { action: 'call' };
-        return { action: 'fold' };
-      }
-    }
-
-    // ===== 翻牌后 =====
-    const eq = equity(me.hole, board, Math.min(numOpp, 6));
-    const wet = boardWetness(board);
-    // 高手更有纪律：门槛随 skill 提高（少付钱给对手价值），并按剥削微调
-    const callT = potOdds + 0.04 + tight * 0.03 + skill * 0.045 + callAdj - (numOpp === 1 ? 0.02 : 0);
-    const disc = 1 - skill * 0.45; // 技巧越高，诈唬越少(更难被抓)
-
-    if (canCheck) {
-      if (eq > 0.85 && rng < 0.35) return { action: 'check' };                 // 陷阱
-      if (eq > 0.60 && canRaise) return betFrac(wet > 0.5 ? 0.78 : 0.62);      // 价值
-      if (eq > 0.50 && canRaise && skill < 0.6 && rng < aggro * 0.5) return betFrac(0.5); // 薄价值仅低手
-      if (eq < 0.42 && canRaise && numOpp <= 2 && rng < (bluff + (1 - wet) * 0.12 * aggro) * disc) return betFrac(0.58); // c-bet 诈唬
-      return { action: 'check' };
-    }
-    // 面对下注
-    if (eq > 0.72 && canRaise && me.chips > toCall + ctx.minRaise && rng < 0.5 + aggro * 0.4) return betFrac(wet > 0.5 ? 0.9 : 0.72);
-    if (eq > callT) return { action: 'call' };
-    if (eq > 0.40 && wet > 0.45 && canRaise && numOpp <= 2 && rng < (bluff + aggro * 0.12) * disc) return betFrac(0.85); // 听牌半诈唬
-    if (eq < 0.3 && wet < 0.3 && canRaise && numOpp === 1 && rng < bluff * 0.5 * disc) return betFrac(0.7);             // 干燥面诈唬
-    if (skill < 0.5 && toCall <= bb && eq > 0.3 && rng < 0.45) return { action: 'call' };
-    return { action: 'fold' };
-  }
+  // [Phase 2 已删除] 旧的 Math.random 阈值决策 decide() 是随机/概率 Bot，已移除。
+  // 所有 Bot 决策统一由 core/ai/PokerBrain.decideBotAction 接管（结构化、可种子复现、带 reason）。
+  // 本文件仅保留 equity/equityFull/equityVsRange/boardWetness 等给「人类训练胜率提示」与策略实验室使用。
 
   // 难度分级：普通=混合性格；高手/大师=鲨鱼(紧凶+高技巧+强剥削)
   const CASUAL = [
@@ -245,5 +158,5 @@
   }
   function setSims(n) { SIMS = Math.max(10, n | 0); }
 
-  window.PokerAI = { decide, makePersona, equity, equityFull, equityVsRange, setSims };
+  window.PokerAI = { makePersona, equity, equityFull, equityVsRange, setSims };
 })();

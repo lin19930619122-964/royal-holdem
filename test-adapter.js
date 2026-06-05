@@ -3,9 +3,8 @@
    验证接口完整、筹码守恒、阶段流转、结果结构。无 UI。 */
 global.window = global.window || global;
 require('./src/poker.js');     // window.Poker
-require('./src/ai.js');        // window.PokerAI
-const AI = window.PokerAI;
 const GameAdapter = require('./src/game/table/GameAdapter.js');
+const BDE = require('./src/core/ai/BotDecisionEngine.js'); // 真实生产决策桥(PokerBrain)
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
@@ -13,7 +12,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); 
 function newTable(seed, bots) {
   const g = GameAdapter.create({ smallBlind: 50, bigBlind: 100, ante: 10, startChips: 10000, bots, seed });
   // 与 ui.startTable 一致：设昵称/头像/AI 人格
-  g.players.forEach((p, i) => { p.name = i === 0 ? '你' : '机器人' + i; p.avatar = '🤖'; if (i !== 0) p.ai = AI.makePersona('hard'); });
+  g.players.forEach((p, i) => { p.name = i === 0 ? '你' : '机器人' + i; p.avatar = '🤖'; if (i !== 0) p.botProfile = BDE.profileForSeat('hard', i); });
   return g;
 }
 function playHand(g) {
@@ -21,7 +20,7 @@ function playHand(g) {
   while (g.phase !== 'ended' && g.phase !== 'gameover' && guard++ < 600) {
     if (g.bettingOpen) {
       const p = g.players[g.current], o = g.actionOptions();
-      let d = p.ai ? AI.decide(p, g.aiContext()) : (o.canCheck ? { action: 'check' } : { action: 'call' });
+      let d = p.botProfile ? BDE.decide(g, g.current, { profile: p.botProfile, seed: (g.handNo * 131 + g.current * 7 + 1) }) : (o.canCheck ? { action: 'check' } : { action: 'call' });
       const curBefore = g.current, betSig = JSON.stringify(g.players.map((x) => x.bet));
       g.act(d.action, d.amount);
       // 无进展兜底（防御非法动作被 reducer 忽略导致死循环）

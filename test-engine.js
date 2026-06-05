@@ -5,8 +5,23 @@ require('./src/ai.js');
 require('./src/game.js');
 const P = window.Poker;
 const Game = window.Game;
-const AI = window.PokerAI;
-AI.setSims(15); // 压力测试只验证引擎正确性，降低模拟次数加速
+// Phase 2：随机 AI.decide 已删除。压力测试只验证「引擎筹码守恒」，决策只需合法即可，
+// 故用确定性(种子化)合法行动驱动器，覆盖 弃/过/跟/加/全下 以压测边池，不依赖任何生产 Bot。
+let _seed = 0x9e3779b9;
+function srand() { _seed = (_seed + 0x6D2B79F5) | 0; let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+function driveAction(g) {
+  const o = g.actionOptions();
+  const r = srand();
+  if (o.canCheck) { // 无需跟注：多数过牌，偶尔下注/加注
+    if (r < 0.7 || !o.canRaise) return { action: 'check' };
+    const amt = Math.min(o.maxRaiseTo, Math.max(o.minRaiseTo, Math.round(o.currentBet + o.bigBlind * 2)));
+    return { action: 'raise', amount: amt };
+  }
+  if (r < 0.30) return { action: 'fold' };
+  if (r < 0.80 || !o.canRaise || o.chips <= o.toCall) return { action: 'call' };
+  const amt = r < 0.93 ? Math.min(o.maxRaiseTo, Math.max(o.minRaiseTo, Math.round(o.currentBet + o.bigBlind * 3))) : o.maxRaiseTo; // 偶尔全下
+  return { action: 'raise', amount: amt };
+}
 
 function card(s) { // 'As' -> {rank,suit}
   const map = { A: 14, K: 13, Q: 12, J: 11, T: 10 };
@@ -65,8 +80,7 @@ for (let trial = 0; trial < 80; trial++) {
         continue;
       }
       if (!g.bettingOpen) { g.proceed(); continue; }
-      const p = g.players[g.current];
-      const d = AI.decide(p, g.aiContext());
+      const d = driveAction(g);
       g.act(d.action, d.amount);
     }
     if (guard >= 200000) { stuck++; if (stuck <= 3) console.log(`  ✗ trial ${trial}: 步数超限(可能死循环)`); }
