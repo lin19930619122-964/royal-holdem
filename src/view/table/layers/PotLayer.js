@@ -6,6 +6,13 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = m;
   if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).PotLayer = m;
 })(this, function (Base) {
-  function create() { return Base.make('PotLayer', { id: 'pot-display', onUpdate: (el, vm) => { if (vm && vm.pot != null) { const a = el.querySelector('#pot-amount'); if (a) a.textContent = String(vm.pot); } } }); }
+  function create() {
+    return Base.make('PotLayer', { id: 'pot-display', onRender: (el, vm) => {
+      if (!vm || vm.pot == null) return;
+      if (vm.ctx && vm.ctx.rollPot) vm.ctx.rollPot(vm.pot);          // 底池滚动(注入渲染器)
+      else { const a = el.querySelector('#pot-amount'); if (a) a.textContent = String(vm.pot); }
+      if (vm.potPulse) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+    } });
+  }
   return { create };
 });

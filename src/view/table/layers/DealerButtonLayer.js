@@ -6,6 +6,14 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = m;
   if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).DealerButtonLayer = m;
 })(this, function (Base) {
-  function create() { return Base.make('DealerButtonLayer', { id: 'dealer-button', onUpdate: (el, vm) => { if (vm && vm.dealerHidden) el.classList.add('hidden'); else if (vm) el.classList.remove('hidden'); } }); }
+  function create() {
+    return Base.make('DealerButtonLayer', { id: 'dealer-button', onRender: (el, vm) => {
+      if (!vm || !vm.ctx || !vm.ctx.SEAT_POS || vm.button == null || vm.button < 0) { el.classList.add('hidden'); return; }
+      const pos = vm.ctx.SEAT_POS[vm.button]; if (!pos) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      el.style.left = (pos.x + (50 - pos.x) * 0.26) + '%';
+      el.style.top = (pos.y + (50 - pos.y) * 0.24) + '%';
+    } });
+  }
   return { create };
 });

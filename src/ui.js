@@ -227,7 +227,7 @@
     seatsEl.innerHTML = '';
     seatsEl.className = game.N >= 8 ? 'many' : '';
     seatEls.length = 0; betEls.length = 0; seatSig.length = 0; prevBet.length = 0; prevLA.length = 0;
-    boardCount = -1; prevPot = -1; _potShown = 0;
+    boardCount = -1; prevPot = -1; _potShown = 0; if (boardEl) boardEl._count = undefined;   // 重置公共牌层计数
     for (let i = 0; i < game.N; i++) {
       const pos = SEAT_POS[i] || { x: 50, y: 50 };
       // 用 SeatView 组件构建座位（含成熟牌桌 22 子节点；保留旧渲染依赖的类名）
@@ -325,6 +325,14 @@
     requestAnimationFrame(frame);
   }
 
+  // A：注入给各 Layer 的渲染上下文(底池/公共牌/庄家 由对应 layer 自行渲染)
+  let _tableCtx = null;
+  function tableContext() {
+    if (!_tableCtx) _tableCtx = { renderCard: cardFaceHTML, rollPot, emit: (e) => { if (GF) GF.emit(e); }, sfxDeal: () => { try { Sfx.deal(); } catch (_) {} } };
+    _tableCtx.SEAT_POS = SEAT_POS;   // 每桌座位布局可变，刷新
+    return _tableCtx;
+  }
+
   // dealIdx>=0 时附加逐张发牌动画(按序错开 animation-delay)
   const dealAttr = (dealIdx) => (dealIdx >= 0 ? ` deal-in" style="animation-delay:${dealIdx * 110}ms` : '');
   function cardFaceTheme() { try { const id = Store.get().activeCardFace || 'classic'; const t = window.Skins.cardFaces[id]; return t ? ' ' + t.cls : ' cf-classic'; } catch (e) { return ' cf-classic'; } }
@@ -370,19 +378,12 @@
   function render() {
     $('blindInfo').textContent = `${game.smallBlind}/${game.bigBlind}`;
     $('handInfo').textContent = `第${game.handNo}手`;
+    // A：底池/公共牌/庄家 渲染委托给各自 Layer（PotLayer / CommunityCardLayer / DealerButtonLayer）
     const potNow = game.pot;
-    rollPot(potNow);
-    if (potNow > prevPot && prevPot >= 0) { potEl.classList.remove('pulse'); void potEl.offsetWidth; potEl.classList.add('pulse'); }
+    const potPulse = potNow > prevPot && prevPot >= 0;
     prevPot = potNow;
-
-    if (game.board.length !== boardCount) {
-      const grew = game.board.length > boardCount && boardCount >= 0;
-      boardEl.innerHTML = game.board.map((c) => cardFaceHTML(c, false)).join('');
-      const newLen = game.board.length;
-      boardCount = newLen;
-      if (grew && GF) GF.emit(newLen === 3 ? 'DEAL_FLOP' : newLen === 4 ? 'DEAL_TURN' : 'DEAL_RIVER');
-      else if (grew) Sfx.deal();
-    }
+    const showDealer = (game.button >= 0 && game.phase !== 'idle' && !game.players[game.button].out) ? game.button : -1;
+    window.RHCore.TableScene.ensure().render({ pot: potNow, potPulse, board: game.board, button: showDealer, ctx: tableContext() });
     renderSidePots();
 
     const banner = $('phase-banner');
@@ -477,13 +478,7 @@
       } catch (e) { /* ignore */ }
     }
     if (anyFreshDeal) { lastDealtHandNo = game.handNo; fireHoleDeal(); }   // 卡牌 DOM 就绪 → 发底牌飞行事件
-
-    if (game.button >= 0 && game.phase !== 'idle' && !game.players[game.button].out) {
-      const pos = SEAT_POS[game.button];
-      dealerBtn.classList.remove('hidden');
-      dealerBtn.style.left = (pos.x + (50 - pos.x) * 0.26) + '%';
-      dealerBtn.style.top = (pos.y + (50 - pos.y) * 0.24) + '%';
-    } else dealerBtn.classList.add('hidden');
+    // 庄家按钮由 DealerButtonLayer 在上方 TableScene.render(vm) 中渲染(不再内联)
 
     // 实时"你的牌型"(翻牌后，帮助练牌)
     const hh = $('hand-hint'), me = game.players[0];

@@ -122,6 +122,14 @@ ok(window.document.querySelector('[data-layer="SeatLayer"]') && window.document.
   ok(allIface, 'A 每个 Layer 具备 mount/render/update/destroy 接口');
   scene.update({ pot: 12345, feltSkin: 'x' });
   ok(window.document.getElementById('pot-amount').textContent === '12345', 'A PotLayer.update 接收 ViewModel 并更新底池');
+  // A：ui.js render 委托 TableScene.render(vm)，layer 自渲染底池/公共牌/庄家(不再在 ui.js 拼)
+  const ctx = { renderCard: (c) => `<div class="card" data-ck="${c.rank}${c.suit}">x</div>`, rollPot: (p) => { const a = window.document.getElementById('pot-amount'); if (a) a.textContent = String(p); }, SEAT_POS: { 0: { x: 50, y: 90 } } };
+  scene.render({ pot: 777, board: [{ rank: 14, suit: 's' }, { rank: 13, suit: 'h' }, { rank: 2, suit: 'c' }], button: 0, ctx });
+  ok(window.document.getElementById('pot-amount').textContent === '777', 'A PotLayer.render 自渲染底池');
+  ok(window.document.getElementById('board').querySelectorAll('.card').length === 3, 'A CommunityCardLayer.render 自渲染公共牌(3 张)');
+  ok(!window.document.getElementById('dealer-button').classList.contains('hidden') && /%$/.test(window.document.getElementById('dealer-button').style.left), 'A DealerButtonLayer.render 自定位庄家按钮');
+  // ui.js render 内不再内联拼公共牌/庄家(委托 TableScene.render)
+  ok(/TableScene\.ensure\(\)\.render\(/.test(fs.readFileSync(path.join(__dirname, 'src/ui.js'), 'utf8')), 'A ui.js render 委托 TableScene.render(vm)');
 })();
 // Completion Sprint B：PlayerViewModel 驱动 SeatView 节点(空节点据数据显示/隐藏)
 (function () {
