@@ -38,11 +38,14 @@
   }
 
   // 不同人数的座位布局(人类固定底部正中)
+  // 归一化坐标(0..1)→ 百分比；scale 控制座位缩放。基准 1080×2339 竖屏，自适应。
   const SEAT_LAYOUTS = {
-    2: [{ x: 50, y: 88 }, { x: 50, y: 12 }],
-    6: [{ x: 50, y: 90 }, { x: 11, y: 60 }, { x: 18, y: 22 }, { x: 50, y: 10 }, { x: 82, y: 22 }, { x: 89, y: 60 }],
-    9: [{ x: 50, y: 91 }, { x: 16, y: 79 }, { x: 12, y: 51 }, { x: 18, y: 25 }, { x: 38, y: 12 },
-        { x: 62, y: 12 }, { x: 82, y: 25 }, { x: 88, y: 51 }, { x: 84, y: 79 }],
+    2: [{ x: 50, y: 84, scale: 1.12 }, { x: 50, y: 25, scale: 0.86 }],
+    6: [{ x: 50, y: 84, scale: 1.12 }, { x: 12, y: 58, scale: 0.84 }, { x: 18, y: 30, scale: 0.82 },
+        { x: 50, y: 25, scale: 0.80 }, { x: 82, y: 30, scale: 0.82 }, { x: 88, y: 58, scale: 0.84 }],
+    9: [{ x: 50, y: 82, scale: 1.12 }, { x: 18, y: 72, scale: 0.86 }, { x: 8, y: 55, scale: 0.82 },
+        { x: 18, y: 38, scale: 0.82 }, { x: 35, y: 28, scale: 0.80 }, { x: 50, y: 25, scale: 0.80 },
+        { x: 65, y: 28, scale: 0.80 }, { x: 82, y: 38, scale: 0.82 }, { x: 92, y: 55, scale: 0.82 }],
   };
   const PHASE_LABEL = { flop: '翻 牌', turn: '转 牌', river: '河 牌', ended: '摊 牌' };
 
@@ -212,13 +215,14 @@
       seat.className = 'seat' + (i === 0 ? ' me' : '');
       seat.style.left = pos.x + '%';
       seat.style.top = pos.y + '%';
+      seat.style.transform = `translate(-50%,-50%) scale(${pos.scale || 1})`;
       seat.innerHTML = `
         <div class="winner-badge hidden"></div>
         <div class="hand-name hidden"></div>
         <div class="last-action"></div>
         <div class="player-cards"></div>
         <div class="player-box">
-          <div class="avatar"><img class="av-img" src="assets/av/${seatAvatars[i] || (i + 1)}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span></div>
+          <div class="avatar"><span class="turn-ring hidden"></span><img class="av-img" src="assets/av/${seatAvatars[i] || (i + 1)}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span><span class="blind-badge hidden"></span></div>
           <div class="pinfo"><span class="ptitle hidden"></span><span class="pname"></span><span class="pchips"></span></div>
         </div>`;
       seatsEl.appendChild(seat);
@@ -277,7 +281,17 @@
       } else { pname.textContent = p.name; ptl.classList.add('hidden'); }
       el.querySelector('.pchips').textContent = p.out ? '—' : fmtChips(p.chips);
       el.classList.toggle('folded', p.folded && !p.out);
-      el.classList.toggle('active', game.current === i && game.bettingOpen);
+      const isActing = game.current === i && game.bettingOpen;
+      el.classList.toggle('active', isActing);
+      // 小盲/大盲标记（庄位 D 由 dealerBtn 单独显示）
+      const bb = el.querySelector('.blind-badge');
+      let blindTxt = '';
+      if (game.phase !== 'idle' && !p.out) { if (i === game.sbIdx) blindTxt = 'SB'; else if (i === game.bbIdx) blindTxt = 'BB'; }
+      bb.textContent = blindTxt; bb.classList.toggle('hidden', !blindTxt);
+      // 倒计时光圈：仅在你的回合显示（环形随 25s 收缩）
+      const ring = el.querySelector('.turn-ring');
+      if (isActing && p.isHuman) { ring.classList.remove('hidden'); }
+      else { ring.classList.add('hidden'); ring.style.animation = 'none'; }
 
       const la = el.querySelector('.last-action');
       la.textContent = p.lastAction || '';
@@ -342,7 +356,7 @@
         ? `<div class="hh3">⚔ ${a.aggrName}${a.aggrStyle ? '(' + a.aggrStyle + ')' : ''} 范围≈前 ${a.rangePct}% · 对其范围胜率 <b>${a.rangeEq}%</b></div>`
         : '';
       hh.innerHTML =
-        `<div class="hh1">${posTag}${a.name} · 胜率 <b>${a.winPct}%</b></div>` +
+        `<div class="hh1">${posTag}${a.name} · 胜率 <b>${a.winPct}%</b><button class="hh-detail" data-scene="strategyLab">详</button></div>` +
         `<div class="hh2">赢${a.winPct} 平${a.tiePct} 输${a.losePct}% · ${draw}${odds}${a.opp}人 · <em>${a.rec}</em></div>` +
         posAdvice + range;
       hh.classList.remove('hidden');
@@ -768,6 +782,7 @@
     if (_turnTimer) { clearTimeout(_turnTimer); _turnTimer = null; }
     if (_turnWarn) { clearTimeout(_turnWarn); _turnWarn = null; }
     const bar = $('turn-timer'); if (bar) bar.classList.add('hidden');
+    const ring = seatEls[0] && seatEls[0].querySelector('.turn-ring'); if (ring) { ring.classList.add('hidden'); ring.style.animation = 'none'; }
   }
   function startTurnTimer(o) {
     clearTurnTimer();
@@ -777,6 +792,9 @@
     const fill = bar.querySelector('i');
     fill.classList.remove('warn'); fill.style.transition = 'none'; fill.style.width = '100%'; void fill.offsetWidth;
     fill.style.transition = `width ${TURN_SECS}s linear`; fill.style.width = '0%';
+    // 座位倒计时光圈（环形随时间收缩）
+    const ring = seatEls[0] && seatEls[0].querySelector('.turn-ring');
+    if (ring) { ring.classList.remove('hidden'); ring.style.animation = 'none'; void ring.offsetWidth; ring.style.animation = `turnRing ${TURN_SECS}s linear forwards`; }
     _turnWarn = setTimeout(() => { fill.classList.add('warn'); try { Sfx.button(); } catch (_) {} }, (TURN_SECS - 5) * 1000);
     _turnTimer = setTimeout(() => {
       const me = game && game.players[0];
@@ -1758,16 +1776,26 @@
       exitRaiseMode(); humanAct('raise', v);
     });
     const slider = $('raise-slider');
-    slider.addEventListener('input', () => { $('raise-value').textContent = (+slider.value).toLocaleString(); });
+    slider.addEventListener('input', () => { $('raise-value').textContent = (+slider.value).toLocaleString(); const ri = $('raise-input'); if (ri) ri.value = ''; });
+    // 精确筹码输入：夹到合法区间并同步滑杆
+    const raiseInput = $('raise-input');
+    if (raiseInput) raiseInput.addEventListener('input', () => {
+      const o = slider._opts || game.actionOptions();
+      let v = parseInt(raiseInput.value, 10); if (isNaN(v)) return;
+      v = Math.max(o.minRaiseTo, Math.min(o.maxRaiseTo, v));
+      slider.value = v; $('raise-value').textContent = v.toLocaleString();
+    });
     document.querySelectorAll('.quick').forEach((b) => b.addEventListener('click', () => {
       const o = slider._opts || game.actionOptions();
       const q = b.dataset.q; let target;
       if (q === 'min') target = o.minRaiseTo;
       else if (q === 'half') target = roundToBB(o.currentBet + o.pot * 0.5);
+      else if (q === 'twothird') target = roundToBB(o.currentBet + o.pot * (2 / 3));
       else if (q === 'pot') target = roundToBB(o.currentBet + o.pot);
       else target = o.maxRaiseTo;
       target = Math.max(o.minRaiseTo, Math.min(target, o.maxRaiseTo));
       slider.value = target; $('raise-value').textContent = target.toLocaleString();
+      const ri = $('raise-input'); if (ri) ri.value = '';
     }));
 
     // 大厅功能入口

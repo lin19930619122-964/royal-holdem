@@ -77,6 +77,15 @@ ok(/data-emoji=/.test(body.innerHTML), 'chat panel has emoji row');
 // SNG：以锦标赛模式进桌不报错并显示牌桌
 window.SceneRouter.go('table', { mode: 'sng', players: 6 });
 ok(!window.document.getElementById('screen-table').classList.contains('hidden'), 'SNG table opens');
+// 9 人归一化座位布局 + 座位组件
+window.SceneRouter.go('table', { players: 9, blindLevel: 0 });
+const seats9 = window.document.querySelectorAll('#seats .seat');
+ok(seats9.length === 9, '9-max 建出 9 个座位');
+ok(/scale\(1\.12\)/.test(seats9[0].style.transform), 'hero 座位 scale 1.12');
+ok(seats9[0].querySelector('.turn-ring') && seats9[0].querySelector('.blind-badge'), '座位含倒计时光圈+盲注标记');
+// ⅔池 / 精确输入控件存在
+ok(window.document.querySelector('.quick[data-q="twothird"]'), '⅔池 快捷下注存在');
+ok(window.document.getElementById('raise-input'), '精确筹码输入存在');
 // SceneRouter：统一路由
 ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
 ['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));

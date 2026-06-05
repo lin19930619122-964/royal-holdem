@@ -187,11 +187,12 @@
         <div id="message-bar">点击「开始」发牌</div>
         <div id="action-area" class="hidden">
           <div id="raise-controls" class="hidden">
-            <div class="raise-amount">加注到 <span id="raise-value">0</span></div>
+            <div class="raise-amount">加注到 <span id="raise-value">0</span> <input type="number" id="raise-input" inputmode="numeric" placeholder="精确" /></div>
             <input type="range" id="raise-slider" min="0" max="100" value="0" />
             <div class="quick-bets">
               <button class="quick" data-q="min">最小</button>
               <button class="quick" data-q="half">½池</button>
+              <button class="quick" data-q="twothird">⅔池</button>
               <button class="quick" data-q="pot">底池</button>
               <button class="quick" data-q="allin">全下</button>
             </div>
