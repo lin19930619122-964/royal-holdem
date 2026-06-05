@@ -91,6 +91,31 @@
     else if (profile.archetype === 'maniac') { weights.bet *= 1.45; weights.raise *= 1.55; weights.fold *= 0.80; }
     else if (profile.archetype === 'loose_passive') { weights.call *= 1.25; weights.raise *= 0.6; weights.bet *= 0.7; }
     else if (profile.archetype === 'loose_aggressive') { weights.bet *= 1.25; weights.raise *= 1.3; }
+
+    // —— 剥削调整：读取本街进攻者(villain)的对手统计 ——
+    const v = ctx.villain;
+    if (v && v.sample >= 8) {
+      if (v.foldToCbet > 0.55) { weights.bet *= 1.25; weights.raise *= 1.20; }           // 对手爱弃 → 多打
+      if (v.wentToShowdown > 0.42 && v.aggressionFactor < 1.2) { weights.bet *= 0.7; weights.raise *= 0.6; if (rawStrength > 0.55) { weights.bet *= 1.6; weights.raise *= 1.5; } } // 跟注站 → 少诈唬、强牌多薄价值
+      if (v.aggressionFactor > 2.2 && rawStrength > 0.45 && canCall) weights.call *= 1.4;  // 对手太凶 → 多抓诈唬
+    }
+
+    // —— check-raise 启发式(真实，非仅检测)：本街已 check 且面对下注、可加注 ——
+    const iChecked = iCheckedThisStreet(ctx);
+    const hasDraw0 = draws.comboDraw || draws.flushDraw || draws.openEndedStraightDraw || draws.gutshot;
+    const multiway = ctx.activeOpponents > 1;
+    if (iChecked && ctx.amountToCall > 0 && canRaise) {
+      if (rawStrength > 0.75) weights.raise *= 1.8;                                        // 强成牌：check-raise 价值
+      else if (hasDraw0 && rawStrength >= 0.45 && rawStrength < 0.72) {                     // 强听牌：check-raise 半诈唬
+        let f = 1.4 + profile.bluffFrequency; if (texture.wetness > 55) f += 0.2; if (multiway) f *= 0.6;
+        if (v && v.wentToShowdown > 0.42) f *= 0.55;                                        // 跟注站不弃，少半诈唬
+        weights.raise *= f;
+      } else if (rawStrength < 0.4 && texture.wetness < 40 && !multiway) {                  // 干面低频 check-raise 诈唬
+        let f = profile.bluffFrequency * (profile.archetype === 'maniac' ? 2.2 : profile.archetype === 'calling_station' ? 0.2 : 1);
+        if (v && v.foldToCbet > 0.55) f *= 1.6;
+        weights.raise += clamp(f, 0, 0.5);
+      }
+    }
     const picked = chooseWeighted(weights, rng);
     let action = fallbackAction(ctx);
     if (picked === 'fold' && canFold) action = { type: 'fold' };

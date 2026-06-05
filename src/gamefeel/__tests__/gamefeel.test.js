@@ -60,4 +60,19 @@ ok(got && got.ev === E.HERO_WIN_BIG && got.juice === 'epic', '5 onVisual 收到�
 eq(GF.juiceOf(E.PLAYER_ALL_IN), 'epic', '6 全下=epic');
 eq(GF.juiceOf(E.PLAYER_CHECK), 'subtle', '6 过牌=subtle');
 
+// 7) 事件序列日志(摊牌序列可打印) + 新闭环事件
+(function () {
+  const G2 = GFD.create({ audio, stage, haptics, immediate: true });
+  ['SHOWDOWN_START', 'REVEAL_HAND', 'REVEAL_HAND', 'BEST_HAND_HIGHLIGHT', 'POT_TO_WINNER', 'SESSION_SUMMARY'].forEach((k, i) => G2.emit(E[k], { seat: i, winners: [{ seat: 0, amount: 100 }] }));
+  const log = G2.getEventLog();
+  ok(log.length === 6, '7 事件日志记录摊牌序列(6 步)');
+  ok(log[0].event === 'SHOWDOWN_START' && log[3].event === 'BEST_HAND_HIGHLIGHT', '7 序列顺序正确');
+  ok(/SHOWDOWN_START/.test(G2.printEventLog()) && /REVEAL_HAND/.test(G2.printEventLog()), '7 printEventLog 可读');
+  // 24/24 闭环：之前缺的 3 个事件能进入并被记录
+  const G3 = GFD.create({ audio, stage, haptics, immediate: true });
+  ['REVEAL_HAND', 'HERO_GOOD_FOLD', 'ACHIEVEMENT_UNLOCKED'].forEach((k) => G3.emit(E[k], {}));
+  const evs = G3.getEventLog().map((e) => e.event);
+  ok(evs.includes('REVEAL_HAND') && evs.includes('HERO_GOOD_FOLD') && evs.includes('ACHIEVEMENT_UNLOCKED'), '7 补齐的 3 事件均可 emit 并记录');
+})();
+
 done();

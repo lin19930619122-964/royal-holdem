@@ -938,3 +938,5 @@ html, body {
 /* TableScene 覆盖层（不参与点击，仅作动画挂载） */
 .tlayer { position: absolute; inset: 0; pointer-events: none; }
 .bet-chip-layer { z-index: 5; } .chat-emoji-layer { z-index: 11; } .gift-anim-layer { z-index: 12; }
+
+.seat .pchips.stack-rolling { color: #ffd86b; text-shadow: 0 0 6px rgba(255,216,107,.7); }

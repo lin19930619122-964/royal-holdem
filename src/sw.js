@@ -1,5 +1,5 @@
 /* 离线缓存：网络优先（联网拿最新，断网才用缓存）— v6 修复白屏 */
-const CACHE = 'royal-holdem-v46';
+const CACHE = 'royal-holdem-v47';
 const ASSETS = [
   './', './index.html', './online.html', './styles.css',
   './codec.js', './skins.js', './store.js', './sound.js', './music.js', './voice.js', './fx.js', './social.js',
@@ -10,7 +10,7 @@ const ASSETS = [
   './core/poker/GameReducer.js', './core/poker/Equity.js', './core/poker/selectors.js',
   './core/ai/types.js', './core/ai/BotProfiles.js', './core/ai/BotProfile.js', './core/ai/PreflopMatrix.js',
   './core/ai/BoardTexture.js', './core/ai/EquityCalculator.js', './core/ai/PostflopHeuristics.js',
-  './core/ai/PokerBrain.js', './core/ai/BotDecisionEngine.js', './game/table/GameAdapter.js',
+  './core/ai/PokerBrain.js', './core/ai/OpponentModel.js', './core/ai/BotDecisionEngine.js', './game/table/GameAdapter.js',
   './services/EventBus.js', './services/AudioManager.js', './services/GameFeelDirector.js',
   './core/Lessons.js',
   './gamefeel/GameFeelEvent.js', './gamefeel/GameFeelConfig.js', './gamefeel/TableAnimationQueue.js', './gamefeel/HapticDirector.js',

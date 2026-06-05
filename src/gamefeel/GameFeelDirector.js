@@ -32,6 +32,8 @@
     const highlight = Highlight.create(stage);
     const visuals = [];        // onVisual 订阅者：(event, payload, juice) => void
     const busMap = {};
+    const eventLog = [];       // 最近事件序列(调试/验收：可打印摊牌等序列)
+    let logSeq = 0;
 
     function juiceOf(event) { return CFG.of(event).juice; }
     function onVisual(fn) { if (typeof fn === 'function') visuals.push(fn); return () => { const i = visuals.indexOf(fn); if (i >= 0) visuals.splice(i, 1); }; }
@@ -61,6 +63,8 @@
     function emit(event, payload) {
       const cfg = CFG.of(event);
       const pl = Object.assign({ juice: cfg.juice }, payload || {});
+      eventLog.push({ seq: logSeq++, event, juice: cfg.juice, sfx: cfg.sfx || null, haptic: cfg.haptic || null, payload: payload || {} });
+      if (eventLog.length > 200) eventLog.shift();
       // 1) 音频（同步，便于测试与即时反馈）
       if (cfg.sfx && audio.play) { try { audio.play(cfg.sfx, pl); } catch (e) { /* ignore */ } }
       // 2) 触觉
@@ -78,6 +82,8 @@
       setCategory: (c, v) => audio.setCategory && audio.setCategory(c, v),
       setHaptics: (v) => haptics.setEnabled(v),
       clearQueue: () => queue.clear(),
+      getEventLog: () => eventLog.slice(),
+      printEventLog: () => eventLog.map((e) => `#${e.seq} ${e.event}[${e.juice}]${e.sfx ? ' sfx:' + e.sfx : ''}`).join('\n'),
       EVENTS: E,
       _animators: { chipFly, cardDeal, potWin, highlight }, _queue: queue, _haptics: haptics,
     };

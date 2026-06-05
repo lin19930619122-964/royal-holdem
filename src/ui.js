@@ -88,6 +88,8 @@
   let sessionHands = 0;     // 本次进桌已打手数(每10手弹 Session 小结)
   let replayState = null;    // 逐步回放游标 {idx, step}
   let lastDealtHandNo = -1;  // 上次已播放发牌动画的手编号(用于逐张发牌)
+  let oppModel = null;        // OpponentModel 实例(逐对手统计，供 Bot 剥削)
+  const lastBotReason = {};   // 座位→最近一次 Bot 决策理由(复盘/策略助手用)
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
   const prevLA = [];
@@ -266,8 +268,24 @@
       clearHighlightBest: () => { try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); if ($('table-felt')) $('table-felt').classList.remove('showdown-dim'); } catch (e) { /* ignore */ } },
       bigPotBanner: (bb) => { try { if (window.Fx && Fx.topBanner) Fx.topBanner(fxLayer, `大底池 ${Math.round(bb)}BB！`); } catch (e) { /* ignore */ } },
       premiumHandCue: (i) => { const n = node(i); if (n && n.root) { n.root.classList.add('premium-cue'); setTimeout(() => n.root.classList.remove('premium-cue'), 900); } },
-      rollSeatStack: () => {},
+      rollSeatStack: (i, target) => { const el = seatEls[i] && seatEls[i].querySelector('.pchips'); if (el) rollNumberEl(el, target); },
     };
+  }
+
+  // 通用数字滚动(座位筹码栈派彩用)：从当前显示值平滑增/减到目标。jsdom 无 rAF 时直接落值。
+  function rollNumberEl(el, target) {
+    target = Math.round(target || 0);
+    const parse = (t) => { const n = parseInt(String(t).replace(/[^\d-]/g, ''), 10); return isNaN(n) ? 0 : n; };
+    let cur = parse(el.textContent);
+    if (typeof requestAnimationFrame !== 'function' || cur === target) { el.textContent = fmtChips(target); return; }
+    const start = cur, delta = target - start, t0 = (window.performance && performance.now) ? performance.now() : 0, dur = 520;
+    el.classList.add('stack-rolling');
+    function frame(now) {
+      const p = Math.min(1, ((now || 0) - t0) / dur);
+      el.textContent = fmtChips(Math.round(start + delta * (p * (2 - p)))); // easeOut
+      if (p < 1) requestAnimationFrame(frame); else { el.textContent = fmtChips(target); el.classList.remove('stack-rolling'); }
+    }
+    requestAnimationFrame(frame);
   }
 
   // dealIdx>=0 时附加逐张发牌动画(按序错开 animation-delay)
@@ -613,7 +631,11 @@
     felt.classList.remove('win-flash'); void felt.offsetWidth; felt.classList.add('win-flash');
     const rb = $('result-banner');
     if (result.summary) { rb.textContent = '🏆 ' + result.summary; rb.classList.remove('hidden'); rb.style.animation = 'none'; void rb.offsetWidth; rb.style.animation = ''; }
-    if (GF && result.showdown) GF.emit('SHOWDOWN_START', {});
+    if (GF && result.showdown) {
+      GF.emit('SHOWDOWN_START', {});
+      // 逐家亮牌事件(按座位顺序)：每个被摊牌玩家一个 REVEAL_HAND
+      (result.reveal || []).forEach((seat) => { const pl = game.players[seat]; GF.emit('REVEAL_HAND', { seat, hand: (result.handNames && result.handNames[pl.id]) || '', hole: (pl.hole || []).slice() }); });
+    }
     const winners = [];
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i];
@@ -745,6 +767,8 @@
             sessionHands++;
             if (sessionHands % 10 === 0) showSessionSummary();
           }
+          // 对手建模：把本手完整事件喂入 OpponentModel(供 Bot 剥削 + 牌风画像)
+          if (oppModel && game.log) oppModel.ingestHand(game.log.filter((e) => e.hand === game.handNo));
         } catch (e) {}
         updateHandStrip();
         syncWallet(true); syncLevel();
@@ -770,7 +794,8 @@
     else {
       hideHumanControls();
       // V4 PokerBrain 决策(位置/范围/牌面/赔率/SPR/画像)；思考时长用画像 reactionTime
-      const d = window.RHCore.BotDecisionEngine.decide(game, game.current, { profile: p.botProfile });
+      const d = window.RHCore.BotDecisionEngine.decide(game, game.current, { profile: p.botProfile, oppStats: oppModel ? oppModel.all() : {} });
+      lastBotReason[game.current] = d.reason;   // 存 Bot 决策理由，供复盘/策略助手展示
       const delay = Math.max(380, Math.min(2200, d.reactionTimeMs || aiThinkDelay(d.action)));
       scheduled = setTimeout(() => {
         game.act(d.action, d.amount);
@@ -986,6 +1011,8 @@
       rangeEq: (handAnalysis && handAnalysis.rangeEq != null) ? handAnalysis.rangeEq : null,
     });
     window.OppModel.record(action, facing);
+    // 好弃牌：面对下注弃牌且复盘判定正确 → HERO_GOOD_FOLD（进入 GameFeel）
+    if (action === 'fold' && facing && v.good === true && GF) GF.emit('HERO_GOOD_FOLD', { seat: 0 });
     game.act(action, amount);
     if (p.lastAction === '全下') Store.recordAllin();
     actSound(p);
@@ -1828,6 +1855,7 @@
   function startTable(cfg) {
     if (scheduled) { clearTimeout(scheduled); scheduled = null; }
     sessionHands = 0;
+    oppModel = window.RHCore.OpponentModel.create();   // 每次进桌重置对手模型
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
     // 牌桌引擎：由 reducer 核心驱动（经 GameAdapter，接口仍兼容旧 game.js）
@@ -2095,7 +2123,7 @@
       const tut = e.target.closest('[data-tutorial]');
       if (tut) { closeModal(); SceneRouter.go('tutorial', {}); return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
-      else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
+      else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { if (GF) GF.emit('ACHIEVEMENT_UNLOCKED', { id: ac.dataset.claimAchv, coins: r.coins }); else Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (back) { $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (oh) { openPanel('tableHistory'); }

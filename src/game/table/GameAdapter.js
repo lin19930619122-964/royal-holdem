@@ -66,6 +66,8 @@
       get phase() { return self._gameover ? 'gameover' : (PHASE[self._state.street] || 'idle'); },
       get bettingOpen() { return self._state.current >= 0 && !self._state.handOver; },
       get current() { return self._state.current >= 0 ? self._state.current : null; },
+      get log() { return self._state.log; },                 // 跨街手牌历史(reducer 权威日志)
+      get street() { return self._state.street; },
       get result() {
         if (self._gameover) return { gameOver: true, winner: proxies.find((p) => p.chips > 0) || null };
         const r = self._state.result; if (!r) return null;

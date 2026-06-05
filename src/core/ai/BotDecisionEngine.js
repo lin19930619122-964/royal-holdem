@@ -45,12 +45,24 @@
     if (o.canRaise) legal.push({ type: o.isBet ? 'bet' : 'raise', minAmount: o.minRaiseTo, maxAmount: o.maxRaiseTo });
     legal.push({ type: 'all-in' });
 
+    // 跨街手牌历史：从 reducer 权威日志(game.log)抽取本手 ACTION 序列
+    const street = game.street || game.phase;
+    const rawLog = (game.log || []).filter((e) => e.t === 'ACTION' && e.hand === game.handNo);
+    const history = rawLog.map((e) => ({ street: e.street, seat: e.seat, playerId: String((game.players[e.seat] && game.players[e.seat].id) != null ? game.players[e.seat].id : e.seat), action: { type: e.act === 'allin' ? 'all-in' : e.act }, amount: e.amount }));
+    const actionsThisStreet = history.filter((e) => e.street === street);
+    // 剥削：取本街最近的进攻者(下注/加注)的对手统计作为 villain
+    const oppStats = opts.oppStats || {};
+    let villainSeat = null;
+    for (let k = actionsThisStreet.length - 1; k >= 0; k--) { const a = actionsThisStreet[k]; if (a.seat !== seat && (a.action.type === 'bet' || a.action.type === 'raise' || a.action.type === 'all-in')) { villainSeat = a.seat; break; } }
+    const villain = villainSeat != null ? oppStats[villainSeat] : null;
+
     const ctx = {
-      street: game.phase, botId: String(p.id), holeCards: p.hole, board: game.board,
+      street, botId: String(p.id), holeCards: p.hole, board: game.board,
       pot: game.pot, amountToCall: o.toCall, currentBet: game.currentBet, minRaiseTo: o.minRaiseTo,
       stack: p.chips, effectiveStack: effectiveStack(game, seat), bigBlind: game.bigBlind,
       position: positionOf(game, seat), playersInHand: game.N, activeOpponents: activeOpponents(game, seat),
-      previousActions: [], legalActions: legal,
+      previousActions: history, actionsThisStreet, seat, legalActions: legal,
+      opponentStats: oppStats, villain,
       tableStats: { handsPlayed: game.handNo || 0, tableAggression: 0.35, averagePotBb: game.pot / (game.bigBlind || 1) },
       botProfile: opts.profile || PROFILES.balanced_reg,
       seed: opts.seed,

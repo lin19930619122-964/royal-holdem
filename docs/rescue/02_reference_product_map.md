@@ -26,8 +26,8 @@
 | **Level / Rank** | `masterLevel` 4 + `rank` 8 + `scoreRankFee` 2 | `rank` 面板 + 等级 | 🟡 |
 | **History** | `prefabs/table/history` 7 | `tableHistory`+handLog | ✅ |
 | **Replay** | （history 内含逐手回看） | `replay` 逐步回放 | ✅ |
-| **Skin** | 头像框/桌布/挂件 `pendant` 2 + `res/common` 136 | `skins.js` 9 桌布 | 🟡 |
-| **Card Skin** | `textures/cards` 814 = **20 套** | 13 牌背(无牌面皮肤，牌面是 CSS) | 🟡 |
+| **Skin** | 头像框/桌布/挂件 `pendant` 2 + `res/common` 136 | `skins.js` 29 桌布 | 🟡 |
+| **Card Skin** | `textures/cards` 814 = **20 套** | 57 牌背(无牌面皮肤，牌面是 CSS) | 🟡 |
 | **Quick Words** | `sound/quickWords` 28 | `social.js` 文本快捷语 | ✅(无语音) 🚫语音 |
 | **Emoji** | `animations/desk/magicEmoji` 110 + `freeEmoji` 48 | `Social.EMOJIS` ≥8 文本表情 | 🟡 无骨骼动画 |
 | **Gift** | `prefabs/table/gitLayer` 3 + `sound/magic` 40 + `animations/giftbox` | `flyGift` 程序化 | 🟡 |

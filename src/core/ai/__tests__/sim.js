@@ -31,3 +31,10 @@ const samples = [
   ['河牌 边缘成牌面对下注', { street: 'river', holeCards: C('Ah Tc'), board: C('As 9d 4h 2c 7s'), amountToCall: 500, currentBet: 500, pot: 1000, legalActions: [{ type: 'fold' }, { type: 'call' }], seed: 8, activeOpponents: 1 }],
 ];
 for (const [label, ov] of samples) { const d = Brain.decideBotAction(ctx(ov)); console.log(`  [${label}]\n    → ${d.reason}`); }
+
+console.log('\n=== 7 种 Bot · 同一翻牌局面(顶对弱踢脚 As5c / Kd8h2s 面对下注) 的决策与理由 ===');
+const spot = { street: 'flop', holeCards: C('Ah 5c'), board: C('Kd 8h 2s'), amountToCall: 300, currentBet: 300, pot: 600, minRaiseTo: 600, legalActions: LEGAL_FACING, activeOpponents: 1 };
+for (const k of Object.keys(P)) {
+  const d = Brain.decideBotAction(ctx(Object.assign({}, spot, { botProfile: P[k], seed: 7 })));
+  console.log(`  ${P[k].displayName.padEnd(5)} → ${d.action.type}${d.action.amount ? '@' + d.action.amount : ''} | ${d.intent}/${d.riskLevel} | ${d.reason}`);
+}
