@@ -383,6 +383,19 @@
     mark(seatEls[focus.id] && seatEls[focus.id].querySelector('.player-cards'));
   }
 
+  // 历史简条（牌桌底部，最近几手输赢与净额）
+  function updateHandStrip() {
+    const el = $('hand-strip'); if (!el) return;
+    const log = Store.getHandLog().slice(0, 8);
+    if (!log.length) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    el.innerHTML = '<span class="hs-label">近期</span>' + log.map((h) => {
+      const cls = h.net > 0 ? 'up' : h.net < 0 ? 'down' : 'flat';
+      const sign = h.net > 0 ? '+' : '';
+      return `<span class="hs-item ${cls}">#${h.no} ${sign}${fmtChips(h.net)}</span>`;
+    }).join('');
+  }
+
   function flashAllIn() {
     const f = $('allin-flash');
     f.classList.remove('hidden'); f.style.animation = 'none'; void f.offsetWidth; f.style.animation = '';
@@ -618,6 +631,7 @@
             mistakes,
           });
         } catch (e) {}
+        updateHandStrip();
         syncWallet(true); syncLevel();
         if (up.leveled > 0) { setTimeout(() => { Fx.rewardPop(fxLayer, '🎉', `升到 ${up.level} 级`, `金币 +${fmtChips(up.level * 10000)}`); Store.addCoins(up.level * 10000); syncWallet(true); Sfx.reward(); }, 1200); }
       }
@@ -1623,6 +1637,7 @@
     seatVoice = game.players.map((_, i) => i % 2); // 0辽宁东北女 / 1男声 错开
     boardCount = -1; lastDecoratedHand = -1; lastSyncedHand = -1; raiseMode = false;
     buildSeats();
+    updateHandStrip();
     showScreen('table');
     $('start-area').classList.remove('hidden');
     $('btn-start').textContent = '开始发牌';

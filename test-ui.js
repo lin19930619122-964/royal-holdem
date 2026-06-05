@@ -86,6 +86,10 @@ ok(seats9[0].querySelector('.turn-ring') && seats9[0].querySelector('.blind-badg
 // ⅔池 / 精确输入控件存在
 ok(window.document.querySelector('.quick[data-q="twothird"]'), '⅔池 快捷下注存在');
 ok(window.document.getElementById('raise-input'), '精确筹码输入存在');
+ok(window.document.getElementById('hand-strip'), '历史简条元素存在');
+S.addHandRecord({ no: S.nextHandNo(), board: [], hole: [], net: 1000, decisions: [], mistakes: 0 });
+window.SceneRouter.go('table', { players: 6 }); // 重入牌桌触发历史简条
+ok(/hs-item/.test(window.document.getElementById('hand-strip').innerHTML), '历史简条已填充近期手牌');
 // SceneRouter：统一路由
 ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
 ['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));

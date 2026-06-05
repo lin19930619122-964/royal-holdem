@@ -456,6 +456,12 @@ html, body {
   display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0;
 }
 #message-bar { font-size: 13px; color: #d8efe1; min-height: 16px; text-align: center; font-weight: 600; }
+/* 历史简条 */
+#hand-strip { display: flex; align-items: center; gap: 6px; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+#hand-strip::-webkit-scrollbar { display: none; }
+#hand-strip .hs-label { color: #9fc4ae; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+#hand-strip .hs-item { flex-shrink: 0; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,.06); }
+#hand-strip .hs-item.up { color: #5fd38a; } #hand-strip .hs-item.down { color: #ff7a7a; } #hand-strip .hs-item.flat { color: #cfe7d8; }
 #action-area { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
 #raise-controls {
   display: flex; flex-direction: column; align-items: center; gap: 7px;
