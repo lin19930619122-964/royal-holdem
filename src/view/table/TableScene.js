@@ -1,41 +1,33 @@
-/* TableScene —— 牌桌分层注册。把成熟牌桌的 14 层显式化：
-   既有 DOM 映射到对应层(打 data-layer 标记)，缺失的覆盖层(下注筹码/聊天表情/礼物动画)按需创建。
-   不破坏现有布局/CSS（不强制重排），返回 {layerName: element} 供组件挂载与 GameFeel 定位。 */
+/* TableScene —— 牌桌场景装配器。只负责：装配 14 个独立 Layer 组件、转发 GameState/ViewModel、销毁。
+   不再拼接 seat/card/chip/action 的 HTML 细节（那些在各 Layer / SeatView / ActionPanel 内）。 */
 (function (root, factory) {
-  const m = factory();
-  if (typeof module !== 'undefined' && module.exports) module.exports = m;
-  if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).TableScene = m;
-})(this, function () {
-  const LAYERS = ['TableBackgroundLayer', 'TableFeltLayer', 'SeatLayer', 'DealerButtonLayer', 'CommunityCardLayer',
+  const req = (typeof require !== 'undefined');
+  const L = (n) => (req ? require('./layers/' + n + '.js') : window.RHCore[n]);
+  const NAMES = ['TableBackgroundLayer', 'TableFeltLayer', 'SeatLayer', 'DealerButtonLayer', 'CommunityCardLayer',
     'PotLayer', 'BetChipLayer', 'PlayerHandLayer', 'ActionPanelLayer', 'TrainingAssistantLayer',
     'ChatEmojiLayer', 'GiftAnimationLayer', 'HistoryLayer', 'ModalLayer'];
-  const $ = (id) => document.getElementById(id);
-  function overlay(id, parent, cls) {
-    let e = $(id); if (e) return e;
-    e = document.createElement('div'); e.id = id; e.className = cls || 'tlayer-overlay';
-    if (parent) parent.appendChild(e); return e;
-  }
-  function ensure() {
-    const tableRoot = $('table'), felt = $('table-felt');
-    const map = {
-      TableBackgroundLayer: tableRoot,
-      TableFeltLayer: felt,
-      SeatLayer: $('seats'),
-      DealerButtonLayer: $('dealer-button'),
-      CommunityCardLayer: $('board'),
-      PotLayer: $('pot-display'),
-      BetChipLayer: felt ? overlay('bet-chip-layer', felt, 'tlayer bet-chip-layer') : null,
-      PlayerHandLayer: $('seats'),                 // 手牌随座位（座位内 .player-cards）
-      ActionPanelLayer: $('action-area') || $('controls'),
-      TrainingAssistantLayer: $('hand-hint'),
-      ChatEmojiLayer: tableRoot ? overlay('chat-emoji-layer', tableRoot, 'tlayer chat-emoji-layer') : null,
-      GiftAnimationLayer: tableRoot ? overlay('gift-anim-layer', tableRoot, 'tlayer gift-anim-layer') : null,
-      HistoryLayer: $('hand-strip'),
-      ModalLayer: $('modal-overlay'),
+  const mods = {}; NAMES.forEach((n) => { mods[n] = L(n); });
+  const m = factory(mods, NAMES);
+  if (typeof module !== 'undefined' && module.exports) module.exports = m;
+  if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).TableScene = m;
+})(this, function (mods, NAMES) {
+  let assembled = null;
+
+  // 装配：实例化并挂载 14 层，返回 { layers, get, el, render, update, destroy }
+  function assemble() {
+    const layers = {};
+    NAMES.forEach((n) => { const inst = mods[n].create(); inst.mount(); layers[n] = inst; });
+    assembled = {
+      layers,
+      get: (n) => layers[n],
+      el: (n) => layers[n] && layers[n].el(),
+      render: (vm) => { NAMES.forEach((n) => layers[n].render(vm || {})); return assembled; },
+      update: (vm) => { NAMES.forEach((n) => layers[n].update(vm || {})); return assembled; },
+      destroy: () => { NAMES.forEach((n) => layers[n].destroy()); assembled = null; },
     };
-    // 给映射到的元素打 data-layer 标记，便于核查“层级显式化”
-    LAYERS.forEach((name) => { const e = map[name]; if (e && e.setAttribute && !e.dataset.layer) e.setAttribute('data-layer', name); });
-    return map;
+    return assembled;
   }
-  return { LAYERS, ensure };
+  // 向后兼容：ensure() 返回已装配场景（首次装配，幂等）
+  function ensure() { return assembled || assemble(); }
+  return { LAYERS: NAMES, assemble, ensure, current: () => assembled };
 });

@@ -158,5 +158,11 @@
     root.setProperty('--scene-bg', `url('${scene.img}')`);
   }
 
-  window.Skins = { backs, felts, frames, titles, vehicles, watches, scenes, apply };
+  // 牌面主题(程序化样式，非资源图)：classic=传统白底，neon=暗底霓虹描边
+  const cardFaces = {
+    classic: { name: '经典', cls: 'cf-classic', price: 0 },
+    neon: { name: '霓虹', cls: 'cf-neon', price: 0 },
+  };
+
+  window.Skins = { backs, felts, frames, titles, vehicles, watches, scenes, cardFaces, apply };
 })();

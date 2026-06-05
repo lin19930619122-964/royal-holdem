@@ -12,6 +12,7 @@
     ownedFelts: ['imgGreen', 'green'],
     activeBack: 'classic',
     activeFelt: 'imgGreen',
+    activeCardFace: 'classic',   // 牌面主题(classic/neon)，程序化样式
     activeAvatar: 1,     // 玩家头像(1..16)
     ownedFrames: ['none'], activeFrame: 'none',   // 头像框
     ownedTitles: ['none'], activeTitle: 'none',   // 称号
@@ -194,6 +195,7 @@
     if (profile.ownedFelts.includes(id)) { profile.activeFelt = id; save(); }
   }
   function setAvatar(id) { profile.activeAvatar = id; save(); }
+  function setCardFace(id) { if (window.Skins && window.Skins.cardFaces && window.Skins.cardFaces[id]) { profile.activeCardFace = id; save(); return true; } return false; }
 
   // 通用饰品(头像框/称号/载具/腕表)购买与装备
   function mkCosmetic(mapName, ownedKey, activeKey) {
@@ -523,7 +525,7 @@
     get, save, addCoins, addDiamonds, spendDiamonds,
     canCheckin, checkinPreview, doCheckin,
     needsRelief, relief, RELIEF_FLOOR,
-    redeem, buyCoinPack, buyBack, buyFelt, setBack, setFelt, setAvatar,
+    redeem, buyCoinPack, buyBack, buyFelt, setBack, setFelt, setAvatar, setCardFace,
     buyFrame: _frame.buy, setFrame: _frame.set,
     buyTitle: _title.buy, setTitle: _title.set,
     buyVehicle: _veh.buy, setVehicle: _veh.set,

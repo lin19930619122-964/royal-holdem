@@ -24,7 +24,9 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); 
 const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
   'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/OpponentModel.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js',
   'gamefeel/GameFeelEvent.js', 'gamefeel/GameFeelConfig.js', 'gamefeel/TableAnimationQueue.js', 'gamefeel/HapticDirector.js', 'gamefeel/ChipFlyAnimator.js', 'gamefeel/CardDealAnimator.js', 'gamefeel/PotWinAnimator.js', 'gamefeel/HighlightDirector.js', 'gamefeel/GameFeelDirector.js',
-  'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/TableScene.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
+  'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/PlayerViewModel.js',
+  'view/table/layers/_base.js', 'view/table/layers/TableBackgroundLayer.js', 'view/table/layers/TableFeltLayer.js', 'view/table/layers/SeatLayer.js', 'view/table/layers/DealerButtonLayer.js', 'view/table/layers/CommunityCardLayer.js', 'view/table/layers/PotLayer.js', 'view/table/layers/BetChipLayer.js', 'view/table/layers/PlayerHandLayer.js', 'view/table/layers/ActionPanelLayer.js', 'view/table/layers/TrainingAssistantLayer.js', 'view/table/layers/ChatEmojiLayer.js', 'view/table/layers/GiftAnimationLayer.js', 'view/table/layers/HistoryLayer.js', 'view/table/layers/ModalLayer.js',
+  'view/table/TableScene.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
   'router.js', 'ui.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
@@ -112,6 +114,40 @@ ok(window.RHCore.GameFeelDirectorV2 && typeof window.RHCore.GameFeelDirectorV2.c
 ok(window.RHCore.TableScene && window.RHCore.TableScene.LAYERS.length === 14, 'TableScene 定义 14 层');
 (function () { const m = window.RHCore.TableScene.ensure(); const tagged = window.document.querySelectorAll('[data-layer]'); ok(m && tagged.length >= 8, 'TableScene 已标记分层 data-layer'); })();
 ok(window.document.querySelector('[data-layer="SeatLayer"]') && window.document.querySelector('[data-layer="CommunityCardLayer"]'), '关键层(SeatLayer/CommunityCardLayer)已显式化');
+// Completion Sprint A：TableScene 真组件树(14 层各有 mount/render/update/destroy)
+(function () {
+  const scene = window.RHCore.TableScene.assemble();
+  ok(Object.keys(scene.layers).length === 14, 'A TableScene 装配 14 个 Layer 实例');
+  const allIface = window.RHCore.TableScene.LAYERS.every((n) => { const L = scene.layers[n]; return L && typeof L.mount === 'function' && typeof L.render === 'function' && typeof L.update === 'function' && typeof L.destroy === 'function'; });
+  ok(allIface, 'A 每个 Layer 具备 mount/render/update/destroy 接口');
+  scene.update({ pot: 12345, feltSkin: 'x' });
+  ok(window.document.getElementById('pot-amount').textContent === '12345', 'A PotLayer.update 接收 ViewModel 并更新底池');
+})();
+// Completion Sprint B：PlayerViewModel 驱动 SeatView 节点(空节点据数据显示/隐藏)
+(function () {
+  const VM = window.RHCore.PlayerViewModel, SV = window.RHCore.SeatView;
+  ok(typeof VM.build === 'function' && typeof SV.update === 'function', 'B PlayerViewModel/SeatView.update 存在');
+  const seat = seats9[2];
+  SV.update(seat, VM.build({ id: 2, seat: 2, name: 'X', chips: 1000, bet: 200, folded: true, hole: [] }, { seatIndex: 2, isSmallBlind: true, isThinking: true, timerPercent: 50, isTrustee: true, winStreak: 3, quickWord: '好牌！' }));
+  ok(!seat.querySelector('.fold-mask').classList.contains('hidden'), 'B 弃牌→foldMask 显示');
+  ok(seat.querySelector('.blind-badge').textContent === 'SB' && !seat.querySelector('.blind-badge').classList.contains('hidden'), 'B 小盲→blindBadge=SB');
+  ok(!seat.querySelector('.win-streak-badge').classList.contains('hidden'), 'B 连胜≥2→winStreakBadge 显示');
+  ok(!seat.querySelector('.trustee-icon').classList.contains('hidden'), 'B 托管→trusteeIcon 显示');
+  ok(!seat.querySelector('.turn-ring').classList.contains('hidden'), 'B 思考→timerRing 显示');
+  ok(!seat.querySelector('.quick-word-bubble').classList.contains('hidden') && /好牌/.test(seat.querySelector('.quick-word-bubble').textContent), 'B 快捷语→气泡显示文字');
+  // 无数据→隐藏
+  SV.update(seat, VM.build({ id: 2, seat: 2, name: 'X', chips: 1000, bet: 0, folded: false, hole: [] }, { seatIndex: 2 }));
+  ok(seat.querySelector('.fold-mask').classList.contains('hidden') && seat.querySelector('.blind-badge').classList.contains('hidden'), 'B 无数据→节点隐藏(非空显示)');
+})();
+// Completion Sprint I：牌面主题(classic/neon) + 持久化 + 切换
+(function () {
+  ok(window.Skins.cardFaces && window.Skins.cardFaces.classic && window.Skins.cardFaces.neon, 'I cardFaces 含 classic/neon');
+  ok(typeof S.setCardFace === 'function' && 'activeCardFace' in S.get(), 'I 牌面主题 API + 持久字段');
+  ok(S.setCardFace('neon') && S.get().activeCardFace === 'neon', 'I 切换到 neon 生效');
+  ok(S.setCardFace('classic'), 'I 切回 classic');
+})();
+// Completion Sprint D：牌堆锚点存在(发牌飞行起点)
+ok(window.document.getElementById('deck-anchor'), 'D 牌堆锚点 deck-anchor 存在');
 // ⅔池 / 精确输入控件存在
 ok(window.document.querySelector('.quick[data-q="twothird"]'), '⅔池 快捷下注存在');
 ok(window.document.getElementById('raise-input'), '精确筹码输入存在');
@@ -125,6 +161,7 @@ window.SceneRouter.go('table', { players: 6 });
 window.document.getElementById('btn-start').click(); // 开始发牌 → nextHand → adapter.startHand
 const heroCards = window.document.querySelector('#seats .seat.me .player-cards');
 ok(heroCards && heroCards.children.length === 2, '适配器发牌后英雄渲染2张手牌');
+ok([...heroCards.children].every((c) => /cf-(classic|neon)/.test(c.className)), 'I 实发英雄牌面带主题类 cf-*');
 const seatsAll = window.document.querySelectorAll('#seats .seat');
 ok(seatsAll.length === 6, '6人桌座位渲染');
 // Phase 7 逐张发牌动画：新发的牌带 deal-in 类且错开 animation-delay

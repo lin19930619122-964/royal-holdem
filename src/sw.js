@@ -1,5 +1,5 @@
 /* 离线缓存：网络优先（联网拿最新，断网才用缓存）— v6 修复白屏 */
-const CACHE = 'royal-holdem-v47';
+const CACHE = 'royal-holdem-v48';
 const ASSETS = [
   './', './index.html', './online.html', './styles.css',
   './codec.js', './skins.js', './store.js', './sound.js', './music.js', './voice.js', './fx.js', './social.js',
@@ -15,7 +15,11 @@ const ASSETS = [
   './core/Lessons.js',
   './gamefeel/GameFeelEvent.js', './gamefeel/GameFeelConfig.js', './gamefeel/TableAnimationQueue.js', './gamefeel/HapticDirector.js',
   './gamefeel/ChipFlyAnimator.js', './gamefeel/CardDealAnimator.js', './gamefeel/PotWinAnimator.js', './gamefeel/HighlightDirector.js', './gamefeel/GameFeelDirector.js',
-  './view/table/SeatView.js', './view/table/ActionPanel.js', './view/table/TableScene.js',
+  './view/table/SeatView.js', './view/table/ActionPanel.js', './view/table/PlayerViewModel.js', './view/table/TableScene.js',
+  './view/table/layers/_base.js', './view/table/layers/TableBackgroundLayer.js', './view/table/layers/TableFeltLayer.js', './view/table/layers/SeatLayer.js',
+  './view/table/layers/DealerButtonLayer.js', './view/table/layers/CommunityCardLayer.js', './view/table/layers/PotLayer.js', './view/table/layers/BetChipLayer.js',
+  './view/table/layers/PlayerHandLayer.js', './view/table/layers/ActionPanelLayer.js', './view/table/layers/TrainingAssistantLayer.js', './view/table/layers/ChatEmojiLayer.js',
+  './view/table/layers/GiftAnimationLayer.js', './view/table/layers/HistoryLayer.js', './view/table/layers/ModalLayer.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];

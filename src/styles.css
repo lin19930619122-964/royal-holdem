@@ -940,3 +940,18 @@ html, body {
 .bet-chip-layer { z-index: 5; } .chat-emoji-layer { z-index: 11; } .gift-anim-layer { z-index: 12; }
 
 .seat .pchips.stack-rolling { color: #ffd86b; text-shadow: 0 0 6px rgba(255,216,107,.7); }
+
+/* ===== Completion Sprint: 牌面主题 / 头像框 / 发牌飞行 / 气泡/表情 ===== */
+.card.cf-neon { background: linear-gradient(160deg,#0e1726,#1b2740); color:#eafaff; box-shadow: 0 0 0 1px #2bd6ff, 0 0 10px rgba(43,214,255,.5); }
+.card.cf-neon .ci, .card.cf-neon .cmini b { color:#9fefff; text-shadow:0 0 6px rgba(43,214,255,.8); }
+.card.cf-neon.red .ci, .card.cf-neon.red .pip { color:#ff6ea8; text-shadow:0 0 6px rgba(255,110,168,.8); }
+.card.cf-neon .pip { color:#9fefff; }
+.cardface-pick { display:flex; gap:8px; margin-top:6px; }
+.cf-opt { padding:4px 12px; border-radius:8px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); color:#eafff2; font-size:12px; }
+.cf-opt.on { border-color:var(--gold); background:rgba(212,175,55,.18); color:#ffe9a8; }
+.seat .avatar-frame.has-frame { box-shadow: 0 0 0 2px var(--gold), 0 0 10px rgba(212,175,55,.6); border-radius:50%; }
+.deal-ghost { position:absolute; width:26px; height:36px; border-radius:4px; background:linear-gradient(135deg,#b11,#700); box-shadow:0 2px 6px rgba(0,0,0,.5); z-index:13; pointer-events:none; }
+.quick-word-bubble { animation: bubblePop .2s ease; }
+@keyframes bubblePop { from { transform:translateX(-50%) scale(.6); opacity:0; } to { transform:translateX(-50%) scale(1); opacity:1; } }
+.pop-anim { display:inline-block; animation: popUp 1.6s ease forwards; font-size:22px; }
+@keyframes popUp { 0%{transform:translateY(8px) scale(.4);opacity:0} 20%{transform:translateY(-6px) scale(1.2);opacity:1} 80%{opacity:1} 100%{transform:translateY(-24px) scale(1);opacity:0} }

@@ -90,6 +90,9 @@
   let lastDealtHandNo = -1;  // 上次已播放发牌动画的手编号(用于逐张发牌)
   let oppModel = null;        // OpponentModel 实例(逐对手统计，供 Bot 剥削)
   const lastBotReason = {};   // 座位→最近一次 Bot 决策理由(复盘/策略助手用)
+  let turnTimerPct = 0;       // 当前行动者倒计时百分比(SeatView.timerRing 用)
+  let bestKeysBySeat = {};    // 座位→最佳五张 cardId(摊牌高亮用，E)
+  const pendingQuickWord = {}; // 座位→待显示快捷语气泡文字
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
   const prevLA = [];
@@ -251,6 +254,21 @@
       seatEl: (i) => seatEls[i],
       seatCardEls: (i) => { const c = seatEls[i] && seatEls[i].querySelector('.player-cards'); return c ? Array.from(c.children) : []; },
       boardCardEls: () => { const b = $('board'); return b ? Array.from(b.children) : []; },
+      deckAnchorEl: () => $('deck-anchor'),
+      // D：从牌堆锚点飞一张幽灵牌到目标卡位(真实 from/to 轨迹，落位后由 deal-in/flip 接手)
+      flyDealCard: (toEl, delayMs) => {
+        try {
+          const deck = $('deck-anchor'); if (!deck || !toEl || !fxLayer || typeof toEl.getBoundingClientRect !== 'function') return;
+          const a = deck.getBoundingClientRect(), b = toEl.getBoundingClientRect(), lr = fxLayer.getBoundingClientRect();
+          if (!b.width && !b.height) return; // 无布局(jsdom)时跳过视觉
+          const g = document.createElement('div'); g.className = 'deal-ghost';
+          g.style.left = (a.left - lr.left) + 'px'; g.style.top = (a.top - lr.top) + 'px';
+          fxLayer.appendChild(g);
+          const dx = b.left - a.left, dy = b.top - a.top;
+          requestAnimationFrame(() => { g.style.transition = 'transform .32s cubic-bezier(.2,.8,.3,1.05), opacity .32s'; g.style.transform = `translate(${dx}px,${dy}px) rotate(0deg)`; g.style.opacity = '0.2'; });
+          setTimeout(() => g.remove(), (delayMs || 0) + 380);
+        } catch (e) { /* ignore */ }
+      },
       potEl: () => $('pot-display'),
       winnerAnchorEl: (i) => { const n = node(i); return (n && n.chipToWinnerAnchor) || seatEls[i]; },
       fly: (from, to, opts) => { try { if (window.Fx && Fx.flyChip && from && to) Fx.flyChip(from, to, fxLayer, opts || { count: 1 }); } catch (e) { /* ignore */ } },
@@ -262,7 +280,10 @@
       allInFocus: () => { try { flashAllIn(); } catch (e) { /* ignore */ } },
       highlightBest: (list) => { try {
         const keys = new Set(); (list || []).forEach((h) => (h.cardKeys || []).forEach((k) => keys.add(k)));
+        // 公共牌：命中 best5 描金
         const b = $('board'); if (b) Array.from(b.querySelectorAll('[data-ck]')).forEach((el) => { const ck = el.getAttribute('data-ck'); el.classList.toggle('best5', keys.has(ck)); });
+        // 各赢家座位手牌：命中各自 best5 描金
+        (list || []).forEach((h) => { const seat = seatEls[h.seat]; if (!seat) return; const set = new Set(h.cardKeys || []); Array.from(seat.querySelectorAll('.player-cards [data-ck]')).forEach((el) => { const ck = el.getAttribute('data-ck'); el.classList.toggle('best5', set.has(ck)); }); });
         if ($('table-felt')) $('table-felt').classList.add('showdown-dim');
       } catch (e) { /* ignore */ } },
       clearHighlightBest: () => { try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); if ($('table-felt')) $('table-felt').classList.remove('showdown-dim'); } catch (e) { /* ignore */ } },
@@ -290,14 +311,16 @@
 
   // dealIdx>=0 时附加逐张发牌动画(按序错开 animation-delay)
   const dealAttr = (dealIdx) => (dealIdx >= 0 ? ` deal-in" style="animation-delay:${dealIdx * 110}ms` : '');
+  function cardFaceTheme() { try { const id = Store.get().activeCardFace || 'classic'; const t = window.Skins.cardFaces[id]; return t ? ' ' + t.cls : ' cf-classic'; } catch (e) { return ' cf-classic'; } }
   function cardFaceHTML(card, small, flip, dealIdx) {
     const red = P.isRed(card) ? ' red' : '';
     const fl = flip ? ' flip-in' : '';
     const dl = dealAttr(dealIdx == null ? -1 : dealIdx);
+    const cf = cardFaceTheme();
     const r = P.RANK_LABEL[card.rank], s = P.SUIT_SYMBOL[card.suit];
     const ck = ` data-ck="${card.rank}${card.suit}"`;
-    if (small) return `<div class="card small${red}${fl}${dl}"${ck}><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
-    return `<div class="card${red}${fl}${dl}"${ck}><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
+    if (small) return `<div class="card small${red}${fl}${cf}${dl}"${ck}><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
+    return `<div class="card${red}${fl}${cf}${dl}"${ck}><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
   }
   const cardBackHTML = (small, dealIdx) => `<div class="card back${small ? ' small' : ''}${dealAttr(dealIdx == null ? -1 : dealIdx)}"></div>`;
 
@@ -422,6 +445,19 @@
       if (result && result.showdown && result.handNames && revealed && !p.folded && result.handNames[p.id]) {
         hn.textContent = result.handNames[p.id]; hn.classList.remove('hidden');
       } else hn.classList.add('hidden');
+
+      // B：用 PlayerViewModel 驱动「此前空占位」节点(头像框/连胜/托管/弃罩/赢家光/最佳光/倒计时/盲注/庄D/下注堆/气泡)
+      try {
+        const vm = window.RHCore.PlayerViewModel.build(p, {
+          seatIndex: i, isDealer: i === game.button, isSmallBlind: i === game.sbIdx, isBigBlind: i === game.bbIdx,
+          isThinking: game.current === i && game.bettingOpen, timerPercent: turnTimerPct,
+          isWinner: !!(result && p.winThisHand > 0), winStreak: i === 0 ? (Store.get().winStreak || 0) : 0,
+          isTrustee: !!p.out, avatarFrameId: i === 0 ? Store.get().activeFrame : null,
+          bestCardIds: bestKeysBySeat[i] || [], quickWord: pendingQuickWord[i] || null,
+        });
+        window.RHCore.SeatView.update(el, vm);
+        pendingQuickWord[i] = null;
+      } catch (e) { /* ignore */ }
     }
     if (anyFreshDeal) lastDealtHandNo = game.handNo;
 
@@ -584,7 +620,7 @@
     if (!ck) return;
     if (Math.random() < 0.32) {
       const line = Social.pickChatter(ck);
-      if (line) Fx.speechBubble(seatEls[p.id], line, '', seatIsTop(p.id));
+      if (line) { pendingQuickWord[p.id] = line; if (seatEls[p.id]) window.RHCore.SeatView.showBubble(seatEls[p.id]._nodes.quickWordBubble, line); }
     }
   }
   // AI 思考时长：按决策难度变化（弃牌快、跟注中、加注/全下慢），更像真人
@@ -648,15 +684,22 @@
         else if (window.Voice && Math.random() < 0.7) Voice.play(seatVoice[p.id] || 0, 'win');
       }
     }
-    // 最佳五张高亮(取头号赢家的最佳五张里落在公共牌上的部分) + 收池(底池→赢家，经 GameFeel)
+    // E：每个赢家计算最佳五张 cardId（公共牌+手牌都要描金，多赢家平分各自高亮）
+    bestKeysBySeat = {};
+    if (result.showdown) {
+      winners.forEach((w) => {
+        try {
+          const wp = game.players[w.seat];
+          const best = window.RHCore.HandEvaluator.evaluateBest((wp.hole || []).concat(game.board));
+          bestKeysBySeat[w.seat] = (best.cards || []).map((c) => c.rank + c.suit);
+        } catch (e) { /* ignore */ }
+      });
+    }
+    // 最佳五张高亮(公共牌 + 各赢家手牌) + 收池(底池→赢家，经 GameFeel)
     if (GF) {
       try {
-        const top = winners.slice().sort((a, b) => b.amount - a.amount)[0];
-        if (result.showdown && top) {
-          const wp = game.players[top.seat];
-          const best = window.RHCore.HandEvaluator.evaluateBest((wp.hole || []).concat(game.board));
-          const keys = (best.cards || []).map((c) => c.rank + c.suit);
-          GF.emit('BEST_HAND_HIGHLIGHT', { highlight: [{ seat: top.seat, cardKeys: keys }] });
+        if (result.showdown && winners.length) {
+          GF.emit('BEST_HAND_HIGHLIGHT', { highlight: winners.map((w) => ({ seat: w.seat, cardKeys: bestKeysBySeat[w.seat] || [] })) });
         }
         const potBb = game.bigBlind ? (winners.reduce((s, w) => s + w.amount, 0) / game.bigBlind) : 0;
         GF.emit('POT_TO_WINNER', { winners, potBb });
@@ -836,6 +879,8 @@
 
   // 发牌相关事件统一出口：HAND_START → POST_BLINDS → DEAL_HOLE_CARD(逐张) → 英雄强起手提示
   function emitHandStart() {
+    bestKeysBySeat = {};
+    try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); const f = $('table-felt'); if (f) f.classList.remove('showdown-dim'); } catch (e) { /* ignore */ }
     if (!GF) { Sfx.deal(); return; }
     GF.emit('HAND_START', {});
     GF.emit('POST_BLINDS', { sb: game.sbIdx, bb: game.bbIdx });
@@ -946,16 +991,20 @@
   function hideHumanControls() { clearTurnTimer(); $('action-area').classList.add('hidden'); }
 
   /* ---------- 回合倒计时 ---------- */
-  let _turnTimer = null, _turnWarn = null;
+  let _turnTimer = null, _turnWarn = null, _turnPctTimer = null;
   const TURN_SECS = 25;
   function clearTurnTimer() {
     if (_turnTimer) { clearTimeout(_turnTimer); _turnTimer = null; }
     if (_turnWarn) { clearTimeout(_turnWarn); _turnWarn = null; }
+    if (_turnPctTimer) { clearInterval(_turnPctTimer); _turnPctTimer = null; } turnTimerPct = 0;
     const bar = $('turn-timer'); if (bar) bar.classList.add('hidden');
     const ring = seatEls[0] && seatEls[0].querySelector('.turn-ring'); if (ring) { ring.classList.add('hidden'); ring.style.animation = 'none'; }
   }
   function startTurnTimer(o) {
     clearTurnTimer();
+    // SeatView.timerRing 用：按秒递减百分比
+    turnTimerPct = 100;
+    _turnPctTimer = setInterval(() => { turnTimerPct = Math.max(0, turnTimerPct - 100 / TURN_SECS); }, 1000);
     let bar = $('turn-timer');
     if (!bar) { bar = document.createElement('div'); bar.id = 'turn-timer'; bar.innerHTML = '<i></i>'; const aa = $('action-area'); aa.insertBefore(bar, aa.firstChild); }
     bar.classList.remove('hidden');
@@ -1568,6 +1617,8 @@
         <div class="panel-list">
           <div class="panel-row"><div class="pr-ic">${muted ? '🔇' : '🔊'}</div><div><b>声音</b><div class="pr-text">音效与语音 ${muted ? '已关闭' : '已开启'}。</div></div><button class="pr-claim" data-toggle="sound">${muted ? '开启' : '关闭'}</button></div>
           <div class="panel-row"><div class="pr-ic">${coachOn ? '🎓' : '📝'}</div><div><b>训练提示</b><div class="pr-text">${coachOn ? '牌桌实时显示胜率/赔率/建议。' : '考试模式：隐藏所有提示。'}</div></div><button class="pr-claim" data-toggle="coach">${coachOn ? '关闭' : '开启'}</button></div>
+          <div class="panel-row"><div class="pr-ic">🃏</div><div><b>牌面主题</b><div class="pr-text">程序化牌面样式，切换后即时生效。</div>
+            <div class="cardface-pick">${Object.keys(window.Skins.cardFaces).map((id) => `<button class="cf-opt${Store.get().activeCardFace === id ? ' on' : ''}" data-cardface="${id}">${window.Skins.cardFaces[id].name}</button>`).join('')}</div></div></div>
           ${panelRow('🌐', '联机服务器', '真人对战默认连接本地 Tailscale 节点。', '当前')}
           ${panelRow('🔒', '隐私说明', '本地训练版不接相机、定位、IDFA、麦克风，不采集上报。', '合规')}
         </div>`;
@@ -2108,7 +2159,8 @@
       if (rpEnter) { replayState = { idx: parseInt(rpEnter.dataset.replay, 10), step: 0 }; $('panel-body').innerHTML = renderHandReplay(replayState.idx, 0); try { Sfx.button(); } catch (_) {} return; }
       if (rpStep && !rpStep.disabled) { const [i, s] = rpStep.dataset.replayStep.split(':').map((x) => parseInt(x, 10)); replayState = { idx: i, step: s }; $('panel-body').innerHTML = renderHandReplay(i, s); try { Sfx.button(); } catch (_) {} return; }
       if (rpExit) { replayState = null; $('panel-body').innerHTML = renderHandDetail(parseInt(rpExit.dataset.replayExit, 10)); try { Sfx.button(); } catch (_) {} return; }
-      const les = e.target.closest('[data-lesson]'), olz = e.target.closest('[data-open-lessons]');
+      const les = e.target.closest('[data-lesson]'), olz = e.target.closest('[data-open-lessons]'), cfBtn = e.target.closest('[data-cardface]');
+      if (cfBtn) { if (Store.setCardFace(cfBtn.dataset.cardface)) { try { Sfx.button(); } catch (_) {} if (game) render(); openPanel('settings'); } return; }
       if (olz) { openPanel('lessons'); return; }
       if (les) { closeModal(); openLesson(les.dataset.lesson); return; }
       const sc = e.target.closest('[data-claim-season]'), sca = e.target.closest('[data-claim-season-all]');

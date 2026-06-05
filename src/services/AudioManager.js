@@ -19,13 +19,17 @@
     PLAYER_CHECK: { sfx: 'check', cat: 'sfx_table' },
     PLAYER_CALL: { sfx: 'chip', cat: 'sfx_table' },
     PLAYER_BET: { sfx: 'bet', cat: 'sfx_table' },
-    PLAYER_RAISE: { sfx: 'bet', cat: 'sfx_table' },
+    PLAYER_RAISE: { sfx: 'raise', cat: 'sfx_table' },        // 与 bet 区分
     PLAYER_ALL_IN: { sfx: 'allin', cat: 'sfx_table' },
-    POT_TO_WINNER: { sfx: 'chip', cat: 'sfx_table' },
+    PLAYER_THINKING: { sfx: null, cat: 'sfx_table' },         // 静音(避免烦)
+    REVEAL_HAND: { sfx: 'flip', cat: 'sfx_table' },           // 亮牌翻面声
+    SHOWDOWN_START: { sfx: null, cat: 'sfx_table' },
+    POT_TO_WINNER: { sfx: 'potwin', cat: 'sfx_table' },       // 收池
     HERO_WIN_SMALL: { sfx: 'win', cat: 'sfx_result' },
-    HERO_WIN_BIG: { sfx: 'win', cat: 'sfx_result' },
+    HERO_WIN_BIG: { sfx: 'winbig', cat: 'sfx_result' },       // 大胜更亮
     HERO_LOSE: { sfx: 'lose', cat: 'sfx_result' },
-    HERO_BAD_BEAT: { sfx: 'lose', cat: 'sfx_result' },
+    HERO_BAD_BEAT: { sfx: 'badbeat', cat: 'sfx_result' },     // bad beat 专属
+    HERO_GOOD_FOLD: { sfx: 'check', cat: 'sfx_result' },
     ACHIEVEMENT_UNLOCKED: { sfx: 'reward', cat: 'sfx_result' },
     MASTER_LEVEL_PROGRESS: { sfx: 'reward', cat: 'sfx_result' },
     GIFT: { sfx: 'gift', cat: 'sfx_table' },

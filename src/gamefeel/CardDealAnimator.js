@@ -12,18 +12,27 @@
       if (!els || !els.length) return;
       els.forEach((el, i) => { if (!el || !el.classList) return; el.classList.remove(cls); void (el.offsetWidth || 0); el.style.animationDelay = (i * (step || 90)) + 'ms'; el.classList.add(cls); });
     }
-    // 底牌逐张飞入（每个座位 2 张，跨座位再错开）
+    // 底牌逐张：从牌堆锚点飞向每个座位的卡位(60-120ms 间隔)，落位后 deal-in 接手
     function dealHole(seatIndices) {
       if (!stage.seatCardEls) return;
-      (seatIndices || []).forEach((si, k) => { const els = stage.seatCardEls(si) || []; els.forEach((el, j) => { if (el && el.classList) { el.style.animationDelay = (k * 60 + j * 110) + 'ms'; el.classList.add('deal-in'); } }); });
+      let order = 0;
+      (seatIndices || []).forEach((si) => {
+        const els = stage.seatCardEls(si) || [];
+        els.forEach((el) => {
+          if (!el || !el.classList) return;
+          const delay = order * 90; order++;
+          el.style.animationDelay = delay + 'ms'; el.classList.add('deal-in');
+          if (stage.flyDealCard) stage.flyDealCard(el, delay);   // 真实牌堆→卡位飞行
+        });
+      });
     }
-    // 公共牌翻开：flop 三张依次、turn/river 单张
+    // 公共牌：从牌堆锚点飞到公共牌位再翻开；flop 三张依次、turn/river 单张
     function revealBoard(street) {
       if (!stage.boardCardEls) return;
       const els = stage.boardCardEls() || [];
-      if (street === 'flop') stagger(els.slice(0, 3), 'flip-in', 140);
-      else if (street === 'turn') stagger(els.slice(3, 4), 'flip-in', 0);
-      else if (street === 'river') stagger(els.slice(4, 5), 'flip-in', 0);
+      const range = street === 'flop' ? els.slice(0, 3) : street === 'turn' ? els.slice(3, 4) : els.slice(4, 5);
+      stagger(range, 'flip-in', street === 'flop' ? 140 : 0);
+      if (stage.flyDealCard) range.forEach((el, i) => stage.flyDealCard(el, i * 140));
     }
     return { dealHole, revealBoard, stagger };
   }

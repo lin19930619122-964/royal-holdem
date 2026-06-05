@@ -54,8 +54,18 @@
     check() { tone(170, 0.06, 'sine', 0.22); tone(150, 0.06, 'sine', 0.18, 0.12); },
     // 弃牌：卡牌甩出去的"唰"
     fold() { noise(0.18, 0.14, 0, { type: 'lowpass', from: 6000, to: 800, q: 0.7 }); },
-    // 全下：码堆 + 上扬强调
-    allin() { this.bet(); tone(523, 0.14, 'triangle', 0.16, 0.1, 880); },
+    // 加注：比下注更重更利，码堆 + 短促上扬叮（与 bet 明显区分）
+    raise() { tone(120, 0.10, 'sine', 0.22); clink(0.02, 1.1); clink(0.07, 1.15); clink(0.12, 1.2); tone(660, 0.10, 'triangle', 0.12, 0.06, 990); },
+    // 全下：码堆 + 强上扬强调（最重）
+    allin() { tone(110, 0.12, 'sine', 0.26); clink(0.02, 1.2); clink(0.07, 1.25); clink(0.13, 1.3); tone(523, 0.18, 'triangle', 0.2, 0.1, 1047); noise(0.2, 0.1, 0.1, { type: 'lowpass', from: 1400, to: 200 }); },
+    // 翻牌/亮牌：轻脆翻面声（与 deal 区分）
+    flip() { tone(900, 0.03, 'square', 0.06); noise(0.05, 0.07, 0.005, { type: 'highpass', from: 4000 }); tone(1300, 0.03, 'triangle', 0.05, 0.02); },
+    // 收池：筹码快速归集（连串叮当扫过）
+    potwin() { for (let i = 0; i < 6; i++) clink(i * 0.04, 1 + i * 0.06); tone(523, 0.18, 'sine', 0.12, 0.1, 784); },
+    // bad beat：下行不和谐 + 低沉一击
+    badbeat() { tone(392, 0.22, 'sawtooth', 0.14); tone(370, 0.26, 'sawtooth', 0.12, 0.1); tone(98, 0.4, 'sine', 0.2, 0.18); },
+    // 英雄大胜：比 win 更长更亮的号角
+    winbig() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.4, 'triangle', 0.22, i * 0.1)); for (let i = 0; i < 8; i++) clink(0.4 + i * 0.05, 1 + i * 0.06); tone(1568, 0.5, 'sine', 0.16, 0.5); },
     win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.32, 'triangle', 0.2, i * 0.09)); for (let i = 0; i < 5; i++) clink(0.3 + i * 0.06, 1 + i * 0.05); },
     lose() { tone(330, 0.3, 'sine', 0.14); tone(247, 0.4, 'sine', 0.12, 0.12); },
     reward() { [659, 880, 1175].forEach((f, i) => tone(f, 0.26, 'sine', 0.2, i * 0.07)); clink(0, 1.2); clink(0.1, 1.1); },
