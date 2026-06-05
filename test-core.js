@@ -114,6 +114,41 @@ function autoPlay(seed, numPlayers) {
   ok(s.players.reduce((a, x) => a + x.stack, 0) === 2000, '全下后筹码守恒');
 })();
 
+// 8b) 边池边界：弃牌的贡献者不享其无资格的边池
+(() => {
+  // a 弃牌投入100(死钱)、b 跟到100、c 全下250
+  const pots = SidePot.compute([
+    { seat: 0, totalBet: 100, folded: true },
+    { seat: 1, totalBet: 100, folded: false },
+    { seat: 2, totalBet: 250, folded: false },
+  ]);
+  ok(pots.length === 2 && pots[0].amount === 300 && pots[1].amount === 150, '主池300(含弃牌死钱) + 边池150');
+  ok(!pots[0].eligible.includes(0) && !pots[1].eligible.includes(0), '弃牌者(seat0)不在任何池的可领名单');
+  ok(pots[1].eligible.length === 1 && pots[1].eligible[0] === 2, '边池仅 seat2 可领');
+  // b 最强 → 拿主池300；c 拿边池150；a 颗粒无收
+  const d = SidePot.distribute(pots, (s) => (s === 1 ? [8, 14] : [0, 7]), [0, 1, 2]);
+  ok(d.winnings[1] === 300 && d.winnings[2] === 150 && !d.winnings[0], '弃牌者不分钱，主池给最强、边池退唯一资格者');
+})();
+
+// 8c) 三人不同额 all-in 主+边池(经 reducer 整局)
+(() => {
+  let s = TableState.create({ numPlayers: 3, smallBlind: 50, bigBlind: 100, startingStack: 0, seed: 17 });
+  // 手动设不同有效筹码：seat0=600, seat1=1500, seat2=4000
+  s.players[0].stack = 600; s.players[1].stack = 1500; s.players[2].stack = 4000;
+  s = reducer(s, { type: 'START_NEXT_HAND' });
+  s = reducer(s, { type: 'DEAL_HOLE_CARDS' });
+  const init = 600 + 1500 + 4000;
+  let guard = 0;
+  while (!s.handOver && guard++ < 200) {
+    if (s.current >= 0) { const p = s.players[s.current]; s = reducer(s, { type: 'PLAYER_ACTION', playerId: p.id, action: 'allin' }); }
+    else if (s.awaitingDeal) s = reducer(s, { type: s.awaitingDeal });
+    else break;
+  }
+  const end = s.players.reduce((a, p) => a + p.stack, 0);
+  ok(s.handOver && init === end, `三人不同额 all-in 筹码守恒 (${init}->${end})`);
+  ok(s.board.length === 5, '三人全下自动跑满5张');
+})();
+
 // 9) 最小加注/短码全下：短码全下不重开已行动者的加注权
 (() => {
   // 构造：3 人，seat 给一个很短的栈，制造低于最小加注的全下
