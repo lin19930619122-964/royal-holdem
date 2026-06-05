@@ -214,5 +214,23 @@
       default: return state;
     }
   }
-  return { reducer };
+
+  // 应用一次待发牌步骤（由 awaitingDeal 指示）。仅在无玩家需行动(current<0)时推进，绝不替玩家行动。
+  function step(state) {
+    if (!state.awaitingDeal || state.handOver) return state;
+    if (state.current >= 0) return state; // 仍需玩家行动，不推进
+    return reducer(state, { type: state.awaitingDeal });
+  }
+  // 全下/无人可行动时把后续街面与摊牌一次跑完（纯核心，不依赖 UI 定时器）。
+  // 返回 handOver 的终局状态；遇到需玩家行动则停下原样返回。
+  function runOut(state) {
+    let s = state, guard = 0;
+    while (s.awaitingDeal && s.current < 0 && !s.handOver && guard++ < 32) {
+      const next = step(s);
+      if (next === s) break; // 无推进，避免死循环
+      s = next;
+    }
+    return s;
+  }
+  return { reducer, step, runOut };
 });

@@ -1,59 +1,99 @@
-# 00 失败成品审计（V4 返工 · Phase 0）
+# 00 · 失败成品审计（当前项目源码事实）
 
-> 只审计，不改功能代码。诚实评估：不把已做对的说成失败，也不把未达 V4 规格的说成完成。
-> 审计日期 2026-06-05｜技术栈：**纯前端 PWA（无构建，浏览器直接加载 JS）+ Node 服务端**，非 Cocos/TS。
-> V4 规格以 Cocos/TS 描述；本项目按等价分层落地，文件后缀为 `.js`（同结构、可平移 `.ts`）。
+> 方法：全部基于 `src/` 源码实读 + `npm test` 实跑，不靠猜。统计时间点：v45 / SW `royal-holdem-v45`。
+> 总规模：`src/` 下 JS+HTML+CSS 共 **7456 行**（`find … | wc -l`）。
+> （本文件替换了旧版 V4 Phase 0 审计，按新规更具体到文件级。）
 
-## 1. 入口与运行
-- App 入口：`src/index.html`（顺序加载 ~30 个 `<script>`）→ `src/ui.js` 末尾 IIFE 启动。
-- 本地服务：`server.js`（静态 + WebSocket 多人）；构建：GitHub Actions → 未签名 IPA → TrollStore。
-- 当前**可运行**：`npm test` 六套件全绿（引擎15 / 规则核心57 / 控制器37 / 适配器69 / UI87 / 联机35 = 300 断言）。
+## 1. 当前项目入口在哪里？
 
-## 2. 各职责落在哪些文件（事实）
-| 职责 | 文件 | 现状诚实评级 |
+- 静态入口：`src/index.html`（309 行）。按固定顺序 `<script>` 加载全部模块，最后加载 `src/ui.js`。
+- 运行入口：`src/ui.js` 的 IIFE，`init()` → `registerScenes()` → `SceneRouter.go('launch')`。
+- 服务端：`server.js`（本地 8099 静态服务，仅托管 PWA + IPA 下载），非游戏逻辑。
+- 打包：GitHub Actions `ios-ipa.yml` 把 `src/` 包成无签名 IPA。
+
+## 2. 当前有几个场景？
+
+`SceneRouter.register(...)` 共 **10 个**逻辑场景（实读 `ui.js`）：
+`launch, login, hall, select, table, tutorial, replay, strategyLab, handDex, lessons`
+
+⚠️ 关键事实：这 10 个"场景"**不是独立场景树**，而是同一个 `index.html` 内的 DOM `screen-*` 区块 + `modal-panel` 弹层切换。除 `launch/hall/select/table` 外多为「面板」而非场景。参考 IPA 是 4 个真正的 `.fire` 场景（gameLogin/gameHall/gameTable/gameTableNovice），层级差异见 02/03。
+
+## 3. 当前大厅代码在哪些文件？
+
+- `src/ui.js`：大厅与所有面板（`renderPanelHTML`、`openPanel`、`PANEL_TITLES` ~30 个面板 key）全部塞在这 2176 行文件里。
+- `src/store.js`（541）：大厅背后的本地经济/成长/任务/赛季/成就数据。
+- `src/skins.js`（162）：皮肤数据（13 牌背 / 9 桌布 + 头像框/称号/座驾/手表/场景）。
+- `src/social.js`（41）：快捷语/表情/礼物数据。
+- **结论**：大厅无独立模块文件，全部寄生在 `ui.js`。
+
+## 4. 当前牌桌代码在哪些文件？
+
+- `src/ui.js`：牌桌渲染（`buildSeats`、`render`、`tick`、`humanAct`、座位/底池/筹码/动作面板）全部在此。
+- `src/game/table/GameAdapter.js`（115）：reducer 包装成旧接口，**实盘牌桌实际驱动者**（`startTable` 调它，第 1775 行）。
+- `src/game/table/TableController.js`（76）：早期控制器，实盘未走它。
+- `src/game.js`（425）：旧可变引擎，**已被 Adapter 取代，但仍在 `index.html`(279) 与 `sw.js`(6) 里加载 = 死代码**。
+- `src/poker.js`（120）：牌型/花色工具，UI 仍用。
+
+## 5. 当前规则逻辑在哪些文件？
+
+`src/core/poker/`（reducer 权威核心，纯函数）：
+`GameReducer.js`(218)、`TableState.js`(49)、`LegalActions.js`(42)、`HandEvaluator.js`(61)、`HandComparator.js`(25)、`SidePot.js`(57)、`Deck.js`(17)、`Card.js`(25)、`SeededRng.js`(38)、`HandHistory.js`(17)、`types.js`(33)、`selectors.js`(61)、`Equity.js`(39)。
+旧规则散落 `src/game.js` + `src/poker.js`（死/半死）。
+
+## 6. 当前 Bot/AI 逻辑在哪些文件？
+
+- `src/core/ai/PokerBrain.js`（292）：V4 脑，169 手矩阵 + 7 画像 + 牌面/听牌/赔率/MC 胜率 + 结构化决策。
+- `src/core/ai/BotDecisionEngine.js`（90）：Adapter 状态 → DecisionContext → PokerBrain → 旧 `{action,amount}`。
+- `src/ai.js`（249）：旧 persona/读牌（仅留风格文案 `pl.ai = AI.makePersona`，决策已由 PokerBrain 接管）。
+
+## 7. 当前动画逻辑在哪些文件？
+
+- `src/fx.js`（211）：`flyChip/rewardPop/speechBubble/flyGift/streakFlame/topBanner/vibrate` 等程序化特效。
+- `src/ui.js`：`rollPot`(底池滚动)、`flashAllIn`(全下闪/压暗)、`deal-in`(逐张发牌)、`renderSidePots` 等内联动画。
+- `src/styles.css`（914）：所有 keyframes（`flipIn/dealFly/allinFreeze/feltFlash` 等）。
+- `src/services/GameFeelDirector.js`（51）：事件总线 + 音频路由。⚠️ **`onVisual` 视觉执行器：ui.js 注册 0 个**（实测无命中）→ 视觉仍散在 ui.js，未中央化。
+
+## 8. 当前音频逻辑在哪些文件？
+
+- `src/sound.js`（83）：**纯 WebAudio 合成**（`deal/chip/bet/check/fold/allin/win/lose/reward/button` 约 10 个振荡器音），**无任何录制音频文件**。
+- `src/services/AudioManager.js`（73）：21 个事件→sfx 映射 + 分类门控 + 语音默认关。
+- `src/music.js`（65）：背景音乐（合成）。
+- `src/voice.js`（18）：语音壳（默认关，无语音包——用户铁律）。
+
+## 9. 当前本地数据保存在哪些文件？
+
+- `src/store.js`：唯一持久化层，`localStorage` 存一个 profile 对象（金币/钻石/等级/赛季/成就/任务/手牌日志 handLog/统计 st_*/皮肤拥有等，DEFAULT 约 50+ key）。
+- `src/codec.js`（52）：兑换码编解码。
+- 无服务器存档（`online.js`/`mp.js` 仅对战，不存成长）。
+
+## 10. 哪些文件可以保留？
+
+| 文件 | 判定 | 理由 |
 |---|---|---|
-| 牌桌 UI | `src/ui.js`(1968 行单体：buildSeats/render/tick/decorateResult/enableHumanControls/startTable/SNG) + `src/styles.css` | 🟡 功能全但**单体**，非分层组件 |
-| 规则核心 | `src/core/poker/`(11 模块 reducer)；`src/game/table/GameAdapter.js`(桥) | ✅ **已对**，权威、可复现、57 测试 |
-| 规则(旧) | `src/game.js`(425 行可变式) | ⬜ app 内死代码（仅 test-engine 仍测），待删 |
-| 牌型评估(旧) | `src/poker.js` | 🟡 仍被 `ai.js` 依赖；核心已有等价 `HandEvaluator` |
-| AI Bot | `src/ai.js`(249 行：MC 胜率+赔率+位置+性格+对手建模) | 🟡 **不是随机**，但不符 V4(无169矩阵/无VPIP-PFR体系/无结构化输出) |
-| AI(V4 蓝本) | 外部 `holdem_ai_brain_v4.ts`(未集成) | ⬜ 待移植为 JS 接入 |
-| 动画 | `src/fx.js`(flyChip/coinBurst/handCelebration/streakFlame/speechBubble/flyGift/topBanner/rewardPop) + CSS keyframes | 🟡 动画**存在**但散落、由 `ui.js` 内联触发，无中央调度 |
-| 音频 | `src/sound.js`(WebAudio合成) / `src/music.js`(bgm) / `src/voice.js`(180 条方言 mp3) | 🟡 **非事件总线**，内联调用；语音包应默认关 |
-| 大厅/成长 | `src/ui.js`(openPanel 32 面板) + `src/store.js`(499 行持久化) + `src/skins.js` | 🟡 内容丰富但塞在单体 ui.js |
-| 历史/复盘 | `src/store.js`(handLog) + `ui.js`(renderHandLogList/renderHandDetail) | ✅ 有复盘+错误分析+建议对比 |
-| 社交/联机 | `src/social.js` / `src/online.js` / `mp.js` / `mpstore.js` | ✅ 多房间/旁观/聊天/好友俱乐部 |
-| 路由 | `src/router.js`(SceneRouter 7 场景) | ✅ 统一路由已存在 |
-| 节奏/爽感总控 | —— | ⬜ **无 GameFeelDirector**（V4 一票否决项之一的源头） |
-| 事件总线 | —— | ⬜ **无 EventBus/AudioManager 事件驱动** |
-| 分层座位组件 | —— | ⬜ **无 SeatView/CardView/PotView 独立组件**（座位在 ui.js 内 buildSeats 直接拼 DOM） |
+| `core/poker/*`（13 文件） | **保留** | reducer 纯函数 + 测试覆盖，规则可信（见 04） |
+| `core/ai/PokerBrain.js` + `BotDecisionEngine.js` | **保留** | 结构化决策 + 7 画像（见 05） |
+| `core/Lessons.js` | 保留 | 教学数据，已解耦 |
+| `store.js` | 保留（需扩展） | 本地数据层可用 |
+| `fx.js` / `sound.js` / `music.js` | 保留（需扩展） | 程序化，无版权风险 |
+| `services/EventBus/AudioManager/GameFeelDirector` | 保留（需接线） | 骨架对，缺真正接入（见 06） |
+| 8 个 `test-*.js` | 保留 | 验收闸门 |
 
-## 3. 必须保留 / 必须重写 / 完全缺失（摘要，详见 04/05）
-- **保留**：`src/core/poker/*`（规则核心，V4 §5 已满足）、`GameAdapter`、`store.js`、`router.js`、`social/online/mp*`、测试套件、复盘逻辑。
-- **重写/重构**：`src/ai.js`→按 `holdem_ai_brain_v4.ts` 重做（169 矩阵 + 7 archetype + 结构化决策）；`src/ui.js` 牌桌部分→拆为分层 `SeatView/CardView/PotView/ActionPanel/...`；音频→事件驱动 `AudioManager`；动画触发→`GameFeelDirector` 统一调度。
-- **完全缺失（标 P0/P1）**：`GameFeelDirector`、`EventBus`、`AudioManager`(事件版)、`BotProfile/PreflopMatrix/BoardTexture/BotDecisionEngine` 结构化模块、分层 TableScene 组件树。
-- **删除**：`src/game.js`（迁移完成后）。
+## 11. 哪些文件必须重写？
 
-## 4. 与 V4「一票否决项」逐条对照（诚实）
-| 否决项 | 当前是否触发 | 说明 |
+| 文件 | 判定 | 理由 |
 |---|---|---|
-| Bot 随机行动 | ❌ 未触发 | ai.js 是 MC 胜率+位置+赔率，非随机；但结构不达 V4 |
-| 没有边池 | ❌ 未触发 | `SidePot.js` 已实现并测试 |
-| 没有合法行动校验 | ❌ 未触发 | `LegalActions.js` + reducer 校验 |
-| 没有 9 人座位组件 | ⚠️ 部分 | 有 9 人布局，但**非独立 SeatView 组件** |
-| 没有筹码飞行动画 | ❌ 未触发 | `Fx.flyChip` 有 |
-| 没有赢池反馈 | ❌ 未触发 | 飞币/数字/高亮有 |
-| 没有复盘 | ❌ 未触发 | 有 |
-| 没有训练建议 | ❌ 未触发 | 实时胜率/赔率/范围/建议有 |
-| 大厅只有按钮列表 | ❌ 未触发 | 卡片式大厅 |
-| 语音随机乱叫 | ⚠️ 注意 | 语音非随机，但默认开+依赖 mp3 包，应改默认关 |
-| 牌桌像网页表格 | ❌ 未触发 | 木纹金边椭圆桌、归一化座位 |
+| `ui.js`（2176 行） | **必须拆分重构** | 大厅+牌桌+面板+动画+事件全塞一文件，结构性病灶 |
+| `game.js`（425 行） | **删除** | 已被 Adapter 取代仍在加载 = 死代码 |
+| `ai.js`（249 行） | 收缩/合并 | 决策已交 PokerBrain，仅留风格文案，应并入画像数据 |
+| `TableController.js` | 评估删除 | 实盘未走 |
+| `styles.css`（914 行） | 拆分 | 与 ui.js 同样过载 |
 
-## 5. 诚实结论
-当前**不是「随机 Demo 失败品」**：规则核心、边池、合法校验、复盘、联机均已达标，AI 是真实 equity-AI。
-但相对 **V4 架构与爽感规格**，存在三块**真实结构性缺口**，需返工：
-1. **AI 结构化不足**：无 169 手矩阵 / 无 VPIP-PFR 七画像 / 无结构化决策理由 → 按 `holdem_ai_brain_v4.ts` 重写（V4 Phase 2）。
-2. **无 GameFeelDirector / 事件总线**：动画与音频散落内联触发，缺「事件→反馈→奖励」统一闭环 → 新建（V4 Phase 4）。
-3. **`ui.js` 单体、牌桌非分层组件**：违反「不堆单文件」「分层」 → 拆分（V4 Phase 3）。
+## 12. 哪些模块完全缺失？
 
-V4 Phase 1（规则核心+测试）**实质已满足**；返工重心是 **Phase 2(AI) → Phase 3(分层牌桌) → Phase 4(GameFeel)**。
+对照成熟产品（02/03/06/07/08），**当前完全没有或仅占位**：
+- ❌ 真正的分层 TableScene（14 层）与富 SeatView（22 子节点）——当前 SeatView 仅 7 子节点（见 03，**P0**）。
+- ❌ GameFeelDirector 视觉执行器接线（0 个 onVisual）+ 约 14 个已定义事件从未 emit（见 06，**P0**）。
+- ❌ 录制级音频体系（参考 187 clip，我方 ~10 合成音）——但语音包/版权音频按铁律**不做**，只扩展合成音（见 08）。
+- ❌ 牌桌内社交完整体（旁观/换桌/桌内奖池/礼物动画层）——部分在联机端，单机牌桌缺。
+- ❌ 成长系统视觉厚度（参考赛季 101 prefab vs 我方文字面板）——见 07。
+- ⚠️ 发牌"飞向座位"是 CSS 滑入近似，非真正从牌堆原点逐张飞行。
