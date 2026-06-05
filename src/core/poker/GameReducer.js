@@ -38,7 +38,7 @@
     return act.every((p) => p.hasActed && p.bet === s.currentBet);
   }
   function openBetting(s, firstSeat) {
-    s.players.forEach((p) => { if (!p.folded && !p.allIn) p.hasActed = false; });
+    s.players.forEach((p) => { if (!p.folded && !p.allIn) { p.hasActed = false; p.cappedToCall = false; } });
     s.current = nextToAct(s, firstSeat);
   }
   // 计算下一步待发(供控制器自动跑牌)
@@ -160,15 +160,14 @@
     else if (act === 'check') { p.lastAction = '过牌'; }
     else if (act === 'call') { commit(p, s.currentBet - p.bet); p.lastAction = p.allIn ? '全下' : '跟注'; }
     else if (act === 'bet' || act === 'raise') {
-      const target = action.amount | 0;
-      const inc = target - s.currentBet;
-      commit(p, target - p.bet);
-      if (p.bet > s.currentBet) { if (inc >= s.lastRaiseSize) s.lastRaiseSize = inc; s.currentBet = p.bet; reopen(s, seat); }
+      const before = s.currentBet;
+      commit(p, (action.amount | 0) - p.bet);
+      if (p.bet > before) raiseTo(s, seat, p.bet - before); // 受 isLegal 约束，恒为合法整额加注
       p.lastAction = p.allIn ? '全下' : (act === 'bet' ? '下注' : '加注');
     } else if (act === 'allin') {
       const before = s.currentBet;
       commit(p, p.stack); // 全下
-      if (p.bet > before) { const inc = p.bet - before; if (inc >= s.lastRaiseSize) s.lastRaiseSize = inc; s.currentBet = p.bet; reopen(s, seat); }
+      if (p.bet > before) raiseTo(s, seat, p.bet - before);
       p.lastAction = '全下';
     }
     p.hasActed = true;
@@ -179,8 +178,19 @@
     else { s.current = nextToAct(s, seat); computeAwaiting(s); }
     return s;
   }
-  // 加注/全下重新打开行动：其他未弃未全下者需重新行动
-  function reopen(s, raiserSeat) { s.players.forEach((p, i) => { if (i !== raiserSeat && !p.folded && !p.allIn) p.hasActed = false; }); }
+  // 处理一次提高 currentBet 的下注：inc=本次提高的增量
+  // 整额加注(inc>=lastRaiseSize)：重新打开行动，所有人可再加注；
+  // 短码全下(inc<lastRaiseSize)：仅未行动者可再加注，已行动者只能跟/弃(cappedToCall)。
+  function raiseTo(s, raiserSeat, inc) {
+    const fullRaise = inc >= s.lastRaiseSize;
+    if (fullRaise) s.lastRaiseSize = inc;
+    s.currentBet = s.players[raiserSeat].bet;
+    s.players.forEach((p, i) => {
+      if (i === raiserSeat || p.folded || p.allIn) return;
+      if (fullRaise) { p.hasActed = false; p.cappedToCall = false; }
+      else { if (p.hasActed) p.cappedToCall = true; else p.hasActed = false; } // 已行动者被限定为只能跟注
+    });
+  }
 
   function showdown(s) {
     // 全下自动跑牌：补满公共牌再评定

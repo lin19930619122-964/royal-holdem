@@ -18,11 +18,14 @@
     const isBet = state.currentBet === 0;
     const maxRaiseTo = p.bet + p.stack; // 全下到的总额
     const minRaiseTo = isBet ? Math.max(state.config.bigBlind, state.minRaise) : state.currentBet + Math.max(state.lastRaiseSize, state.config.bigBlind);
-    const canRaise = (p.stack > toCall) && (maxRaiseTo >= Math.min(minRaiseTo, maxRaiseTo)) && (maxRaiseTo > state.currentBet);
+    // 短码全下后被限定为只能跟/弃的玩家：不可加注
+    const capped = !!p.cappedToCall;
+    const canRaise = !capped && (p.stack > toCall) && (maxRaiseTo >= Math.min(minRaiseTo, maxRaiseTo)) && (maxRaiseTo > state.currentBet);
     const actions = ['fold'];
     if (canCheck) actions.push('check'); else if (canCall) actions.push('call');
     if (canRaise) actions.push(isBet ? 'bet' : 'raise');
-    if (p.stack > 0) actions.push('allin');
+    // 全下：未受限可全下；受限者仅当全下不超过待跟额(等同跟注)时允许
+    if (p.stack > 0 && (!capped || p.stack <= toCall)) actions.push('allin');
     return {
       actions, canCheck, canCall, callAmount, canRaise, isBet,
       minRaiseTo: Math.min(minRaiseTo, maxRaiseTo), maxRaiseTo, toCall,

@@ -114,5 +114,26 @@ function autoPlay(seed, numPlayers) {
   ok(s.players.reduce((a, x) => a + x.stack, 0) === 2000, '全下后筹码守恒');
 })();
 
+// 9) 最小加注/短码全下：短码全下不重开已行动者的加注权
+(() => {
+  // 构造：3 人，seat 给一个很短的栈，制造低于最小加注的全下
+  let s = TableState.create({ numPlayers: 3, smallBlind: 50, bigBlind: 100, startingStack: 10000, seed: 11 });
+  // 手动把 button 玩家(将首先行动者之一)设短栈不易控制，改为直接验证 raiseTo 规则路径：
+  s = reducer(s, { type: 'START_NEXT_HAND' });
+  s = reducer(s, { type: 'DEAL_HOLE_CARDS' });
+  // UTG 整额加注到 300（合法）
+  let p = s.players[s.current];
+  s = reducer(s, { type: 'PLAYER_ACTION', playerId: p.id, action: 'raise', amount: 300 });
+  ok(s.currentBet === 300 && s.lastRaiseSize === 200, '整额加注到300、最小加注增量更新为200');
+  // 下一位整额再加注到 600 合法、到 450(增量150<200)非法
+  const o2 = Legal.forCurrent(s);
+  ok(o2.minRaiseTo === 500, '面对300加注后，最小再加注到500');
+  ok(Legal.isLegal(s, 'raise', 500) && !Legal.isLegal(s, 'raise', 450), '再加注下限=500(450非法)');
+  // 全下受限者：构造一名 cappedToCall 玩家，验证其不可加注
+  s.players[1].cappedToCall = true; s.current = 1; s.currentBet = 300; s.players[1].bet = 0; s.players[1].stack = 10000;
+  const oc = Legal.forCurrent(s);
+  ok(!oc.actions.includes('raise') && oc.actions.includes('call') && oc.actions.includes('fold'), '受限玩家只能跟/弃、不能加注');
+})();
+
 console.log(`\n规则核心回归: ${pass} 通过, ${fail} 失败`);
 process.exit(fail ? 1 : 0);

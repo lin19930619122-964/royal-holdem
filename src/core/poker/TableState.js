@@ -6,7 +6,7 @@
   if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).TableState = m;
 })(this, function (SeededRng) {
   function makePlayer(seat, stack) {
-    return { id: 'p' + seat, seat, stack, bet: 0, totalBet: 0, folded: false, allIn: false, sittingOut: false, hole: [], hasActed: false, lastAction: '', winThisHand: 0, isHuman: false };
+    return { id: 'p' + seat, seat, stack, bet: 0, totalBet: 0, folded: false, allIn: false, sittingOut: false, hole: [], hasActed: false, cappedToCall: false, lastAction: '', winThisHand: 0, isHuman: false };
   }
   function create(config) {
     const cfg = Object.assign({ numPlayers: 6, smallBlind: 50, bigBlind: 100, ante: 0, startingStack: 10000, seed: 1 }, config || {});
