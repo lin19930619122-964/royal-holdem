@@ -339,6 +339,14 @@ html, body {
 /* 精确加注输入 + 详情按钮 */
 #raise-input { width:72px; padding:3px 6px; border-radius:7px; border:1px solid rgba(245,207,107,.4); background:rgba(0,0,0,.35); color:#fff; font-size:13px; text-align:center; margin-left:6px; }
 .hh-detail { margin-left:8px; border:1px solid var(--gold); background:rgba(245,207,107,.15); color:var(--gold); border-radius:8px; padding:0 8px; font-size:11px; font-weight:900; }
+/* 座位下注筹码堆 */
+.bet-tag .chip-stack { display:inline-flex; align-items:center; margin-right:3px; vertical-align:middle; }
+.bet-tag .chip-stack .chip-dot { margin-left:-4px; box-shadow:0 1px 2px rgba(0,0,0,.5); }
+.bet-tag .chip-stack .chip-dot:first-child { margin-left:0; }
+/* 主池/边池 */
+#sidepots { position:absolute; left:50%; top:54%; transform:translateX(-50%); z-index:6; display:flex; gap:8px; pointer-events:none; }
+#sidepots.hidden { display:none; }
+#sidepots .sp { font-size:11px; font-weight:800; color:#ffe9a8; background:rgba(0,0,0,.5); border:1px solid rgba(245,207,107,.3); border-radius:999px; padding:2px 9px; }
 /* 最优5张高亮 */
 .card.hl5 { box-shadow:0 0 0 2px var(--gold), 0 0 12px rgba(245,207,107,.9); z-index:5; animation:hl5pulse 1.1s ease-in-out infinite alternate; }
 @keyframes hl5pulse { from{box-shadow:0 0 0 2px var(--gold),0 0 8px rgba(245,207,107,.6)} to{box-shadow:0 0 0 2px var(--gold-lt),0 0 16px rgba(245,207,107,1)} }
