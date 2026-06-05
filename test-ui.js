@@ -117,6 +117,15 @@ const heroCards = window.document.querySelector('#seats .seat.me .player-cards')
 ok(heroCards && heroCards.children.length === 2, '适配器发牌后英雄渲染2张手牌');
 const seatsAll = window.document.querySelectorAll('#seats .seat');
 ok(seatsAll.length === 6, '6人桌座位渲染');
+// Phase 7 逐张发牌动画：新发的牌带 deal-in 类且错开 animation-delay
+ok([...heroCards.children].some((c) => c.classList.contains('deal-in')), '英雄手牌带逐张发牌动画(deal-in)');
+ok(heroCards.children[1] && /animation-delay/.test(heroCards.children[1].getAttribute('style') || ''), '第二张牌有错开延时');
+// Phase 7 动画样式交付校验：deal-in 飞入 + all-in 压暗定格 keyframes/规则就位
+(function () {
+  const css = fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8');
+  ok(/\.card\.deal-in/.test(css) && /@keyframes dealFly/.test(css), 'CSS: 逐张发牌 deal-in/dealFly 已定义');
+  ok(/#table-felt\.allin-freeze/.test(css) && /@keyframes allinFreeze/.test(css), 'CSS: 全下压暗定格 allin-freeze/allinFreeze 已定义');
+})();
 // SceneRouter：统一路由
 ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
 ['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));

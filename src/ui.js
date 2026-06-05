@@ -87,6 +87,7 @@
   let handDecisions = [];   // 本手牌内你的每个决策(用于复盘/错误分析)
   let sessionHands = 0;     // 本次进桌已打手数(每10手弹 Session 小结)
   let replayState = null;    // 逐步回放游标 {idx, step}
+  let lastDealtHandNo = -1;  // 上次已播放发牌动画的手编号(用于逐张发牌)
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
   const prevLA = [];
@@ -248,15 +249,18 @@
     }
   }
 
-  function cardFaceHTML(card, small, flip) {
+  // dealIdx>=0 时附加逐张发牌动画(按序错开 animation-delay)
+  const dealAttr = (dealIdx) => (dealIdx >= 0 ? ` deal-in" style="animation-delay:${dealIdx * 110}ms` : '');
+  function cardFaceHTML(card, small, flip, dealIdx) {
     const red = P.isRed(card) ? ' red' : '';
     const fl = flip ? ' flip-in' : '';
+    const dl = dealAttr(dealIdx == null ? -1 : dealIdx);
     const r = P.RANK_LABEL[card.rank], s = P.SUIT_SYMBOL[card.suit];
     const ck = ` data-ck="${card.rank}${card.suit}"`;
-    if (small) return `<div class="card small${red}${fl}"${ck}><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
-    return `<div class="card${red}${fl}"${ck}><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
+    if (small) return `<div class="card small${red}${fl}${dl}"${ck}><span class="cmini"><b>${r}</b><i>${s}</i></span></div>`;
+    return `<div class="card${red}${fl}${dl}"${ck}><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
   }
-  const cardBackHTML = (small) => `<div class="card back${small ? ' small' : ''}"></div>`;
+  const cardBackHTML = (small, dealIdx) => `<div class="card back${small ? ' small' : ''}${dealAttr(dealIdx == null ? -1 : dealIdx)}"></div>`;
 
   // 底池数字滚动(从当前显示值平滑增到目标)
   function rollPot(target) {
@@ -309,6 +313,7 @@
     } else banner.style.opacity = '0';
 
     const result = game.result;
+    let anyFreshDeal = false;
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i], el = seatEls[i];
       el.querySelector('.av-emoji').textContent = p.out ? '💀' : p.avatar;
@@ -359,10 +364,12 @@
       const sig = (revealed ? 'F' + p.hole.map((c) => c.rank + c.suit).join('') : 'B' + p.hole.length) + (p.out ? 'o' : '');
       if (sig !== seatSig[i]) {
         const cardsEl = el.querySelector('.player-cards');
-        const wasHidden = seatSig[i].startsWith(`${p.hole.length}|0`);
+        const freshDeal = game.handNo !== lastDealtHandNo && p.hole.length > 0;   // 新一手→逐张发牌
+        const flipReveal = revealed && !p.isHuman && seatSig[i].startsWith('B') && p.hole.length > 0; // 摊牌翻面
         if (p.hole.length === 0 || p.out) cardsEl.innerHTML = '';
-        else if (revealed) cardsEl.innerHTML = p.hole.map((c) => cardFaceHTML(c, true, wasHidden && !p.isHuman)).join('');
-        else cardsEl.innerHTML = p.hole.map(() => cardBackHTML(true)).join('');
+        else if (revealed) cardsEl.innerHTML = p.hole.map((c, ci) => cardFaceHTML(c, true, flipReveal, freshDeal ? ci : -1)).join('');
+        else cardsEl.innerHTML = p.hole.map((_, ci) => cardBackHTML(true, freshDeal ? ci : -1)).join('');
+        if (freshDeal) anyFreshDeal = true;
         seatSig[i] = sig;
       }
 
@@ -377,6 +384,7 @@
         hn.textContent = result.handNames[p.id]; hn.classList.remove('hidden');
       } else hn.classList.add('hidden');
     }
+    if (anyFreshDeal) lastDealtHandNo = game.handNo;
 
     if (game.button >= 0 && game.phase !== 'idle' && !game.players[game.button].out) {
       const pos = SEAT_POS[game.button];
@@ -440,7 +448,9 @@
   function flashAllIn() {
     const f = $('allin-flash');
     f.classList.remove('hidden'); f.style.animation = 'none'; void f.offsetWidth; f.style.animation = '';
-    if (window.Sfx) Sfx.bet();
+    // 全下时桌面压暗定格(epic 级爽感)：牌桌区短暂变暗+轻微缩放定格(音频由 actSound 的 PLAYER_ALL_IN 负责)
+    const tbl = $('table-felt') || $('screen-table');
+    if (tbl) { tbl.classList.add('allin-freeze'); setTimeout(() => tbl.classList.remove('allin-freeze'), 900); }
     setTimeout(() => f.classList.add('hidden'), 1000);
   }
   // 载具进场特效：你的座驾从画面驶过
