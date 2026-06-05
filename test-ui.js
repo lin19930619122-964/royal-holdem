@@ -163,6 +163,20 @@ ok(window.document.querySelector('[data-layer="SeatLayer"]') && window.document.
 })();
 // Completion Sprint D：牌堆锚点存在(发牌飞行起点)
 ok(window.document.getElementById('deck-anchor'), 'D 牌堆锚点 deck-anchor 存在');
+// D：ActionPanel 门控 API + GameFeelDirector 发牌门控 + 发牌顺序日志
+ok(typeof window.RHCore.ActionPanel.disableAll === 'function', 'D ActionPanel.disableAll(门控)存在');
+ok(window.GameFeel && typeof window.GameFeel.isBusy === 'function' && typeof window.GameFeel.onceIdle === 'function', 'D GameFeelDirector 门控 API(isBusy/onceIdle)');
+(function () {
+  // 进 6 人桌发牌(render 创建卡牌 DOM 后 fireHoleDeal 发 DEAL_HOLE_CARD→逐张飞行+门控)。下方测试会重建自己的桌。
+  const GF = window.GameFeel;
+  window.SceneRouter.go('table', { players: 6 });
+  window.document.getElementById('btn-start').click();
+  const order = GF.dealOrderLog();
+  ok(Array.isArray(order) && order.length === 12, `D 发牌顺序日志=12 张(6 座×2，实=${order.length})`);
+  const first = order[0];
+  ok(first && first.delay === 0 && first.duration > 0 && first.type === 'hole', 'D 每张有 delay/duration/from-to(逐张 90ms 错开)');
+  ok(GF.isBusy(), 'D 发牌后 isBusy()=true(ActionPanel 门控期)');
+})();
 // ⅔池 / 精确输入控件存在
 ok(window.document.querySelector('.quick[data-q="twothird"]'), '⅔池 快捷下注存在');
 ok(window.document.getElementById('raise-input'), '精确筹码输入存在');

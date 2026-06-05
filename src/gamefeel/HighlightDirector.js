@@ -17,6 +17,12 @@
       bestHand(highlightCards) { if (stage.highlightBest) safe(() => stage.highlightBest(highlightCards)); },
       clearBest() { if (stage.clearHighlightBest) safe(() => stage.clearHighlightBest()); },
       premiumHand(i) { if (stage.premiumHandCue) safe(() => stage.premiumHandCue(i)); },
+      // 摊牌：进入/退出压暗模式
+      showdownDim(on) { if (stage.setShowdownDim) safe(() => stage.setShowdownDim(on)); },
+      // 逐家亮牌(翻开该座位手牌并轻闪)
+      revealHand(i, payload) { if (stage.revealSeat) safe(() => stage.revealSeat(i, payload)); },
+      // 成就解锁横幅
+      achievement(payload) { if (stage.achievementBanner) safe(() => stage.achievementBanner(payload)); },
     };
   }
   return { create };

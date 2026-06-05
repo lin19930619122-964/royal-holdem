@@ -93,6 +93,7 @@
   let turnTimerPct = 0;       // 当前行动者倒计时百分比(SeatView.timerRing 用)
   let bestKeysBySeat = {};    // 座位→最佳五张 cardId(摊牌高亮用，E)
   const seatWinStreak = [];   // 座位→连胜数(B winStreakBadge 用，逐座)
+  const revealedSeats = new Set(); // E：已被 REVEAL_HAND 事件翻开的对手座位(摊牌逐家揭示，事件驱动)
   const pendingQuickWord = {}; // 座位→待显示快捷语气泡文字
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
@@ -256,19 +257,22 @@
       seatCardEls: (i) => { const c = seatEls[i] && seatEls[i].querySelector('.player-cards'); return c ? Array.from(c.children) : []; },
       boardCardEls: () => { const b = $('board'); return b ? Array.from(b.children) : []; },
       deckAnchorEl: () => $('deck-anchor'),
-      // D：从牌堆锚点飞一张幽灵牌到目标卡位(真实 from/to 轨迹，落位后由 deal-in/flip 接手)
-      flyDealCard: (toEl, delayMs) => {
+      seatCardAnchor: (i) => { const el = seatEls[i]; return el ? el.querySelector('.player-cards') : null; },   // 命名卡位锚点
+      communityCardAnchor: () => $('board'),
+      // D：从牌堆锚点飞一张幽灵牌到目标卡位(真实 from/to 轨迹 + duration + onComplete)
+      flyDealCard: (toEl, delayMs, durMs, onComplete) => {
+        const dur = durMs || 320;
         try {
-          const deck = $('deck-anchor'); if (!deck || !toEl || !fxLayer || typeof toEl.getBoundingClientRect !== 'function') return;
+          const deck = $('deck-anchor'); if (!deck || !toEl || !fxLayer || typeof toEl.getBoundingClientRect !== 'function') { if (onComplete) setTimeout(onComplete, (delayMs || 0) + dur); return; }
           const a = deck.getBoundingClientRect(), b = toEl.getBoundingClientRect(), lr = fxLayer.getBoundingClientRect();
-          if (!b.width && !b.height) return; // 无布局(jsdom)时跳过视觉
+          if (!b.width && !b.height) { if (onComplete) onComplete(); return; } // 无布局(jsdom)时跳过视觉但仍回调
           const g = document.createElement('div'); g.className = 'deal-ghost';
           g.style.left = (a.left - lr.left) + 'px'; g.style.top = (a.top - lr.top) + 'px';
           fxLayer.appendChild(g);
           const dx = b.left - a.left, dy = b.top - a.top;
-          requestAnimationFrame(() => { g.style.transition = 'transform .32s cubic-bezier(.2,.8,.3,1.05), opacity .32s'; g.style.transform = `translate(${dx}px,${dy}px) rotate(0deg)`; g.style.opacity = '0.2'; });
-          setTimeout(() => g.remove(), (delayMs || 0) + 380);
-        } catch (e) { /* ignore */ }
+          setTimeout(() => { requestAnimationFrame(() => { g.style.transition = `transform ${dur}ms cubic-bezier(.2,.8,.3,1.05), opacity ${dur}ms`; g.style.transform = `translate(${dx}px,${dy}px)`; g.style.opacity = '0.2'; }); }, delayMs || 0);
+          setTimeout(() => { g.remove(); if (onComplete) onComplete(); }, (delayMs || 0) + dur + 40);
+        } catch (e) { if (onComplete) onComplete(); }
       },
       potEl: () => $('pot-display'),
       winnerAnchorEl: (i) => { const n = node(i); return (n && n.chipToWinnerAnchor) || seatEls[i]; },
@@ -288,6 +292,17 @@
         if ($('table-felt')) $('table-felt').classList.add('showdown-dim');
       } catch (e) { /* ignore */ } },
       clearHighlightBest: () => { try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); if ($('table-felt')) $('table-felt').classList.remove('showdown-dim'); } catch (e) { /* ignore */ } },
+      setShowdownDim: (on) => { try { const f = $('table-felt'); if (f) f.classList.toggle('showdown-dim', !!on); } catch (e) { /* ignore */ } },
+      // E：逐家翻开该座位手牌(flip-in)，事件驱动、由队列错开
+      revealSeat: (seat, payload) => { try {
+        revealedSeats.add(seat);
+        const el = seatEls[seat]; if (!el) return;
+        const p = game.players[seat], cards = el.querySelector('.player-cards');
+        if (cards && p && p.hole && p.hole.length) cards.innerHTML = p.hole.map((c) => cardFaceHTML(c, true, true)).join('');
+        el.classList.add('seat-revealed');
+        const hn = el.querySelector('.hand-name'); if (hn && payload && payload.hand) { hn.textContent = payload.hand; hn.classList.remove('hidden'); }
+      } catch (e) { /* ignore */ } },
+      achievementBanner: () => { try { if (window.Fx && Fx.topBanner) Fx.topBanner(fxLayer, '🏆 成就解锁！'); } catch (e) { /* ignore */ } },
       bigPotBanner: (bb) => { try { if (window.Fx && Fx.topBanner) Fx.topBanner(fxLayer, `大底池 ${Math.round(bb)}BB！`); } catch (e) { /* ignore */ } },
       premiumHandCue: (i) => { const n = node(i); if (n && n.root) { n.root.classList.add('premium-cue'); setTimeout(() => n.root.classList.remove('premium-cue'), 900); } },
       rollSeatStack: (i, target) => { const el = seatEls[i] && seatEls[i].querySelector('.pchips'); if (el) rollNumberEl(el, target); },
@@ -423,7 +438,8 @@
         betEl.innerHTML = chipStackHTML(p.bet);
       } else betEl.classList.add('hidden');
 
-      const revealed = p.isHuman || (result && result.reveal && result.reveal.includes(p.id));
+      // E：对手手牌只有被 REVEAL_HAND 事件逐家翻开后才正面显示(不再 render 一次性全亮)
+      const revealed = p.isHuman || revealedSeats.has(i);
       const sig = (revealed ? 'F' + p.hole.map((c) => c.rank + c.suit).join('') : 'B' + p.hole.length) + (p.out ? 'o' : '');
       if (sig !== seatSig[i]) {
         const cardsEl = el.querySelector('.player-cards');
@@ -460,7 +476,7 @@
         pendingQuickWord[i] = null;
       } catch (e) { /* ignore */ }
     }
-    if (anyFreshDeal) lastDealtHandNo = game.handNo;
+    if (anyFreshDeal) { lastDealtHandNo = game.handNo; fireHoleDeal(); }   // 卡牌 DOM 就绪 → 发底牌飞行事件
 
     if (game.button >= 0 && game.phase !== 'idle' && !game.players[game.button].out) {
       const pos = SEAT_POS[game.button];
@@ -678,10 +694,13 @@
     felt.classList.remove('win-flash'); void felt.offsetWidth; felt.classList.add('win-flash');
     const rb = $('result-banner');
     if (result.summary) { rb.textContent = '🏆 ' + result.summary; rb.classList.remove('hidden'); rb.style.animation = 'none'; void rb.offsetWidth; rb.style.animation = ''; }
-    if (GF && result.showdown) {
-      GF.emit('SHOWDOWN_START', {});
-      // 逐家亮牌事件(按座位顺序)：每个被摊牌玩家一个 REVEAL_HAND
-      (result.reveal || []).forEach((seat) => { const pl = game.players[seat]; GF.emit('REVEAL_HAND', { seat, hand: (result.handNames && result.handNames[pl.id]) || '', hole: (pl.hole || []).slice() }); });
+    if (result.showdown) {
+      revealedSeats.clear();   // E：清空，由 REVEAL_HAND 事件逐家翻开
+      if (GF) {
+        GF.emit('SHOWDOWN_START', {});
+        // 逐家亮牌事件(按座位/摊牌顺序)：每个被摊牌玩家一个 REVEAL_HAND，队列带延时→真实 stagger
+        (result.reveal || []).forEach((seat) => { const pl = game.players[seat]; GF.emit('REVEAL_HAND', { seat, hand: (result.handNames && result.handNames[pl.id]) || '', hole: (pl.hole || []).slice() }); });
+      } else { (result.reveal || []).forEach((seat) => revealedSeats.add(seat)); }   // 无 GF：立即全亮兜底
     }
     const winners = [];
     for (let i = 0; i < game.N; i++) {
@@ -844,8 +863,11 @@
 
     const p = game.players[game.current];
     if (GF) GF.emit('PLAYER_THINKING', { seat: game.current });   // 轮到谁：座位光圈/操作区亮起
-    if (p.isHuman) enableHumanControls();
-    else {
+    if (p.isHuman) {
+      // D：发牌动画期间禁用 ActionPanel，动画完成后才激活
+      if (GF && GF.isBusy()) { try { window.RHCore.ActionPanel.disableAll && window.RHCore.ActionPanel.disableAll(); } catch (e) {} hideHumanControls(); GF.onceIdle(() => { if (game && game.bettingOpen && game.current === 0) enableHumanControls(); }); }
+      else enableHumanControls();
+    } else {
       hideHumanControls();
       // V4 PokerBrain 决策(位置/范围/牌面/赔率/SPR/画像)；思考时长用画像 reactionTime
       const d = window.RHCore.BotDecisionEngine.decide(game, game.current, { profile: p.botProfile, oppStats: oppModel ? oppModel.all() : {} });
@@ -890,11 +912,17 @@
 
   // 发牌相关事件统一出口：HAND_START → POST_BLINDS → DEAL_HOLE_CARD(逐张) → 英雄强起手提示
   function emitHandStart() {
-    bestKeysBySeat = {};
-    try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); const f = $('table-felt'); if (f) f.classList.remove('showdown-dim'); } catch (e) { /* ignore */ }
+    bestKeysBySeat = {}; revealedSeats.clear();
+    try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); document.querySelectorAll('.seat-revealed').forEach((e) => e.classList.remove('seat-revealed')); const f = $('table-felt'); if (f) f.classList.remove('showdown-dim'); } catch (e) { /* ignore */ }
     if (!GF) { Sfx.deal(); return; }
     GF.emit('HAND_START', {});
     GF.emit('POST_BLINDS', { sb: game.sbIdx, bb: game.bbIdx });
+    pendingHoleDeal = true;   // DEAL_HOLE_CARD 在 render 创建好卡牌 DOM 后再发(见 render)，确保飞行有目标
+  }
+  let pendingHoleDeal = false;
+  // 卡牌 DOM 就绪后发底牌事件(供 render 调用)：逐张飞行 + 门控 + 英雄强起手
+  function fireHoleDeal() {
+    if (!pendingHoleDeal || !GF) return; pendingHoleDeal = false;
     const seated = []; for (let i = 0; i < game.N; i++) if (!game.players[i].out) seated.push(i);
     GF.emit('DEAL_HOLE_CARD', { seatIndices: seated });
     const me = game.players[0];
@@ -1917,6 +1945,7 @@
   function startTable(cfg) {
     if (scheduled) { clearTimeout(scheduled); scheduled = null; }
     sessionHands = 0;
+    lastDealtHandNo = -1;   // 新桌重置：保证首手发牌被识别为新发牌(逐张动画+DEAL_HOLE_CARD)
     oppModel = window.RHCore.OpponentModel.create();   // 每次进桌重置对手模型
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];

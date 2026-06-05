@@ -44,6 +44,10 @@
     }
     return can;
   }
-  function legalSet(o) { const c = renderLegal.__last; return c; }
-  return { mount, renderLegal, CONTROLS };
+  // 全部禁用(发牌动画期间门控)
+  function disableAll() {
+    ['btn-fold', 'btn-check', 'btn-call', 'btn-raise', 'btn-confirm-raise'].forEach((id) => { const b = $(id); if (b) b.disabled = true; });
+    document.querySelectorAll('.quick-bets .quick').forEach((q) => { q.disabled = true; });
+  }
+  return { mount, renderLegal, disableAll, CONTROLS };
 });

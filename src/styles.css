@@ -955,3 +955,5 @@ html, body {
 @keyframes bubblePop { from { transform:translateX(-50%) scale(.6); opacity:0; } to { transform:translateX(-50%) scale(1); opacity:1; } }
 .pop-anim { display:inline-block; animation: popUp 1.6s ease forwards; font-size:22px; }
 @keyframes popUp { 0%{transform:translateY(8px) scale(.4);opacity:0} 20%{transform:translateY(-6px) scale(1.2);opacity:1} 80%{opacity:1} 100%{transform:translateY(-24px) scale(1);opacity:0} }
+
+.seat.seat-revealed .player-cards .card { box-shadow: 0 0 6px rgba(255,255,255,.4); }

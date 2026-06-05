@@ -8,33 +8,47 @@
 })(this, function () {
   function create(stage) {
     stage = stage || {};
+    const STEP = 90, DUR = 320;     // 每张间隔 90ms（60-120ms 区间）、飞行 320ms
+    let _order = [];
     function stagger(els, cls, step) {
       if (!els || !els.length) return;
       els.forEach((el, i) => { if (!el || !el.classList) return; el.classList.remove(cls); void (el.offsetWidth || 0); el.style.animationDelay = (i * (step || 90)) + 'ms'; el.classList.add(cls); });
     }
-    // 底牌逐张：从牌堆锚点飞向每个座位的卡位(60-120ms 间隔)，落位后 deal-in 接手
-    function dealHole(seatIndices) {
+    // 底牌逐张：deckAnchor → 每个座位 holeCardBack0/1（seatCardAnchor）。带 from/to/delay/duration/onComplete。
+    function dealHoleCards(seatIndices) {
+      _order = [];
       if (!stage.seatCardEls) return;
-      let order = 0;
-      (seatIndices || []).forEach((si) => {
+      let idx = 0; const seats = seatIndices || [];
+      seats.forEach((si) => {
         const els = stage.seatCardEls(si) || [];
-        els.forEach((el) => {
+        els.forEach((el, j) => {
           if (!el || !el.classList) return;
-          const delay = order * 90; order++;
+          const delay = idx * STEP; idx++;
+          _order.push({ type: 'hole', seat: si, cardIndex: j, delay, duration: DUR });
           el.style.animationDelay = delay + 'ms'; el.classList.add('deal-in');
-          if (stage.flyDealCard) stage.flyDealCard(el, delay);   // 真实牌堆→卡位飞行
+          flyTo(el, delay, DUR);
         });
       });
     }
-    // 公共牌：从牌堆锚点飞到公共牌位再翻开；flop 三张依次、turn/river 单张
-    function revealBoard(street) {
-      if (!stage.boardCardEls) return;
+    function flyTo(toEl, delay, duration, onComplete) {
+      if (stage.flyDealCard) stage.flyDealCard(toEl, delay, duration, onComplete);
+      else if (onComplete && typeof setTimeout === 'function') setTimeout(onComplete, (delay || 0) + (duration || 0));
+      else if (onComplete) onComplete();
+    }
+    function boardReveal(street) {
+      if (!stage.boardCardEls) return [];
       const els = stage.boardCardEls() || [];
       const range = street === 'flop' ? els.slice(0, 3) : street === 'turn' ? els.slice(3, 4) : els.slice(4, 5);
       stagger(range, 'flip-in', street === 'flop' ? 140 : 0);
-      if (stage.flyDealCard) range.forEach((el, i) => stage.flyDealCard(el, i * 140));
+      _order = range.map((el, i) => ({ type: street, cardIndex: i, delay: i * 140, duration: DUR }));
+      range.forEach((el, i) => flyTo(el, i * 140, DUR));
+      return range;
     }
-    return { dealHole, revealBoard, stagger };
+    function dealFlop() { return boardReveal('flop'); }
+    function dealTurn() { return boardReveal('turn'); }
+    function dealRiver() { return boardReveal('river'); }
+    function lastOrder() { return _order.slice(); }
+    return { dealHoleCards, dealHole: dealHoleCards, dealFlop, dealTurn, dealRiver, revealBoard: boardReveal, stagger, lastOrder };
   }
   return { create };
 });

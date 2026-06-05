@@ -7,7 +7,7 @@ const { ok, eq, done } = harness('GameFeel 子系统');
 const E = GFE.EVENTS;
 
 // mock stage：记录各 Animator 调用
-const calls = { fly: 0, seatCardEls: 0, boardCardEls: 0, winnerGlow: 0, foldMask: 0, active: 0, allInFocus: 0, best: 0, bigPot: 0, premium: 0 };
+const calls = { fly: 0, seatCardEls: 0, boardCardEls: 0, winnerGlow: 0, foldMask: 0, active: 0, allInFocus: 0, best: 0, bigPot: 0, premium: 0, dim: 0, reveal: 0, achieve: 0 };
 const fakeEl = () => ({ classList: { add() {}, remove() {} }, style: {}, offsetWidth: 1 });
 const stage = {
   seatEl: () => fakeEl(), potEl: () => fakeEl(), winnerAnchorEl: () => fakeEl(),
@@ -18,6 +18,7 @@ const stage = {
   setFoldMask: () => { calls.foldMask++; }, setActiveSeat: () => { calls.active++; }, setThinking: () => {},
   allInFocus: () => { calls.allInFocus++; }, highlightBest: () => { calls.best++; }, clearHighlightBest: () => {},
   bigPotBanner: () => { calls.bigPot++; }, rollSeatStack: () => {}, premiumHandCue: () => { calls.premium++; },
+  setShowdownDim: () => { calls.dim++; }, revealSeat: () => { calls.reveal++; }, achievementBanner: () => { calls.achieve++; },
 };
 const audioPlays = [];
 const audio = { play: (k) => { audioPlays.push(k); return true; }, setCategory() {} };
@@ -45,6 +46,23 @@ ok(calls.best > 0, '3 BEST_HAND_HIGHLIGHT→最佳五张高亮');
 ok(calls.winnerGlow > 0, '3 POT_TO_WINNER→赢家发光');
 ok(calls.bigPot > 0, '3 大底池(>=50BB)→big pot 反馈');
 ok(calls.premium > 0, '3 HERO_PREMIUM_HAND→强起手提示');
+ok(calls.dim > 0, '3 SHOWDOWN_START→桌面压暗 handler');
+ok(calls.reveal > 0, '3 REVEAL_HAND→逐家翻牌 handler');
+ok(calls.achieve > 0, '3 ACHIEVEMENT_UNLOCKED→成就横幅 handler');
+
+// 3b) 24/24 事件都有 handler 或显式 silent(emit 全部不抛错已在 2 验证；此处验证摊牌链逐家 stagger)
+(function () {
+  const c2 = { dim: 0, reveal: 0, best: 0, award: 0 };
+  const st2 = Object.assign({}, stage, { setShowdownDim: () => { c2.dim++; }, revealSeat: () => { c2.reveal++; }, highlightBest: () => { c2.best++; }, winnerGlow: () => { c2.award++; } });
+  const G2 = GFD.create({ audio, stage: st2, haptics, immediate: true });
+  G2.emit(E.SHOWDOWN_START, {});
+  ['p0', 'p1', 'p2'].forEach((id, i) => G2.emit(E.REVEAL_HAND, { seat: i, hand: '两对' }));
+  G2.emit(E.BEST_HAND_HIGHLIGHT, { highlight: [{ seat: 0, cardKeys: ['As'] }] });
+  G2.emit(E.POT_TO_WINNER, { winners: [{ seat: 0, amount: 100 }], potBb: 5 });
+  ok(c2.dim === 1, '3b 摊牌进入压暗 1 次');
+  ok(c2.reveal === 3, '3b 逐家 REVEAL_HAND 各触发(3 家)');
+  ok(c2.best === 1 && c2.award === 1, '3b 描金+派彩 handler 各触发');
+})();
 
 // 4) 音频路由：有 sfx 配置的事件应触发 audio.play
 ok(audioPlays.includes('PLAYER_RAISE') && audioPlays.includes('HERO_WIN_BIG'), '4 配置了 sfx 的事件触发音频');
