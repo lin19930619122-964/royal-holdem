@@ -93,5 +93,31 @@ function playHand(g) {
   ok(g.phase === 'gameover', '仅一人有筹码→gameover');
 })();
 
+// 7) BotDecisionEngine 驱动整手：用 V4 PokerBrain 出牌，合法 + 筹码守恒
+(() => {
+  const BDE = require('./src/core/ai/BotDecisionEngine.js');
+  for (const seed of [3, 31, 303]) for (const bots of [1, 5, 8]) {
+    const g = newTable(seed, bots);
+    g.players.forEach((p, i) => { if (i !== 0) p.botProfile = BDE.profileForSeat('casual', i); });
+    const init = g.players.reduce((a, p) => a + p.chips, 0);
+    g.startHand();
+    let guard = 0;
+    while (g.phase !== 'ended' && g.phase !== 'gameover' && guard++ < 600) {
+      if (g.bettingOpen) {
+        const seat = g.current, p = g.players[seat];
+        const o = g.actionOptions();
+        let d;
+        if (p.ai || p.botProfile) { const bd = BDE.decide(g, seat, { profile: p.botProfile, seed: seed * 100 + guard }); d = { action: bd.action, amount: bd.amount }; }
+        else d = o.canCheck ? { action: 'check' } : { action: 'call' };
+        const curBefore = g.current, betSig = JSON.stringify(g.players.map((x) => x.bet));
+        g.act(d.action, d.amount);
+        if (g.bettingOpen && g.current === curBefore && JSON.stringify(g.players.map((x) => x.bet)) === betSig) { g.act(o.canCheck ? 'check' : 'call'); if (g.current === curBefore) g.act('fold'); }
+      } else g.proceed();
+    }
+    const end = g.players.reduce((a, p) => a + p.chips, 0);
+    ok(g.phase === 'ended' && init === end, `BrainBot 驱动整手筹码守恒 seed=${seed} bots=${bots} (${init}->${end})`);
+  }
+})();
+
 console.log(`\nPhase3a 适配器回归: ${pass} 通过, ${fail} 失败`);
 process.exit(fail ? 1 : 0);

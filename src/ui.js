@@ -23,8 +23,14 @@
     tag:     { label: '紧凶', tag: 'TAG', color: '#5fd38a', desc: '紧且有侵略性，价值清晰。对策：尊重其加注，别轻易跟丢。' },
     lag:     { label: '松凶', tag: 'LAG', color: '#ffb454', desc: '范围宽、爱施压，诈唬多。对策：用强牌抓诈，慎打边缘牌。' },
     station: { label: '跟注站', tag: '松弱', color: '#ff8db0', desc: '什么都跟，很少弃。对策：只打价值，别对它诈唬。' },
-    maniac:  { label: '疯子', tag: '超凶', color: '#ff6b6b', desc: '疯狂加注全下，方差极大。对策：耐心等强牌收割。' },
+    maniac:  { label: '疯狗', tag: '超凶', color: '#ff6b6b', desc: '疯狂加注全下，方差极大。对策：耐心等强牌收割。' },
     shark:   { label: '鲨鱼', tag: '高手', color: '#c9a6ff', desc: '紧凶+高纪律+读你弱点，难被抓。对策：减少漏洞、保持平衡。' },
+    // V4 七画像(BotDecisionEngine 用)
+    tight_aggressive: { label: '紧凶', tag: 'TAG', color: '#5fd38a', desc: '紧且有侵略性，价值清晰。对策：尊重其加注，别轻易跟丢。' },
+    loose_aggressive: { label: '松凶', tag: 'LAG', color: '#ffb454', desc: '范围宽、爱施压、诈唬多。对策：用强牌抓诈，慎打边缘牌。' },
+    loose_passive:    { label: '松被动', tag: '松弱', color: '#ff8db0', desc: '入池宽但被动、爱跟。对策：多价值下注，少诈唬。' },
+    calling_station:  { label: '跟注站', tag: '松弱', color: '#ff8db0', desc: '什么都跟，极少弃。对策：只打价值，别对它诈唬。' },
+    balanced_reg:     { label: '常规', tag: 'REG', color: '#9fd0ff', desc: '较均衡的常规打法。对策：找其频率漏洞，针对性施压。' },
   };
   const AVATAR_COUNT = 24;
   const ACT2VOICE = { 弃牌: 'fold', 过牌: 'check', 跟注: 'call', 加注: 'raise', 下注: 'raise', 全下: 'allin' };
@@ -653,9 +659,9 @@
     if (p.isHuman) enableHumanControls();
     else {
       hideHumanControls();
-      // 先算决策，再按"决策难度"决定思考时长：弃牌快、跟注中、加注/全下慢，更像真人
-      const d = AI.decide(p, game.aiContext());
-      const delay = aiThinkDelay(d.action);
+      // V4 PokerBrain 决策(位置/范围/牌面/赔率/SPR/画像)；思考时长用画像 reactionTime
+      const d = window.RHCore.BotDecisionEngine.decide(game, game.current, { profile: p.botProfile });
+      const delay = Math.max(380, Math.min(2200, d.reactionTimeMs || aiThinkDelay(d.action)));
       scheduled = setTimeout(() => {
         game.act(d.action, d.amount);
         recordSeatAct(p);
@@ -1623,12 +1629,14 @@
     game = window.RHCore.GameAdapter.create({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
     // SNG 锦标赛：所有人等额起始筹码，盲注递增，淘汰制
     sng = (cfg.mode === 'sng') ? { level: 0, hands: 0, places: {}, baseSb: cfg.sb, baseBb: cfg.bb } : null;
-    // 按难度配置 AI：高手/大师=鲨鱼，更准的模拟
-    game.players.forEach((pl) => { if (!pl.isHuman) pl.ai = AI.makePersona(cfg.level); });
+    // 按难度配置 AI：bot 用 V4 PokerBrain 画像决策；ai.js 仍供人类胜率提示
+    const BDE = window.RHCore.BotDecisionEngine;
+    game.players.forEach((pl, i) => { if (!pl.isHuman) { pl.botProfile = BDE.profileForSeat(cfg.level, i); pl.ai = AI.makePersona(cfg.level); } });
     AI.setSims(cfg.level === 'master' ? 260 : cfg.level === 'hard' ? 220 : 170);
-    // 对手画像：记录每个 AI 的风格 + 本局观察统计(入池/加注/弃牌/全下)
+    // 对手画像：记录每个 bot 的 V4 画像 + 本局观察统计(入池/加注/弃牌/全下)
     seatProfiles = game.players.map((pl) => pl.isHuman ? null : {
-      style: (pl.ai && pl.ai.style) || 'tag', acts: 0, raises: 0, calls: 0, folds: 0, allins: 0, entered: 0, hands: 0,
+      style: (pl.botProfile && pl.botProfile.archetype) || 'balanced_reg', label: (pl.botProfile && pl.botProfile.displayName) || '',
+      acts: 0, raises: 0, calls: 0, folds: 0, allins: 0, entered: 0, hands: 0,
     });
     // 头像分配：你用所选头像，机器人用不重复的随机头像
     const me = Store.get().activeAvatar || 1;
