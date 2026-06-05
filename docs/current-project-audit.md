@@ -1,98 +1,72 @@
 # 当前项目审计（皇室德州 / royal-holdem-mobile）
 
-> 对本项目源码做事实审计：工程分层、代码量、模块、屏幕/面板、资源、构建链路；并诚实标注**已实装 / 半实装 / 占位**。
-> 审计对象：`/Users/linlin/cc 工作站/royal-holdem-mobile/src`（源码项目，**非** IPA 二进制）。
-> 审计日期：2026-06-04。
+> 事实审计：工程分层、代码量、模块、屏幕/面板、规则核心、联机、测试、构建。诚实标注 已实装 / 半实装 / 占位。
+> 审计对象：`/Users/linlin/cc 工作站/royal-holdem-mobile/`（源码，非 IPA）。
+> 审计日期：2026-06-05（项目已历经 40 次提交、SW v39，较初版大幅演进）。
 
 ---
 
-## 1. 工程分层（已具备清晰分层）
+## 1. 工程分层
 
+### 1a. 运行中的牌桌引擎（现行，单机 UI 使用）
 | 层 | 文件 | LOC | 职责 |
 |---|---|---|---|
-| 规则 | `poker.js` | 120 | 牌、洗牌、7 选 5 评定、比牌、牌型名 |
-| 状态机 | `game.js` | 425 | 发牌/盲注/前注/下注轮/边池/摊牌/结算 |
-| AI | `ai.js` | 184 | 蒙特卡洛胜率、位置范围、3bet/set-mine、下注尺度、对手剥削、难度分层 |
-| 持久化 | `store.js` | 312 | localStorage 档案：金币/钻石/等级/任务/成就/外观/**牌谱复盘** |
-| 皮肤 | `skins.js` | 158 | 牌背/桌布/头像框/称号/座驾/手表/场景（程序化 + 少量原创图） |
-| 音频 | `sound.js`(65)/`music.js`(65)/`voice.js`(18) | 148 | WebAudio 合成音效 + 暖色 lounge bgm + 方言语音播放 |
-| 动效 | `fx.js` | 105 | 赢牌闪光/筹码飞行/连胜庆祝/震屏/震动 |
-| UI 控制 | `ui.js` | 1,332 | 渲染、循环、人类操作、面板系统、商店、复盘 |
-| 多人 | `mp.js` / `online.js`(267) | — | 权威 WebSocket 同桌（复用 game.js） |
-| 壳/构建 | `make-www.js` / Capacitor / `.github/workflows/ios-ipa.yml` | — | PWA → 未签名 IPA → TrollStore |
+| 规则 | `src/poker.js` | 120 | 牌/洗牌/7选5/比牌/牌型名 |
+| 状态机 | `src/game.js` | 425 | 发牌/盲注/前注/下注轮/边池/摊牌/结算（可变式） |
+| AI | `src/ai.js` | 249 | 蒙特卡洛胜率、equityVsRange、位置范围、对手剥削、难度分层 |
+| 持久化 | `src/store.js` | 499 | localStorage 档案：经济/成长/赛季/段位/任务/活动/牌谱/图鉴/教程 |
+| 皮肤 | `src/skins.js` | 162 | 牌背/桌布(程序化)/头像框/称号/座驾/手表/场景 |
+| 音频 | `src/sound.js`(83)/`music.js`(65)/`voice.js`(18) | 166 | WebAudio 合成 + lounge bgm + 方言语音 |
+| 动效 | `src/fx.js` | 211 | 飞筹码/庆祝/连胜烈焰/气泡/礼物/顶部通告/升级弹层 |
+| 社交数据 | `src/social.js` | 41 | 原创快捷语/礼物/表情/AI 闲聊 |
+| 路由 | `src/router.js` | 35 | 统一 SceneRouter（注册表+历史+回退） |
+| UI 控制 | `src/ui.js` | **1968** | 渲染/循环/操作/面板系统/复盘/SNG/社交/教程 ← **偏厚，最大重构候选** |
+| 联机客户端 | `src/online.js` | 371 | 多房间/旁观/聊天/表情/礼物/举报/好友俱乐部面板 |
 
-代码合计 ~3,143 行 JS + 731 CSS + 284 HTML（+103 online.html）。
-**分层评价**：规则/状态机/AI/持久化/音频/动效已分离；UI 层偏厚（1,332 行），是后续重构候选。
+### 1b. UI 无关规则核心（新，权威实现，reducer 驱动，**尚未接入 UI**）
+`src/core/poker/`（582 LOC，11 模块）：`SeededRng / Card / Deck / types / HandEvaluator / HandComparator / SidePot / TableState / LegalActions / GameReducer / HandHistory` + README。
+纯函数、零 UI/DOM/网络；所有状态变化只经 `GameReducer`；同 seed 完全可复现。详见 `src/core/poker/README.md`。
+
+### 1c. 服务端
+`server.js`（静态 + WS 多房间路由）/ `mp.js`（Rooms Hub + 权威牌桌，复用 game.js）/ `mpstore.js`（好友/俱乐部磁盘持久化）。
+
+**分层评价**：规则/状态机/AI/持久化/音频/动效/路由/社交已分离；`ui.js` 1968 行偏厚；存在**两套规则实现**（现行 game.js + 新核心 core/poker），尚未统一——这是当前最大的架构债。
 
 ---
 
 ## 2. 屏幕与面板
+- **统一路由 SceneRouter（7 场景）**：launch / login / hall / select / table / tutorial / replay / strategyLab / handDex（注册 ≥7）。
+- **屏幕（3）**：home / select / table。
+- **面板（openPanel ~32 种）**：profile/missions/vip/security/rank/mail/events/gifts/coach/activityMap/passport/mysteryShop/goldenPig/invite/club/vault/achievements/friends/analytics/settings/support/notice/season/tourney/tableChat/tableGift/tableHistory/jackpot/voiceCenter/strategyLab/handDex 等。
+- **商店（9 类）**：coins/avatars/frames/titles/scenes/vehicles/watches/backs/felts。
 
-- **屏幕（3）**：`screen-home`（大厅）/ `screen-select`（选桌）/ `screen-table`（牌桌）。
-- **面板入口（28，`data-panel` → `openPanel`）**：
-  profile, missions, vip, security, rank, mail, events, gifts, coach, activityMap, passport, mysteryShop, goldenPig, invite, club, vault, achievements, friends, analytics, support, settings, tableChat, tableGift, tableHistory, jackpot, voiceCenter, notice, season, tourney。
-- **商店标签（9）**：coins, avatars, frames, titles, scenes, vehicles, watches, backs, felts。
-- **独立模态**：签到、商店、兑换码、自定义牌桌、幸运转盘、通用面板、toast。
+---
 
-### 面板成熟度分级（诚实）
-| 状态 | 面板 |
+## 3. 功能成熟度（诚实分级）
+| 状态 | 功能 |
 |---|---|
-| ✅ 已实装（真实数据/可交互） | profile、missions（任务领取）、achievements（成就领取）、analytics（真实统计 + 复盘入口）、**tableHistory（牌局复盘列表+详情）**、vip（实时计算）、settings（开关）、shop（9 类可购买）、签到/转盘/兑换码/破产救济 |
-| 🟡 半实装（真实数据但只展示） | rank、security、season、season 进度、notice |
-| ⬜ 占位（panelRow 文案，待发奖/待接入） | mail、events、gifts、coach、activityMap、passport、mysteryShop、goldenPig、invite、club、vault、friends、support、tourney、tableChat、tableGift、jackpot、voiceCenter |
+| ✅ 已实装 | 单机牌桌(2/6/9人，归一化座位)、实时胜率/赔率/起手范围/位置/对手范围/建议、**牌局复盘+错误分析+最优建议对比**、训练/考试模式、AI 对手画像、盈利曲线、**SNG 锦标赛**(递增盲注/淘汰/名次)、经济(金币钻石救济)、签到/转盘/兑换码、商店9类、皇家赛季 battle pass、段位、成就墙(19)、每日任务/活动、每日礼包、金库钱罐、邮件、本地财富榜、牌型图鉴、新手教程、连胜烈焰/顶级通告/座驾入场/最佳5张高亮/倒计时光圈/SB-BB标记、历史简条、原创开屏、方言语音、**联机多房间+旁观+聊天/表情/礼物+举报+换桌**、**持久化好友/俱乐部**、未签名 IPA→TrollStore |
+| 🟡 半实装/展示 | 部分运营面板(秘宝/活动中心展示态尚可领的已实装)、语音中心(合规入口) |
+| ⬜ 缺失/未接 | **新 reducer 核心未接入 UI**（仍用 game.js）；竖屏 6 段硬比例栅格未做；联机桌仍 6 座简版(未上归一化9座) |
+| 🚫 不做 | 真钱/充值/提现/广告/风控/上报/麦克风 |
 
 ---
 
-## 3. 资源（56MB，远低于参考 320MB）
-
-| 类别 | 数量 | 形态 |
-|---|---|---|
-| 头像 | 24 | 原创/AI 生成 PNG |
-| 场景 | 5 | vip/palace/yacht/vegas/macau |
-| 牌背 | 4 图 + 32 程序化 | imgGold/Royal/Dragon/Phoenix + PAL×PAT |
-| 桌布 | 4 图 + 18 程序化 | green/blue/crimson/purple + FPAL |
-| 方言语音 | 180 mp3 | edge-tts 东北话，12 动作 × 多变体（原创） |
-| 牌皮 | 程序化 | CSS 渲染（cmini/角标+中心 pip） |
-| 头像框/称号/座驾/手表 | 程序化 | CSS box-shadow / emoji / 文案 |
-
-**体积评价**：满足"体系完整 + 轻量"双目标；56M 主要来自 180 条语音 + 少量原创位图。
+## 4. 测试与构建
+- `npm test` 四套件全绿：**引擎 15 / 规则核心 57 / UI 回归 84 / 联机服务端 35**。
+- `test-engine.js`(引擎压测，35万级手压测历史) / `test-core.js`(reducer 纯逻辑) / `test-ui.js`(jsdom 全面板+流程) / `test-mp.js`(房间/旁观/聊天/举报/好友/俱乐部持久化)。
+- 构建：GitHub Actions(macos-14, `CODE_SIGNING_ALLOWED=NO`) → 未签名 IPA(56M) → TrollStore；本地 Tailscale 服务 8099 上线 `/ws`。
 
 ---
 
-## 4. 已验证的工程质量
-- 引擎：35 万手压测 0 崩溃、筹码守恒。
-- AI：鲨鱼击败 TAG 基线（TAG -0.10 bb/手）、碾压跟注站。
-- 复盘系统：13 项 jsdom 渲染测试 + 6 项数据层测试全绿。
-- 构建：GitHub Actions（macos-14，`CODE_SIGNING_ALLOWED=NO`）产未签名 IPA → TrollStore 安装；当前包 56M、服务端本地实测 200。
-- 兼容：iPhone 11 安全区适配（刘海/灵动岛 padding）、9 人桌座位重排、筹码紧凑显示（万/亿）。
+## 5. 清洁室合规自查
+- `src/` 无参考素材/UUID 资源/反编译代码；无「传奇」残留（已全改「皇家」）。
+- 资源 56M（参考 320M），程序化优先。
+- 字体用系统/可商用，不打包参考字体。
 
 ---
 
-## 5. 相对参考包的结构性差距（概览，详见 gap-matrix）
-1. **赛季体系**：参考最重（101 prefab），我方仅进度条占位。
-2. **桌面社交**：聊天/表情/礼物有入口无动效。
-3. **成长奖励表**：赛季/通行证/段位的"奖励表 + 领取 + 晋升动画"缺。
-4. **外观体系广度**：参考 ~20 牌皮 / 16+ 桌布主题；我方程序化覆盖但主题数偏少。
-5. **牌桌反馈层**：连胜火焰/顶级通告/入场座驾我方有雏形，精致度待提升。
-6. **超越项已起步**：复盘+错误分析已实装（参考仅 history 记录），实时策略提示 + AI 画像待建。
-
----
-
-## 5b. 清洁室合规自查（发现项）
-
-扫描 `src/` 确认**无参考素材/代码泄漏**（无 UUID 资源、无参考贴图/音频、无反编译代码）。
-但发现**命名风险**——以下文案用了"传奇"，与参考 App 专有名（其赛季模块 `legendarySeason`、产品名）过近，建议在实现阶段改名（参 `reference-cleanroom-abstraction.md` 的映射 → "皇家赛季 / Royal Season"）：
-
-| 文件 | 位置 | 现文案 | 建议 |
-|---|---|---|---|
-| `src/skins.js:116` | 称号 | `传奇` | 改原创称号（如"皇家传说/Royal Legend"） |
-| `src/index.html:68` | 大厅横幅 | `传奇赛季开启` | 改"皇家赛季开启" |
-| `src/ui.js:739` | 赛季公告 | `传奇赛季开放…` | 改"皇家赛季…" |
-| `src/ui.js:934` | 赛季面板标题 | `传奇赛季` | 改"皇家赛季" |
-
-> 风险级别：低（"传奇"是通用形容词），但为干净起见列入阶段 3（赛季实装）一并改名。本轮审计**不改代码**。
-
-## 6. 审计结论
-本项目已是"**有完整引擎 + 分层工程 + 可玩经济成长 + 复盘训练核心**"的真实 App，不是 demo。
-与参考的差距集中在**大厅功能密度（尤其赛季/社交/奖励表）**与**牌桌情绪反馈精致度**，而非地基。
-下一步应：①把占位面板按优先级填实（发奖/动效），②做强三个超越点（复盘已成→实时提示→AI 画像），③保持体积红线与清洁室边界。
+## 6. 结论与最大债务
+项目已是「**完整训练 App + 真人社交联机 + 权威规则核心**」，远超 demo。
+**首要技术债**：① 两套规则实现未统一（应把 UI 迁到 `core/poker` reducer，淘汰 game.js 的可变式状态机）；② `ui.js` 1968 行待按场景/层拆分。
+这正是接下来 Phase 1→3 的核心目标。
