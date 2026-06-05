@@ -41,8 +41,9 @@
     if (opts.avatarSrc) n.avatar.src = opts.avatarSrc;
     n.avatarEmoji = el('span', 'av-emoji');
     n.blindBadge = el('span', 'blind-badge hidden');
-    n.dealerButton = el('span', 'seat-dealer hidden', 'D');
-    avatar.append(n.timerRing, n.avatarFrame, n.avatar, n.avatarEmoji, n.blindBadge, n.dealerButton);
+    // 庄家按钮为桌级单一可移动标记(DealerButtonLayer/#dealer-button)，不在座位内重复
+    n.dealerButton = null;
+    avatar.append(n.timerRing, n.avatarFrame, n.avatar, n.avatarEmoji, n.blindBadge);
     const info = el('div', 'pinfo');
     n.titleLabel = el('span', 'ptitle hidden');
     n.nicknameLabel = el('span', 'pname');
@@ -86,8 +87,8 @@
   function update(seatEl, vm) {
     const n = seatEl && seatEl._nodes; if (!n || !vm) return;
     const toggle = (el, on) => { if (el) el.classList.toggle('hidden', !on); };
-    // 头像框：有 frameId → 显示并套用主题类
-    if (n.avatarFrame) { const on = !!vm.avatarFrameId; n.avatarFrame.classList.toggle('has-frame', on); if (on) n.avatarFrame.dataset.frame = String(vm.avatarFrameId); }
+    // 头像框：有真实 frameId(非 'none') → 显示并套用主题类
+    if (n.avatarFrame) { const on = !!vm.avatarFrameId && vm.avatarFrameId !== 'none'; n.avatarFrame.classList.toggle('has-frame', on); if (on) n.avatarFrame.dataset.frame = String(vm.avatarFrameId); }
     // 连胜徽标
     if (n.winStreakBadge) { const on = (vm.winStreak || 0) >= 2; toggle(n.winStreakBadge, on); if (on) n.winStreakBadge.textContent = '🔥' + vm.winStreak; }
     // 托管图标
@@ -100,7 +101,7 @@
     if (n.timerRing) { toggle(n.timerRing, !!vm.isThinking); if (vm.isThinking) n.timerRing.style.setProperty('--timer', Math.max(0, Math.min(100, vm.timerPercent || 0)) + '%'); }
     // 盲注/庄家
     if (n.blindBadge) { const lab = vm.isSmallBlind ? 'SB' : vm.isBigBlind ? 'BB' : ''; toggle(n.blindBadge, !!lab); if (lab) n.blindBadge.textContent = lab; }
-    if (n.dealerButton) toggle(n.dealerButton, !!vm.isDealer);
+    // dealerButton 由桌级 DealerButtonLayer(#dealer-button) 驱动，座位内不重复
     // 座位下注筹码堆(数据=本街下注)
     if (n.betChipStackNode) { const on = (vm.streetBetAmount || 0) > 0; toggle(n.betChipStackNode, on); if (on) n.betChipStackNode.dataset.amt = String(vm.streetBetAmount); }
     // 快捷语气泡：有文字则显示并定时清除

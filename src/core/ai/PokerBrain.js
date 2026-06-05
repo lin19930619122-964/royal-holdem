@@ -85,10 +85,10 @@
     // 翻后：委托 PostflopHeuristics
     const d = Post.decide(ctx, rng);
     return pack(d.action, {
-      confidence: d.confidence, reason: d.reason, handClass: d.value.label,
-      equity: d.equity, potOdds: d.odds, boardTexture: d.texture.description, riskLevel: d.riskLevel, intent: d.intent,
+      confidence: d.confidence, reason: d.reason, handClass: d.handClassId,
+      equity: d.equity, potOdds: d.odds, boardTexture: d.boardText, riskLevel: d.riskLevel, intent: d.intent,
       reactionTimeMs,
-      features: { equity: d.equity, potOdds: d.odds, boardWetness: d.texture.wetness, spr: d.spr, madeHand: d.value.label, drawSummary: d.draws.summary, profileBias: profile.displayName, strength: d.rawStrength },
+      features: { equity: d.equity, potOdds: d.odds, boardWetness: d.texture.wetness, spr: d.spr, madeHand: d.handClassId, handClassCn: d.handClassCn, fromHole: d.fromHole, fromBoard: d.fromBoard, drawSummary: d.draws.summary, profileBias: profile.displayName, strength: d.rawStrength, actionHistory: d.historySummary },
     });
   }
 

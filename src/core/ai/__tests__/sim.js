@@ -32,9 +32,37 @@ const samples = [
 ];
 for (const [label, ov] of samples) { const d = Brain.decideBotAction(ctx(ov)); console.log(`  [${label}]\n    → ${d.reason}`); }
 
-console.log('\n=== 7 种 Bot · 同一翻牌局面(顶对弱踢脚 As5c / Kd8h2s 面对下注) 的决策与理由 ===');
-const spot = { street: 'flop', holeCards: C('Ah 5c'), board: C('Kd 8h 2s'), amountToCall: 300, currentBet: 300, pot: 600, minRaiseTo: 600, legalActions: LEGAL_FACING, activeOpponents: 1 };
+// 7 种 Bot × 20 手样例日志（含 street/position/handClass/boardTexture/SPR/equity/potOdds/actionHistory/decision/reason）
+const HIST = [{ street: 'preflop', pos: 'BTN', seat: 3, action: { type: 'call' } }, { street: 'preflop', pos: 'BB', seat: 2, action: { type: 'call' } }];
+const SPOTS = [
+  ['翻前UTG AA', { street: 'preflop', holeCards: C('Ah Ad'), board: [], position: 'UTG', amountToCall: 100, currentBet: 100, minRaiseTo: 200, legalActions: LEGAL_FACING, activeOpponents: 5 }],
+  ['翻前BTN 72o 开池', { street: 'preflop', holeCards: C('7h 2d'), board: [], position: 'BTN', amountToCall: 0, currentBet: 0, legalActions: LEGAL_OPEN, activeOpponents: 2 }],
+  ['翻前CO KJs 开池', { street: 'preflop', holeCards: C('Kh Jh'), board: [], position: 'CO', amountToCall: 0, currentBet: 0, legalActions: LEGAL_OPEN, activeOpponents: 3 }],
+  ['翻前BB 99 面加注', { street: 'preflop', holeCards: C('9h 9d'), board: [], position: 'BB', amountToCall: 300, currentBet: 300, minRaiseTo: 600, legalActions: LEGAL_FACING, activeOpponents: 2, previousActions: [{ street: 'preflop', pos: 'CO', action: { type: 'raise' } }] }],
+  ['翻牌 AsQs/Qh7d2c 无人下注', { street: 'flop', holeCards: C('As Qs'), board: C('Qh 7d 2c'), position: 'CO', amountToCall: 0, currentBet: 0, pot: 418, stack: 2440, effectiveStack: 2440, legalActions: LEGAL_OPEN, activeOpponents: 2, previousActions: HIST }],
+  ['翻牌 顶set 湿面', { street: 'flop', holeCards: C('9h 9d'), board: C('9s 8h 7h'), position: 'BTN', amountToCall: 0, currentBet: 0, pot: 600, legalActions: LEGAL_OPEN, activeOpponents: 1 }],
+  ['翻牌 超对 干面', { street: 'flop', holeCards: C('Ah Ad'), board: C('Kd 7c 2s'), position: 'CO', amountToCall: 0, currentBet: 0, pot: 500, legalActions: LEGAL_OPEN, activeOpponents: 1 }],
+  ['翻牌 同花听牌 干面', { street: 'flop', holeCards: C('Kh Qh'), board: C('Jh 7h 2c'), position: 'BTN', amountToCall: 0, currentBet: 0, pot: 400, legalActions: LEGAL_OPEN, activeOpponents: 1 }],
+  ['翻牌 两头顺听 面对下注', { street: 'flop', holeCards: C('Th 9d'), board: C('8s 7c 2h'), position: 'BB', amountToCall: 300, currentBet: 300, pot: 600, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['翻牌 顶对弱踢 面对下注', { street: 'flop', holeCards: C('Ah 5c'), board: C('Ad 9h 8h'), position: 'CO', amountToCall: 300, currentBet: 300, pot: 600, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['翻牌 空气 干面', { street: 'flop', holeCards: C('Qh Jc'), board: C('Ad 7s 2c'), position: 'BTN', amountToCall: 0, currentBet: 0, pot: 300, legalActions: LEGAL_OPEN, activeOpponents: 1 }],
+  ['转牌 成顺 面对下注', { street: 'turn', holeCards: C('Th 9d'), board: C('8s 7c 6h 2d'), position: 'BB', amountToCall: 500, currentBet: 500, pot: 1200, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['转牌 中对 面对下注', { street: 'turn', holeCards: C('9h 9d'), board: C('Kd 8h 4c 2s'), position: 'CO', amountToCall: 400, currentBet: 400, pot: 900, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['河牌 坚果同花 无人下注', { street: 'river', holeCards: C('Ah Kh'), board: C('Qh 7h 2h 9d 3c'), position: 'BTN', amountToCall: 0, currentBet: 0, pot: 1000, legalActions: LEGAL_OPEN, activeOpponents: 1 }],
+  ['河牌 边缘成牌 面对大注', { street: 'river', holeCards: C('Ah Tc'), board: C('As 9d 4h 2c 7s'), position: 'CO', amountToCall: 600, currentBet: 600, pot: 1200, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['河牌 空气 面对下注', { street: 'river', holeCards: C('Jh Tc'), board: C('Ad Kc 5s 5h 2d'), position: 'BB', amountToCall: 400, currentBet: 400, pot: 900, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['翻牌 两对 湿面', { street: 'flop', holeCards: C('Ah 9c'), board: C('As 9h 6h'), position: 'CO', amountToCall: 0, currentBet: 0, pot: 500, legalActions: LEGAL_OPEN, activeOpponents: 2 }],
+  ['翻牌 暗三 面对下注', { street: 'flop', holeCards: C('7h 7d'), board: C('Kd 7c 2s'), position: 'BB', amountToCall: 250, currentBet: 250, pot: 500, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['翻牌 中对+卡顺 面对下注', { street: 'flop', holeCards: C('Th 9d'), board: C('Jc 9h 4s'), position: 'BTN', amountToCall: 200, currentBet: 200, pot: 450, legalActions: LEGAL_FACING, activeOpponents: 1 }],
+  ['翻前HJ ATs 面加注', { street: 'preflop', holeCards: C('Ah Th'), board: [], position: 'HJ', amountToCall: 300, currentBet: 300, legalActions: LEGAL_FACING, activeOpponents: 3, previousActions: [{ street: 'preflop', pos: 'UTG', action: { type: 'raise' } }] }],
+];
 for (const k of Object.keys(P)) {
-  const d = Brain.decideBotAction(ctx(Object.assign({}, spot, { botProfile: P[k], seed: 7 })));
-  console.log(`  ${P[k].displayName.padEnd(5)} → ${d.action.type}${d.action.amount ? '@' + d.action.amount : ''} | ${d.intent}/${d.riskLevel} | ${d.reason}`);
+  console.log(`\n===== ${P[k].displayName} (${k}) · 20 手样例 =====`);
+  SPOTS.forEach(([label, sp], i) => {
+    const d = Brain.decideBotAction(ctx(Object.assign({}, sp, { botProfile: P[k], seed: (i + 1) * 31 + 7 })));
+    const a = d.action.type + (d.action.amount ? '@' + d.action.amount : '');
+    const spr = d.features.spr != null ? d.features.spr.toFixed(1) : '-';
+    console.log(`  ${String(i + 1).padStart(2)} ${label.padEnd(22)} → ${a.padEnd(11)}| ${(sp.position || '-')}/${d.handClass}/${d.boardTexture} | SPR${spr} eq${Math.round(d.equity * 100)}% po${Math.round(d.potOdds * 100)}% | ${d.intent}/${d.riskLevel}`);
+    if (i === 4) console.log(`       reason: ${d.reason}`);   // AsQs/Qh7d2c 那手打印完整 reason
+  });
 }

@@ -22,7 +22,7 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
 
 const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
-  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/OpponentModel.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js',
+  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/HandClassDescriber.js', 'core/ai/BoardTextureDescriber.js', 'core/ai/ActionHistoryFormatter.js', 'core/ai/DecisionReasonFormatter.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/OpponentModel.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js',
   'gamefeel/GameFeelEvent.js', 'gamefeel/GameFeelConfig.js', 'gamefeel/TableAnimationQueue.js', 'gamefeel/HapticDirector.js', 'gamefeel/ChipFlyAnimator.js', 'gamefeel/CardDealAnimator.js', 'gamefeel/PotWinAnimator.js', 'gamefeel/HighlightDirector.js', 'gamefeel/GameFeelDirector.js',
   'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/PlayerViewModel.js',
   'view/table/layers/_base.js', 'view/table/layers/TableBackgroundLayer.js', 'view/table/layers/TableFeltLayer.js', 'view/table/layers/SeatLayer.js', 'view/table/layers/DealerButtonLayer.js', 'view/table/layers/CommunityCardLayer.js', 'view/table/layers/PotLayer.js', 'view/table/layers/BetChipLayer.js', 'view/table/layers/PlayerHandLayer.js', 'view/table/layers/ActionPanelLayer.js', 'view/table/layers/TrainingAssistantLayer.js', 'view/table/layers/ChatEmojiLayer.js', 'view/table/layers/GiftAnimationLayer.js', 'view/table/layers/HistoryLayer.js', 'view/table/layers/ModalLayer.js',
@@ -138,6 +138,21 @@ ok(window.document.querySelector('[data-layer="SeatLayer"]') && window.document.
   // 无数据→隐藏
   SV.update(seat, VM.build({ id: 2, seat: 2, name: 'X', chips: 1000, bet: 0, folded: false, hole: [] }, { seatIndex: 2 }));
   ok(seat.querySelector('.fold-mask').classList.contains('hidden') && seat.querySelector('.blind-badge').classList.contains('hidden'), 'B 无数据→节点隐藏(非空显示)');
+  // avatarFrame: 'none' 不显示(修 none-bug)，真实框显示
+  SV.update(seat, VM.build({ id: 2, seat: 2, chips: 1, hole: [] }, { seatIndex: 2, avatarFrameId: 'none' }));
+  ok(!seat.querySelector('.avatar-frame').classList.contains('has-frame'), 'B avatarFrame=none→不显示框(none-bug 已修)');
+  SV.update(seat, VM.build({ id: 2, seat: 2, chips: 1, hole: [] }, { seatIndex: 2, avatarFrameId: 'gold' }));
+  ok(seat.querySelector('.avatar-frame').classList.contains('has-frame'), 'B avatarFrame=gold→显示框');
+  // winnerGlow / bestHandGlow 据结算数据
+  SV.update(seat, VM.build({ id: 2, seat: 2, chips: 1, winThisHand: 500, hole: [] }, { seatIndex: 2, isWinner: true, bestCardIds: ['As', 'Ks'] }));
+  ok(!seat.querySelector('.winner-glow').classList.contains('hidden'), 'B 赢家→winnerGlow 显示');
+  ok(!seat.querySelector('.best-hand-glow').classList.contains('hidden'), 'B 有 best5→bestHandGlow 显示');
+  // emojiMount / giftMount 一次性占位动画(popMount 真填充，非空占位)
+  SV.popMount(seat, 'emoji', '😀'); ok(/pop-anim/.test(seat.querySelector('.emoji-mount').innerHTML), 'B emojiMount 播放一次性表情');
+  SV.popMount(seat, 'gift', '🎁'); ok(/pop-anim/.test(seat.querySelector('.gift-mount').innerHTML), 'B giftMount 播放一次性礼物');
+  // dealerButton: 桌级单一标记(去重)，座位内不再有 seat-dealer
+  ok(!seat.querySelector('.seat-dealer'), 'B 座位内无重复庄家标记(去重)');
+  ok(window.document.getElementById('dealer-button'), 'B 庄家按钮为桌级 #dealer-button(状态驱动)');
 })();
 // Completion Sprint I：牌面主题(classic/neon) + 持久化 + 切换
 (function () {

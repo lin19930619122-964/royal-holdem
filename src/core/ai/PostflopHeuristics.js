@@ -5,10 +5,14 @@
   const Board = req ? require('./BoardTexture.js') : window.RHCore.BoardTexture;
   const EQ = req ? require('./EquityCalculator.js') : window.RHCore.EquityCalculator;
   const T = req ? require('./types.js') : window.RHCore.AiTypes;
-  const m = factory(Board, EQ, T);
+  const HCD = req ? require('./HandClassDescriber.js') : window.RHCore.HandClassDescriber;
+  const BTD = req ? require('./BoardTextureDescriber.js') : window.RHCore.BoardTextureDescriber;
+  const AHF = req ? require('./ActionHistoryFormatter.js') : window.RHCore.ActionHistoryFormatter;
+  const DRF = req ? require('./DecisionReasonFormatter.js') : window.RHCore.DecisionReasonFormatter;
+  const m = factory(Board, EQ, T, HCD, BTD, AHF, DRF);
   if (typeof module !== 'undefined' && module.exports) module.exports = m;
   if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).PostflopHeuristics = m;
-})(this, function (Board, EQ, T) {
+})(this, function (Board, EQ, T, HCD, BTD, AHF, DRF) {
   const INTENT = T.INTENT, INTENT_CN = T.INTENT_CN, RISK = T.RISK, RISK_CN = T.RISK_CN, MADE = T.MADE;
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const hasLegal = (ctx, type) => ctx.legalActions.some((a) => a.type === type);
@@ -129,8 +133,16 @@
     const intent = classifyIntent(action, { rawStrength, equity, odds, hasDraw, made: value.made, iChecked: iCheckedThisStreet(ctx), street: ctx.street });
     const riskLevel = classifyRisk(action, rawStrength, intent);
     const confidence = clamp(Math.abs(equity - odds) + rawStrength * 0.4, 0.25, 0.95);
-    const reason = buildReason(ctx, action, value, equity, odds, texture, draws, rawStrength, intent, riskLevel);
-    return { action, rawStrength, equity, odds, texture, draws, value, intent, riskLevel, confidence, reason, spr: stackPotRatio };
+    // 细粒度描述 + 富理由(G 解释层)
+    const hc = HCD.describe(ctx.holeCards, ctx.board);
+    const bt = BTD.describe(ctx.board);
+    const hist = AHF.format(ctx.previousActions || []);
+    const reason = DRF.format({
+      street: ctx.street, position: ctx.position, handClassCn: hc.cn, boardTextureCn: bt.cn,
+      equity, potOdds: odds, spr: stackPotRatio, intent, action, pot: ctx.pot,
+      historyCn: hist.cn, rangeHint: hist.rangeHint,
+    });
+    return { action, rawStrength, equity, odds, texture, draws, value, handClassId: hc.class, handClassCn: hc.cn, boardText: bt.text, fromHole: hc.fromHole, fromBoard: hc.fromBoard, intent, riskLevel, confidence, reason, spr: stackPotRatio, historySummary: hist.en };
   }
 
   function classifyIntent(action, f) {

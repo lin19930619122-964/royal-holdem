@@ -9,7 +9,7 @@ const ASSETS = [
   './core/poker/TableState.js', './core/poker/LegalActions.js', './core/poker/HandHistory.js',
   './core/poker/GameReducer.js', './core/poker/Equity.js', './core/poker/selectors.js',
   './core/ai/types.js', './core/ai/BotProfiles.js', './core/ai/BotProfile.js', './core/ai/PreflopMatrix.js',
-  './core/ai/BoardTexture.js', './core/ai/EquityCalculator.js', './core/ai/PostflopHeuristics.js',
+  './core/ai/BoardTexture.js', './core/ai/EquityCalculator.js', './core/ai/HandClassDescriber.js', './core/ai/BoardTextureDescriber.js', './core/ai/ActionHistoryFormatter.js', './core/ai/DecisionReasonFormatter.js', './core/ai/PostflopHeuristics.js',
   './core/ai/PokerBrain.js', './core/ai/OpponentModel.js', './core/ai/BotDecisionEngine.js', './game/table/GameAdapter.js',
   './services/EventBus.js', './services/AudioManager.js', './services/GameFeelDirector.js',
   './core/Lessons.js',

@@ -92,6 +92,7 @@
   const lastBotReason = {};   // 座位→最近一次 Bot 决策理由(复盘/策略助手用)
   let turnTimerPct = 0;       // 当前行动者倒计时百分比(SeatView.timerRing 用)
   let bestKeysBySeat = {};    // 座位→最佳五张 cardId(摊牌高亮用，E)
+  const seatWinStreak = [];   // 座位→连胜数(B winStreakBadge 用，逐座)
   const pendingQuickWord = {}; // 座位→待显示快捷语气泡文字
   let _eqKey = null, _eq = null;  // 蒙特卡洛胜率缓存(同手同街复用)
   let _rngKey = null, _rng = null;  // 对手范围胜率缓存
@@ -451,7 +452,7 @@
         const vm = window.RHCore.PlayerViewModel.build(p, {
           seatIndex: i, isDealer: i === game.button, isSmallBlind: i === game.sbIdx, isBigBlind: i === game.bbIdx,
           isThinking: game.current === i && game.bettingOpen, timerPercent: turnTimerPct,
-          isWinner: !!(result && p.winThisHand > 0), winStreak: i === 0 ? (Store.get().winStreak || 0) : 0,
+          isWinner: !!(result && p.winThisHand > 0), winStreak: seatWinStreak[i] || 0,
           isTrustee: !!p.out, avatarFrameId: i === 0 ? Store.get().activeFrame : null,
           bestCardIds: bestKeysBySeat[i] || [], quickWord: pendingQuickWord[i] || null,
         });
@@ -575,6 +576,13 @@
   function sayPhrase(text) {
     if (!game || !seatEls[0]) return;
     Fx.speechBubble(seatEls[0], text, 'mine', seatIsTop(0));
+    // B：英雄快捷语进 SeatView 气泡；表情走 emojiMount 一次性动画
+    const SV = window.RHCore.SeatView;
+    if (seatEls[0]._nodes) {
+      pendingQuickWord[0] = text;
+      SV.showBubble(seatEls[0]._nodes.quickWordBubble, text);
+      if (window.Social && Social.EMOJIS && Social.EMOJIS.indexOf(text) >= 0) SV.popMount(seatEls[0], 'emoji', text);
+    }
     Sfx.button();
     const opps = activeOpponents();
     if (opps.length && Math.random() < 0.8) {
@@ -597,6 +605,7 @@
     if (gf.cost > 0) { Store.get().coins -= gf.cost; Store.save(); syncWallet(true); }
     closeModal();
     Fx.flyGift(seatEls[0], seatEls[target.id], fxLayer, gf.icon);
+    window.RHCore.SeatView.popMount(seatEls[target.id], 'gift', gf.icon);   // B：礼物落到 giftMount 一次性动画
     try { Sfx.gift(gf.sfx); } catch (_) {}
     setTimeout(() => { if (seatEls[target.id]) Fx.speechBubble(seatEls[target.id], Social.pickChatter('win') || '多谢', '', seatIsTop(target.id)); }, 1000);
   }
@@ -662,6 +671,8 @@
   function decorateResult() {
     const result = game.result;
     if (!result) return;
+    // B：逐座连胜统计(参与本手者：赢家+1，其余清零)
+    for (let i = 0; i < game.N; i++) { const p = game.players[i]; if (p.out) continue; seatWinStreak[i] = (p.winThisHand > 0) ? (seatWinStreak[i] || 0) + 1 : 0; }
     let humanWon = false;
     const felt = $('table-felt');
     felt.classList.remove('win-flash'); void felt.offsetWidth; felt.classList.add('win-flash');

@@ -48,7 +48,7 @@
     // 跨街手牌历史：从 reducer 权威日志(game.log)抽取本手 ACTION 序列
     const street = game.street || game.phase;
     const rawLog = (game.log || []).filter((e) => e.t === 'ACTION' && e.hand === game.handNo);
-    const history = rawLog.map((e) => ({ street: e.street, seat: e.seat, playerId: String((game.players[e.seat] && game.players[e.seat].id) != null ? game.players[e.seat].id : e.seat), action: { type: e.act === 'allin' ? 'all-in' : e.act }, amount: e.amount }));
+    const history = rawLog.map((e) => ({ street: e.street, seat: e.seat, pos: positionOf(game, e.seat), playerId: String((game.players[e.seat] && game.players[e.seat].id) != null ? game.players[e.seat].id : e.seat), action: { type: e.act === 'allin' ? 'all-in' : e.act }, amount: e.amount }));
     const actionsThisStreet = history.filter((e) => e.street === street);
     // 剥削：取本街最近的进攻者(下注/加注)的对手统计作为 villain
     const oppStats = opts.oppStats || {};

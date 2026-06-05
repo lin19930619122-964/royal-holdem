@@ -66,16 +66,24 @@ function sample(ov, profile, n) {
   ok((trash.raise + trash.bet) <= 12, `D 7-2o UTG 极少主动加注(${trash.raise + trash.bet})`);
 })();
 
-// E) 翻后概念 + handClass 命名
+// E) 翻后细粒度 handClass + 富 boardTexture（G 解释层）
 (() => {
-  // 坚果(顶set)在湿面 → 价值意图、handClass=暗三条/葫芦类
   const setCtx = base({ street: 'flop', holeCards: C('9h 9d'), board: C('9s 8h 7h'), amountToCall: 0, currentBet: 0, legalActions: LEGAL_OPEN, botProfile: P.tight_aggressive, seed: 3, activeOpponents: 1 });
   const d1 = Brain.decideBotAction(setCtx);
-  ok(['暗三条', '葫芦', '三条'].includes(d1.handClass), `E set→handClass=${d1.handClass}`);
-  // 河牌边缘成牌面对下注 → 可能抓诈唬/弃牌，reason 含意图词
-  const riverCtx = base({ street: 'river', holeCards: C('Ah 5c'), board: C('Ks 9d 4h 2c 8s'), amountToCall: 400, currentBet: 400, pot: 800, legalActions: [{ type: 'fold' }, { type: 'call' }], botProfile: P.balanced_reg, seed: 4, activeOpponents: 1 });
-  const d2 = Brain.decideBotAction(riverCtx);
-  ok(/意图：/.test(d2.reason) && /风险：/.test(d2.reason), 'E 翻后 reason 含意图/风险讲解');
+  ok(['set', 'full_house', 'trips', 'straight'].includes(d1.handClass), `E set→handClass=${d1.handClass}`);
+})();
+
+// E2) 必达：AsQs / Qh7d2c → top_pair_good_kicker + rainbow dry q-high disconnected + reason 含 SPR/actionHistory
+(() => {
+  const ctx = base({ street: 'flop', holeCards: C('As Qs'), board: C('Qh 7d 2c'), amountToCall: 0, currentBet: 0, pot: 418, stack: 2440, effectiveStack: 2440, legalActions: LEGAL_OPEN, position: 'CO', activeOpponents: 2, botProfile: P.tight_aggressive, seed: 23,
+    previousActions: [{ street: 'preflop', pos: 'BTN', seat: 3, action: { type: 'call' } }, { street: 'preflop', pos: 'BB', seat: 2, action: { type: 'call' } }] });
+  const d = Brain.decideBotAction(ctx);
+  ok(d.handClass === 'top_pair_good_kicker', `E2 handClass=top_pair_good_kicker (实=${d.handClass})`);
+  ok(d.boardTexture === 'rainbow dry q-high disconnected', `E2 boardTexture (实=${d.boardTexture})`);
+  ok(/SPR 5\.8/.test(d.reason), 'E2 reason 含 SPR 5.8');
+  ok(/BTN 翻前跟注/.test(d.reason) && /BB 翻前跟注/.test(d.reason), 'E2 reason 含 actionHistory');
+  ok(/价值|半池/.test(d.reason) && !/概率合适|权益较高$/.test(d.reason), 'E2 reason 非废话(含尺度/价值)');
+  ok(!/1 张高张/.test(d.reason), 'E2 不把 A 踢脚误描述成"1 张高张"');
 })();
 
 done();
