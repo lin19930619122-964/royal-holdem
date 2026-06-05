@@ -1,9 +1,13 @@
 /* 离线缓存：网络优先（联网拿最新，断网才用缓存）— v6 修复白屏 */
-const CACHE = 'royal-holdem-v39';
+const CACHE = 'royal-holdem-v40';
 const ASSETS = [
   './', './index.html', './online.html', './styles.css',
   './codec.js', './skins.js', './store.js', './sound.js', './music.js', './voice.js', './fx.js', './social.js',
   './poker.js', './ai.js', './game.js', './router.js', './ui.js', './online.js',
+  './core/poker/SeededRng.js', './core/poker/types.js', './core/poker/Card.js', './core/poker/Deck.js',
+  './core/poker/HandEvaluator.js', './core/poker/HandComparator.js', './core/poker/SidePot.js',
+  './core/poker/TableState.js', './core/poker/LegalActions.js', './core/poker/HandHistory.js',
+  './core/poker/GameReducer.js', './core/poker/selectors.js', './game/table/GameAdapter.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];

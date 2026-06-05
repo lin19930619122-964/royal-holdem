@@ -277,6 +277,20 @@
   <script src="poker.js"></script>
   <script src="ai.js"></script>
   <script src="game.js"></script>
+  <!-- 规则核心(reducer)+ 绞杀者适配器：依赖序加载，挂到 window.RHCore -->
+  <script src="core/poker/SeededRng.js"></script>
+  <script src="core/poker/types.js"></script>
+  <script src="core/poker/Card.js"></script>
+  <script src="core/poker/Deck.js"></script>
+  <script src="core/poker/HandEvaluator.js"></script>
+  <script src="core/poker/HandComparator.js"></script>
+  <script src="core/poker/SidePot.js"></script>
+  <script src="core/poker/TableState.js"></script>
+  <script src="core/poker/LegalActions.js"></script>
+  <script src="core/poker/HandHistory.js"></script>
+  <script src="core/poker/GameReducer.js"></script>
+  <script src="core/poker/selectors.js"></script>
+  <script src="game/table/GameAdapter.js"></script>
   <script src="router.js"></script>
   <script src="ui.js"></script>
   <script>

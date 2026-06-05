@@ -1619,7 +1619,8 @@
     if (scheduled) { clearTimeout(scheduled); scheduled = null; }
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
-    game = new window.Game({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
+    // 牌桌引擎：由 reducer 核心驱动（经 GameAdapter，接口仍兼容旧 game.js）
+    game = window.RHCore.GameAdapter.create({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
     // SNG 锦标赛：所有人等额起始筹码，盲注递增，淘汰制
     sng = (cfg.mode === 'sng') ? { level: 0, hands: 0, places: {}, baseSb: cfg.sb, baseBb: cfg.bb } : null;
     // 按难度配置 AI：高手/大师=鲨鱼，更准的模拟

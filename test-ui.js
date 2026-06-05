@@ -9,7 +9,8 @@ const dom = new JSDOM(fs.readFileSync(path.join(SRC, 'index.html'), 'utf8'), { r
 const { window } = dom;
 global.window = window; global.document = window.document;
 window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
-const anode = () => ({ connect() { return anode(); }, start() {}, stop() {}, gain: { setValueAtTime() {}, value: 0, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {} }, frequency: { setValueAtTime() {}, value: 0, linearRampToValueAtTime() {} }, type: '', buffer: null, getChannelData: () => new Float32Array(1) });
+const aparam = () => ({ setValueAtTime() {}, setTargetAtTime() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {}, value: 0 });
+const anode = () => ({ connect() { return anode(); }, start() {}, stop() {}, gain: aparam(), frequency: aparam(), Q: aparam(), type: '', buffer: null, getChannelData: () => new Float32Array(1) });
 window.AudioContext = window.webkitAudioContext = function () { return { createOscillator: anode, createGain: anode, createBuffer: anode, createBufferSource: anode, createBiquadFilter: anode, destination: anode(), currentTime: 0, resume() {}, state: 'running', sampleRate: 44100 }; };
 window.localStorage = (() => { let s = {}; return { getItem: (k) => (k in s ? s[k] : null), setItem: (k, v) => (s[k] = String(v)), removeItem: (k) => delete s[k], clear: () => (s = {}) }; })();
 window.sessionStorage = (() => { let s = {}; return { getItem: (k) => (k in s ? s[k] : null), setItem: (k, v) => (s[k] = String(v)), removeItem: (k) => delete s[k] }; })();
@@ -20,7 +21,9 @@ window.HTMLCanvasElement.prototype.getContext = () => ({ scale() {}, clearRect()
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
 
-const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js', 'router.js', 'ui.js'];
+const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
+  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/selectors.js', 'game/table/GameAdapter.js',
+  'router.js', 'ui.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
 const S = window.Store, body = window.document.getElementById('panel-body');
@@ -90,6 +93,14 @@ ok(window.document.getElementById('hand-strip'), '历史简条元素存在');
 S.addHandRecord({ no: S.nextHandNo(), board: [], hole: [], net: 1000, decisions: [], mistakes: 0 });
 window.SceneRouter.go('table', { players: 6 }); // 重入牌桌触发历史简条
 ok(/hs-item/.test(window.document.getElementById('hand-strip').innerHTML), '历史简条已填充近期手牌');
+// Phase 3b：牌桌跑在 reducer 适配器上，实际发牌渲染
+ok(window.RHCore && typeof window.RHCore.GameAdapter.create === 'function', 'GameAdapter 已加载(window.RHCore)');
+window.SceneRouter.go('table', { players: 6 });
+window.document.getElementById('btn-start').click(); // 开始发牌 → nextHand → adapter.startHand
+const heroCards = window.document.querySelector('#seats .seat.me .player-cards');
+ok(heroCards && heroCards.children.length === 2, '适配器发牌后英雄渲染2张手牌');
+const seatsAll = window.document.querySelectorAll('#seats .seat');
+ok(seatsAll.length === 6, '6人桌座位渲染');
 // SceneRouter：统一路由
 ok(window.SceneRouter && typeof window.SceneRouter.go === 'function', 'SceneRouter exists');
 ['launch', 'login', 'hall', 'select', 'table', 'tutorial', 'replay', 'strategyLab'].forEach((s) => ok(window.SceneRouter.has(s), 'scene registered: ' + s));

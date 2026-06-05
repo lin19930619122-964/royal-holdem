@@ -59,7 +59,9 @@
       get sbIdx() { return self._state.sbIndex; },
       get bbIdx() { return self._state.bbIndex; },
       get smallBlind() { return self._state.config.smallBlind; },
+      set smallBlind(v) { self._state.config.smallBlind = v; },      // SNG 升盲需可写
       get bigBlind() { return self._state.config.bigBlind; },
+      set bigBlind(v) { self._state.config.bigBlind = v; },
       get ante() { return self._state.config.ante; },
       get phase() { return self._gameover ? 'gameover' : (PHASE[self._state.street] || 'idle'); },
       get bettingOpen() { return self._state.current >= 0 && !self._state.handOver; },
@@ -67,7 +69,7 @@
       get result() {
         if (self._gameover) return { gameOver: true, winner: proxies.find((p) => p.chips > 0) || null };
         const r = self._state.result; if (!r) return null;
-        return { showdown: r.showdown, reveal: r.reveal.slice(), pots: r.pots, handScores: r.handScores, handNames: r.handNames, summary: niceSummary(r) };
+        return { showdown: r.showdown, reveal: r.showdown ? r.reveal.slice() : [], pots: r.pots, handScores: r.handScores, handNames: r.handNames, summary: niceSummary(r) };
       },
 
       startHand() {
