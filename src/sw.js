@@ -1,5 +1,5 @@
 /* 离线缓存：网络优先（联网拿最新，断网才用缓存）— v6 修复白屏 */
-const CACHE = 'royal-holdem-v45';
+const CACHE = 'royal-holdem-v46';
 const ASSETS = [
   './', './index.html', './online.html', './styles.css',
   './codec.js', './skins.js', './store.js', './sound.js', './music.js', './voice.js', './fx.js', './social.js',
@@ -13,6 +13,9 @@ const ASSETS = [
   './core/ai/PokerBrain.js', './core/ai/BotDecisionEngine.js', './game/table/GameAdapter.js',
   './services/EventBus.js', './services/AudioManager.js', './services/GameFeelDirector.js',
   './core/Lessons.js',
+  './gamefeel/GameFeelEvent.js', './gamefeel/GameFeelConfig.js', './gamefeel/TableAnimationQueue.js', './gamefeel/HapticDirector.js',
+  './gamefeel/ChipFlyAnimator.js', './gamefeel/CardDealAnimator.js', './gamefeel/PotWinAnimator.js', './gamefeel/HighlightDirector.js', './gamefeel/GameFeelDirector.js',
+  './view/table/SeatView.js', './view/table/ActionPanel.js', './view/table/TableScene.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];

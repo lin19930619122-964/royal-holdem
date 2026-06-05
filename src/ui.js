@@ -223,20 +223,13 @@
     boardCount = -1; prevPot = -1; _potShown = 0;
     for (let i = 0; i < game.N; i++) {
       const pos = SEAT_POS[i] || { x: 50, y: 50 };
-      const seat = document.createElement('div');
-      seat.className = 'seat' + (i === 0 ? ' me' : '');
+      // 用 SeatView 组件构建座位（含成熟牌桌 22 子节点；保留旧渲染依赖的类名）
+      const sv = window.RHCore.SeatView.build(i, { avatarSrc: `assets/av/${seatAvatars[i] || (i + 1)}.png` });
+      const seat = sv.root;
+      if (i === 0) seat.classList.add('me');
       seat.style.left = pos.x + '%';
       seat.style.top = pos.y + '%';
       seat.style.transform = `translate(-50%,-50%) scale(${pos.scale || 1})`;
-      seat.innerHTML = `
-        <div class="winner-badge hidden"></div>
-        <div class="hand-name hidden"></div>
-        <div class="last-action"></div>
-        <div class="player-cards"></div>
-        <div class="player-box">
-          <div class="avatar"><span class="turn-ring hidden"></span><img class="av-img" src="assets/av/${seatAvatars[i] || (i + 1)}.png" onerror="this.style.display='none'"/><span class="av-emoji"></span><span class="blind-badge hidden"></span></div>
-          <div class="pinfo"><span class="ptitle hidden"></span><span class="pname"></span><span class="pchips"></span></div>
-        </div>`;
       seatsEl.appendChild(seat);
       seatEls.push(seat); seatSig.push(''); prevBet.push(0);
 
@@ -247,6 +240,34 @@
       seatsEl.appendChild(bet);
       betEls.push(bet);
     }
+  }
+
+  // GameFeel 舞台：把 DOM 访问器注入 GameFeelDirector 的各 Animator（jsdom 安全）
+  function buildGameFeelStage() {
+    const node = (i) => seatEls[i] && seatEls[i]._nodes;
+    return {
+      seatEl: (i) => seatEls[i],
+      seatCardEls: (i) => { const c = seatEls[i] && seatEls[i].querySelector('.player-cards'); return c ? Array.from(c.children) : []; },
+      boardCardEls: () => { const b = $('board'); return b ? Array.from(b.children) : []; },
+      potEl: () => $('pot-display'),
+      winnerAnchorEl: (i) => { const n = node(i); return (n && n.chipToWinnerAnchor) || seatEls[i]; },
+      fly: (from, to, opts) => { try { if (window.Fx && Fx.flyChip && from && to) Fx.flyChip(from, to, fxLayer, opts || { count: 1 }); } catch (e) { /* ignore */ } },
+      winnerGlow: (i, on) => { const n = node(i); if (n && n.winnerGlow) n.winnerGlow.classList.toggle('hidden', !on); if (seatEls[i]) seatEls[i].classList.toggle('seat-winner', !!on); },
+      clearWinnerGlow: () => seatEls.forEach((s, i) => { const n = node(i); if (n && n.winnerGlow) n.winnerGlow.classList.add('hidden'); s.classList.remove('seat-winner'); }),
+      setActiveSeat: (i) => seatEls.forEach((s, k) => s.classList.toggle('gf-active', k === i)),
+      setThinking: (i, on) => { const n = node(i); if (n && n.timerRing) n.timerRing.classList.toggle('hidden', !on); },
+      setFoldMask: (i) => { const n = node(i); if (n && n.foldMask) n.foldMask.classList.remove('hidden'); },
+      allInFocus: () => { try { flashAllIn(); } catch (e) { /* ignore */ } },
+      highlightBest: (list) => { try {
+        const keys = new Set(); (list || []).forEach((h) => (h.cardKeys || []).forEach((k) => keys.add(k)));
+        const b = $('board'); if (b) Array.from(b.querySelectorAll('[data-ck]')).forEach((el) => { const ck = el.getAttribute('data-ck'); el.classList.toggle('best5', keys.has(ck)); });
+        if ($('table-felt')) $('table-felt').classList.add('showdown-dim');
+      } catch (e) { /* ignore */ } },
+      clearHighlightBest: () => { try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); if ($('table-felt')) $('table-felt').classList.remove('showdown-dim'); } catch (e) { /* ignore */ } },
+      bigPotBanner: (bb) => { try { if (window.Fx && Fx.topBanner) Fx.topBanner(fxLayer, `大底池 ${Math.round(bb)}BB！`); } catch (e) { /* ignore */ } },
+      premiumHandCue: (i) => { const n = node(i); if (n && n.root) { n.root.classList.add('premium-cue'); setTimeout(() => n.root.classList.remove('premium-cue'), 900); } },
+      rollSeatStack: () => {},
+    };
   }
 
   // dealIdx>=0 时附加逐张发牌动画(按序错开 animation-delay)
@@ -592,10 +613,12 @@
     felt.classList.remove('win-flash'); void felt.offsetWidth; felt.classList.add('win-flash');
     const rb = $('result-banner');
     if (result.summary) { rb.textContent = '🏆 ' + result.summary; rb.classList.remove('hidden'); rb.style.animation = 'none'; void rb.offsetWidth; rb.style.animation = ''; }
+    if (GF && result.showdown) GF.emit('SHOWDOWN_START', {});
+    const winners = [];
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i];
       if (p.winThisHand > 0) {
-        Fx.flyChip(potEl, seatEls[i], fxLayer, { count: 4 });
+        winners.push({ seat: i, amount: p.winThisHand, toStack: p.chips });
         Fx.floatText(seatEls[i], `+${fmtChips(p.winThisHand)}`, fxLayer);
         Fx.pulseWin(seatEls[i]);
         Fx.coinBurst(seatEls[i], fxLayer, 12);
@@ -603,6 +626,20 @@
         else if (window.Voice && Math.random() < 0.7) Voice.play(seatVoice[p.id] || 0, 'win');
       }
     }
+    // 最佳五张高亮(取头号赢家的最佳五张里落在公共牌上的部分) + 收池(底池→赢家，经 GameFeel)
+    if (GF) {
+      try {
+        const top = winners.slice().sort((a, b) => b.amount - a.amount)[0];
+        if (result.showdown && top) {
+          const wp = game.players[top.seat];
+          const best = window.RHCore.HandEvaluator.evaluateBest((wp.hole || []).concat(game.board));
+          const keys = (best.cards || []).map((c) => c.rank + c.suit);
+          GF.emit('BEST_HAND_HIGHLIGHT', { highlight: [{ seat: top.seat, cardKeys: keys }] });
+        }
+        const potBb = game.bigBlind ? (winners.reduce((s, w) => s + w.amount, 0) / game.bigBlind) : 0;
+        GF.emit('POT_TO_WINNER', { winners, potBb });
+      } catch (e) { winners.forEach((w) => Fx.flyChip(potEl, seatEls[w.seat], fxLayer, { count: 4 })); }
+    } else { winners.forEach((w) => Fx.flyChip(potEl, seatEls[w.seat], fxLayer, { count: 4 })); }
     if (humanWon) {
       const meWin = (game.players[0].winThisHand) || 0;
       if (GF) GF.emit(meWin >= game.bigBlind * 40 ? 'HERO_WIN_BIG' : 'HERO_WIN_SMALL', { amount: meWin }); else Sfx.win();
@@ -614,7 +651,12 @@
         try { Sfx.streak(L || 1); } catch (_) {}
         if (streak >= 4) Fx.shake($('table-wrap'), streak >= 6 ? 9 : 6);
       }
-    } else { if (GF) GF.emit('HERO_LOSE'); else Sfx.lose(); }
+    } else if (GF) {
+      // bad beat：摊牌时英雄持强成牌(两对+)仍落败 → 触发复盘提示
+      const meHand = result.showdown && result.handScores && result.handScores[0];
+      const strong = meHand && meHand[0] >= 2 && !game.players[0].folded;
+      GF.emit(strong ? 'HERO_BAD_BEAT' : 'HERO_LOSE', { handScore: meHand || null });
+    } else { Sfx.lose(); }
 
     // 牌型特效：摊牌时按牌型等级炸场(对子小、同花顺最炸)。优先展示你的牌型
     if (result.showdown && result.handScores) {
@@ -723,6 +765,7 @@
     }
 
     const p = game.players[game.current];
+    if (GF) GF.emit('PLAYER_THINKING', { seat: game.current });   // 轮到谁：座位光圈/操作区亮起
     if (p.isHuman) enableHumanControls();
     else {
       hideHumanControls();
@@ -762,8 +805,22 @@
     }
     game.startHand();
     syncWallet();
-    if (GF) GF.emit('DEAL_HOLE_CARD'); else Sfx.deal();
+    emitHandStart();
     tick();
+  }
+
+  // 发牌相关事件统一出口：HAND_START → POST_BLINDS → DEAL_HOLE_CARD(逐张) → 英雄强起手提示
+  function emitHandStart() {
+    if (!GF) { Sfx.deal(); return; }
+    GF.emit('HAND_START', {});
+    GF.emit('POST_BLINDS', { sb: game.sbIdx, bb: game.bbIdx });
+    const seated = []; for (let i = 0; i < game.N; i++) if (!game.players[i].out) seated.push(i);
+    GF.emit('DEAL_HOLE_CARD', { seatIndices: seated });
+    const me = game.players[0];
+    if (me && me.hole && me.hole.length === 2) {
+      const code = (window.RHCore.PokerBrain.handCode(me.hole[0], me.hole[1]));
+      if (['AA', 'KK', 'QQ', 'JJ', 'AKs', 'AKo'].includes(code)) GF.emit('HERO_PREMIUM_HAND', { seat: 0, code });
+    }
   }
 
   // SNG 锦标赛下一手：结算淘汰名次、升盲、判定冠军/出局，不补码
@@ -787,7 +844,7 @@
       }
     }
     game.startHand();
-    if (GF) GF.emit('DEAL_HOLE_CARD'); else Sfx.deal();
+    emitHandStart();
     tick();
   }
   function endSng(humanPlace, won) {
@@ -858,6 +915,7 @@
     const raiseBtn = $('btn-raise');
     if (o.canRaise) { raiseBtn.classList.remove('hidden'); raiseBtn.textContent = o.isBet ? '下注' : '加注'; }
     else raiseBtn.classList.add('hidden');
+    try { window.RHCore.ActionPanel.renderLegal(o); } catch (e) { /* ignore */ }  // LegalActions 驱动 + 合法提示
     startTurnTimer(o);   // 回合倒计时（#1）
   }
   function hideHumanControls() { clearTurnTimer(); $('action-area').classList.add('hidden'); }
@@ -961,6 +1019,7 @@
   function showSessionSummary() {
     try {
       const s = Store.getPokerStats();
+      if (GF) GF.emit('SESSION_SUMMARY', { hands: sessionHands, stats: s });
       const line = `VPIP ${s.vpip}% · PFR ${s.pfr}% · 激进 ${s.af} · 摊牌 ${s.wtsd}% · 正确率 ${s.correct}%`;
       if (Fx && typeof Fx.rewardPop === 'function') Fx.rewardPop(fxLayer, '📊', `本场小结(已打 ${sessionHands} 手)`, `${line}　｜　漏洞：${s.leak}`);
       else toast(`本场小结：${line}`);
@@ -2145,9 +2204,13 @@
   if (window.Music) Music.setMuted(Store.get().muted);
   if (window.Voice) Voice.setMuted(Store.get().muted);
   $('sound-icon').textContent = Store.get().muted ? '🔇' : '🔊';
-  // GameFeelDirector：牌局事件→音频/视觉/节奏统一编排（语音默认关）
-  GF = window.RHCore.GameFeelDirector.create({ audio: window.RHCore.AudioManager.create({ sfx: window.Sfx, voice: { play: (key) => window.Voice && Voice.play(seatVoice[0] || 0, key) } }) });
+  // GameFeelDirector V2：牌局事件→音频/触觉/视觉(9 模块) 统一编排（语音默认关）
+  const _audioMgr = window.RHCore.AudioManager.create({ sfx: window.Sfx, voice: { play: (key) => window.Voice && Voice.play(seatVoice[0] || 0, key) } });
+  GF = window.RHCore.GameFeelDirectorV2.create({ audio: _audioMgr, stage: buildGameFeelStage() });
+  GF.quickWord = (id, key) => _audioMgr.quickWord(id, key);   // 兼容 maybeVoice 调用
   window.GameFeel = GF;
+  window.RHCore.TableScene.ensure();          // 显式化 14 层
+  window.RHCore.ActionPanel.mount();           // 仅补 legal-hint，不造假按钮；执行仍由既有处理器
   registerScenes();
   setupEvents();
   syncWallet();

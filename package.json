@@ -6,8 +6,9 @@
     "start": "node server.js",
     "test:rules": "node src/core/poker/__tests__/hand-evaluator.test.js && node src/core/poker/__tests__/side-pot.test.js && node src/core/poker/__tests__/legal-actions.test.js",
     "test:ai": "node src/core/ai/__tests__/poker-brain.test.js",
+    "test:gamefeel": "node src/gamefeel/__tests__/gamefeel.test.js",
     "sim:ai": "node src/core/ai/__tests__/sim.js",
-    "test": "npm run test:rules && npm run test:ai && node test-engine.js && node test-core.js && node test-bot.js && node test-gamefeel.js && node test-controller.js && node test-adapter.js && node test-ui.js && node test-mp.js"
+    "test": "npm run test:rules && npm run test:ai && npm run test:gamefeel && node test-engine.js && node test-core.js && node test-bot.js && node test-gamefeel.js && node test-controller.js && node test-adapter.js && node test-ui.js && node test-mp.js"
   },
   "author": "",
   "license": "MIT",

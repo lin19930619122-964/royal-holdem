@@ -22,7 +22,9 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
 
 const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
-  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
+  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js',
+  'gamefeel/GameFeelEvent.js', 'gamefeel/GameFeelConfig.js', 'gamefeel/TableAnimationQueue.js', 'gamefeel/HapticDirector.js', 'gamefeel/ChipFlyAnimator.js', 'gamefeel/CardDealAnimator.js', 'gamefeel/PotWinAnimator.js', 'gamefeel/HighlightDirector.js', 'gamefeel/GameFeelDirector.js',
+  'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/TableScene.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
   'router.js', 'ui.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
@@ -102,6 +104,14 @@ const seats9 = window.document.querySelectorAll('#seats .seat');
 ok(seats9.length === 9, '9-max 建出 9 个座位');
 ok(/scale\(1\.12\)/.test(seats9[0].style.transform), 'hero 座位 scale 1.12');
 ok(seats9[0].querySelector('.turn-ring') && seats9[0].querySelector('.blind-badge'), '座位含倒计时光圈+盲注标记');
+// Phase 3: SeatView 富节点（22 子节点的关键代表）+ ActionPanel 合法提示 + TableScene 分层
+['.fold-mask', '.winner-glow', '.best-hand-glow', '.bet-chip-stack', '.win-streak-badge', '.trustee-icon', '.emoji-mount', '.gift-mount', '.chip-to-pot-anchor', '.chip-to-winner-anchor', '.quick-word-bubble', '.avatar-frame'].forEach((sel) => ok(seats9[0].querySelector(sel), 'SeatView 含 ' + sel));
+ok(seats9[0]._nodes && seats9[0]._nodes.holeCardBack0 && seats9[0]._nodes.holeCardBack1, 'SeatView 含两张底牌位');
+ok(window.document.getElementById('legal-hint'), 'ActionPanel 合法提示元素存在');
+ok(window.RHCore.GameFeelDirectorV2 && typeof window.RHCore.GameFeelDirectorV2.create === 'function', 'GameFeelDirectorV2 已加载');
+ok(window.RHCore.TableScene && window.RHCore.TableScene.LAYERS.length === 14, 'TableScene 定义 14 层');
+(function () { const m = window.RHCore.TableScene.ensure(); const tagged = window.document.querySelectorAll('[data-layer]'); ok(m && tagged.length >= 8, 'TableScene 已标记分层 data-layer'); })();
+ok(window.document.querySelector('[data-layer="SeatLayer"]') && window.document.querySelector('[data-layer="CommunityCardLayer"]'), '关键层(SeatLayer/CommunityCardLayer)已显式化');
 // ⅔池 / 精确输入控件存在
 ok(window.document.querySelector('.quick[data-q="twothird"]'), '⅔池 快捷下注存在');
 ok(window.document.getElementById('raise-input'), '精确筹码输入存在');

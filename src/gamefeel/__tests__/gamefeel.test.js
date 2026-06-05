@@ -1,0 +1,63 @@
+/* GameFeel 子系统回归 —— 24 事件齐全 + 音频/触觉路由 + 各 Animator 经 stage 触发 + onVisual。
+   运行：node src/gamefeel/__tests__/gamefeel.test.js */
+const GFE = require('../GameFeelEvent.js');
+const GFD = require('../GameFeelDirector.js');
+const { harness } = require('../../core/poker/__tests__/_harness.js');
+const { ok, eq, done } = harness('GameFeel 子系统');
+const E = GFE.EVENTS;
+
+// mock stage：记录各 Animator 调用
+const calls = { fly: 0, seatCardEls: 0, boardCardEls: 0, winnerGlow: 0, foldMask: 0, active: 0, allInFocus: 0, best: 0, bigPot: 0, premium: 0 };
+const fakeEl = () => ({ classList: { add() {}, remove() {} }, style: {}, offsetWidth: 1 });
+const stage = {
+  seatEl: () => fakeEl(), potEl: () => fakeEl(), winnerAnchorEl: () => fakeEl(),
+  fly: () => { calls.fly++; },
+  seatCardEls: () => { calls.seatCardEls++; return [fakeEl(), fakeEl()]; },
+  boardCardEls: () => { calls.boardCardEls++; return [fakeEl(), fakeEl(), fakeEl(), fakeEl(), fakeEl()]; },
+  winnerGlow: () => { calls.winnerGlow++; }, clearWinnerGlow: () => {},
+  setFoldMask: () => { calls.foldMask++; }, setActiveSeat: () => { calls.active++; }, setThinking: () => {},
+  allInFocus: () => { calls.allInFocus++; }, highlightBest: () => { calls.best++; }, clearHighlightBest: () => {},
+  bigPotBanner: () => { calls.bigPot++; }, rollSeatStack: () => {}, premiumHandCue: () => { calls.premium++; },
+};
+const audioPlays = [];
+const audio = { play: (k) => { audioPlays.push(k); return true; }, setCategory() {} };
+const haptics = { fire: () => true, setEnabled() {}, isOn: () => true };
+
+const GF = GFD.create({ audio, stage, haptics, immediate: true });
+
+// 1) 24 事件常量齐全
+eq(GFE.ALL.length, 24, '定义 24 个 GameFeelEvent');
+['HAND_START', 'POST_BLINDS', 'DEAL_HOLE_CARD', 'HERO_PREMIUM_HAND', 'PLAYER_THINKING', 'PLAYER_FOLD', 'PLAYER_CHECK', 'PLAYER_CALL', 'PLAYER_BET', 'PLAYER_RAISE', 'PLAYER_ALL_IN', 'DEAL_FLOP', 'DEAL_TURN', 'DEAL_RIVER', 'SHOWDOWN_START', 'REVEAL_HAND', 'BEST_HAND_HIGHLIGHT', 'POT_TO_WINNER', 'HERO_WIN_SMALL', 'HERO_WIN_BIG', 'HERO_BAD_BEAT', 'HERO_GOOD_FOLD', 'ACHIEVEMENT_UNLOCKED', 'SESSION_SUMMARY'].forEach((k) => ok(E[k] === k, '事件存在: ' + k));
+
+// 2) 每个事件 emit 都不抛错
+let threw = 0;
+GFE.ALL.forEach((k) => { try { GF.emit(E[k], { seat: 1, seatIndices: [0, 1, 2], winners: [{ seat: 0, amount: 2000, toStack: 5000 }], potBb: 60, highlight: [{ seat: 0, cardKeys: ['As'] }] }); } catch (e) { threw++; console.log('  ✗ emit 抛错 ' + k + ': ' + e.message); } });
+ok(threw === 0, '2 全部 24 事件 emit 不抛错');
+
+// 3) 视觉分发到正确 Animator（immediate 队列→同步）
+ok(calls.seatCardEls > 0, '3 DEAL_HOLE_CARD→CardDealAnimator(座位卡)');
+ok(calls.boardCardEls > 0, '3 DEAL_FLOP/TURN/RIVER→翻牌');
+ok(calls.fly > 0, '3 下注/跟注/加注/赢池→ChipFly');
+ok(calls.foldMask > 0, '3 PLAYER_FOLD→foldMask');
+ok(calls.active > 0, '3 PLAYER_THINKING→激活座位高亮');
+ok(calls.allInFocus > 0, '3 PLAYER_ALL_IN→桌面聚焦');
+ok(calls.best > 0, '3 BEST_HAND_HIGHLIGHT→最佳五张高亮');
+ok(calls.winnerGlow > 0, '3 POT_TO_WINNER→赢家发光');
+ok(calls.bigPot > 0, '3 大底池(>=50BB)→big pot 反馈');
+ok(calls.premium > 0, '3 HERO_PREMIUM_HAND→强起手提示');
+
+// 4) 音频路由：有 sfx 配置的事件应触发 audio.play
+ok(audioPlays.includes('PLAYER_RAISE') && audioPlays.includes('HERO_WIN_BIG'), '4 配置了 sfx 的事件触发音频');
+ok(!audioPlays.includes('PLAYER_THINKING'), '4 无 sfx 的事件不触发音频');
+
+// 5) onVisual 订阅者收到 (event,payload,juice)
+let got = null;
+GF.onVisual((ev, pl, juice) => { if (ev === E.HERO_WIN_BIG) got = { ev, juice, amt: pl.winners && pl.winners[0].amount }; });
+GF.emit(E.HERO_WIN_BIG, { winners: [{ seat: 0, amount: 9999 }], potBb: 80 });
+ok(got && got.ev === E.HERO_WIN_BIG && got.juice === 'epic', '5 onVisual 收到事件+epic 级别');
+
+// 6) juiceOf
+eq(GF.juiceOf(E.PLAYER_ALL_IN), 'epic', '6 全下=epic');
+eq(GF.juiceOf(E.PLAYER_CHECK), 'subtle', '6 过牌=subtle');
+
+done();

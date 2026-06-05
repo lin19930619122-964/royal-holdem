@@ -912,3 +912,29 @@ html, body {
 
 .toast { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); background: rgba(10,30,20,.96); border: 1.5px solid var(--gold); color: #fff; padding: 14px 22px; border-radius: 14px; font-weight: 800; font-size: 15px; z-index: 200; box-shadow: 0 10px 40px rgba(0,0,0,.6); animation: toastIn .3s ease; text-align: center; }
 @keyframes toastIn { from{opacity:0; transform:translate(-50%,-10px)} to{opacity:1; transform:translate(-50%,0)} }
+
+/* ===== Phase 3/4: SeatView 新增节点 + GameFeel 视觉 ===== */
+.seat-view { position: absolute; }
+.seat .fold-mask { position: absolute; inset: -4px; border-radius: 12px; background: rgba(8,16,12,.55); z-index: 6; pointer-events: none; }
+.seat .winner-glow { position: absolute; inset: -8px; border-radius: 16px; box-shadow: 0 0 22px 6px rgba(212,175,55,.75); animation: gfWinPulse 1s ease-in-out infinite alternate; z-index: 4; pointer-events: none; }
+@keyframes gfWinPulse { from { opacity: .55; } to { opacity: 1; } }
+.seat.seat-winner { z-index: 8; }
+.seat .best-hand-glow { position: absolute; inset: -6px; border-radius: 14px; border: 2px solid rgba(212,175,55,.6); pointer-events: none; }
+.seat .win-streak-badge { position: absolute; top: -10px; right: -6px; font-size: 11px; background: linear-gradient(135deg,#ff8a3d,#ff3d6e); color: #fff; padding: 1px 6px; border-radius: 9px; z-index: 7; }
+.seat .trustee-icon { margin-left: 4px; opacity: .7; font-size: 11px; }
+.seat .avatar-frame { position: absolute; inset: -3px; border-radius: 50%; pointer-events: none; }
+.seat .quick-word-bubble { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); background: #fff; color: #123; font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; z-index: 9; }
+.seat .emoji-mount, .seat .gift-mount { position: absolute; left: 50%; transform: translateX(-50%); top: -34px; z-index: 9; }
+.seat .chip-to-pot-anchor, .seat .chip-to-winner-anchor { position: absolute; left: 50%; top: 50%; width: 1px; height: 1px; }
+.seat .bet-chip-stack { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); }
+.seat.gf-active .turn-ring { box-shadow: 0 0 14px 3px rgba(212,175,55,.8); }
+/* 摊牌：最佳五张高亮 + 其他压暗 */
+#table-felt.showdown-dim .card:not(.best5) { filter: brightness(.5) saturate(.7); transition: filter .3s ease; }
+.card.best5 { box-shadow: 0 0 14px 3px rgba(212,175,55,.85); transform: translateY(-3px); transition: all .25s ease; z-index: 3; }
+.seat.premium-cue { animation: gfPremium .9s ease; }
+@keyframes gfPremium { 0%,100% { filter: none; } 30% { filter: drop-shadow(0 0 10px rgba(255,215,0,.9)); } }
+/* ActionPanel 合法提示 */
+.legal-hint { font-size: 11px; color: #9fdcc0; text-align: center; padding: 2px 0; opacity: .85; }
+/* TableScene 覆盖层（不参与点击，仅作动画挂载） */
+.tlayer { position: absolute; inset: 0; pointer-events: none; }
+.bet-chip-layer { z-index: 5; } .chat-emoji-layer { z-index: 11; } .gift-anim-layer { z-index: 12; }
