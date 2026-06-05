@@ -22,7 +22,7 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
 
 const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
-  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/PokerBrain.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js',
+  'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/PokerBrain.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
   'router.js', 'ui.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
@@ -159,6 +159,32 @@ ok(/data-tutorial/.test(body.innerHTML), 'support offers tutorial');
 body.querySelector('[data-tutorial]').click();
 ok(window.document.getElementById('tut-ov'), 'tutorial overlay opens');
 ok(/欢迎来到训练场/.test(window.document.getElementById('tut-ov').innerHTML), 'tutorial first page');
+// Phase 6b 教学课程：注册表 + 判题 + 面板 + 课程runner自测流
+ok(window.RHCore.Lessons && window.RHCore.Lessons.count >= 6, 'Lessons 注册表 ≥6 课');
+(function () {
+  const L = window.RHCore.Lessons, lessons = L.all();
+  ok(lessons.every((l) => l.id && l.title && l.pages.length && l.quiz && Array.isArray(l.quiz.options) && typeof l.quiz.answer === 'number'), '每课含分页+自测题结构完整');
+  const lid = lessons[0].id, ans = lessons[0].quiz.answer;
+  ok(L.check(lid, ans).correct === true && L.check(lid, (ans + 1) % lessons[0].quiz.options.length).correct === false, 'check 判对错正确');
+  ok(typeof S.markLesson === 'function' && typeof S.getLessonDone === 'function', 'lesson 进度 API');
+  // 面板渲染
+  window.SceneRouter.go('lessons', {});
+  ok(/学习课程/.test(body.innerHTML) && body.querySelector('[data-lesson]'), '学习课程面板列出课程');
+  // 进第一课 → 翻到自测 → 答对 → 完成
+  body.querySelector(`[data-lesson="${lid}"]`).click();
+  const ov = window.document.getElementById('lesson-ov');
+  ok(ov && /tut-card/.test(ov.innerHTML), '课程运行器开启');
+  let guard = 0;
+  while (ov.querySelector('[data-le="next"]') && guard++ < 20) ov.querySelector('[data-le="next"]').click();
+  ok(ov.querySelector('[data-le-opt]'), '翻到自测题');
+  ov.querySelector(`[data-le-opt="${ans}"]`).click();
+  ok(/答对了/.test(ov.innerHTML) && ov.querySelector('[data-le="done"]'), '答对显示反馈+完成按钮');
+  ov.querySelector('[data-le="done"]').click();
+  ok(S.getLessonDone()[lid] === true, '完成后课程标记已学');
+  window.SceneRouter.go('lessons', {});
+  ok(/✓ 已学/.test(body.innerHTML), '面板显示已学标记');
+})();
+
 ok(!/传奇/.test(window.document.body.innerHTML), 'no 传奇 trademark in DOM');
 
 console.log(`\nUI 回归: ${pass} 通过, ${fail} 失败`);

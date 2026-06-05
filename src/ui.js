@@ -1171,7 +1171,7 @@
     activityMap: '运营总览', passport: '皇家征程', mysteryShop: '秘宝商店',
     goldenPig: '金库钱罐', invite: '邀请礼', tableChat: '牌桌聊天',
     tableGift: '牌桌礼物', tableHistory: '牌局记录', jackpot: '皇家奖池',
-    voiceCenter: '语音中心', strategyLab: '策略实验室', handDex: '牌型图鉴',
+    voiceCenter: '语音中心', strategyLab: '策略实验室', handDex: '牌型图鉴', lessons: '学习课程',
   };
   // 渲染面板正文 HTML（与弹窗/后置钩子解耦，便于单测与后续逐面板拆分）
   function renderPanelHTML(kind, p, hands, wins, rate) {
@@ -1416,6 +1416,16 @@
           ${panelRow('🎁', '好友礼物', '每日互赠金币，形成轻社交循环。', '规划')}
           ${panelRow('🚫', '黑名单', '商业版需要屏蔽、举报和禁言能力。', '安全')}
         </div>`;
+    } else if (kind === 'lessons') {
+      const L = window.RHCore.Lessons, done = Store.getLessonDone();
+      const all = L.all(), nDone = all.filter((l) => done[l.id]).length;
+      html = `<div class="panel-hero"><b>学习课程</b><span>原创德州训练讲义：每课分页讲解 + 一道自测题。学完一课答对即点亮。已完成 ${nDone}/${all.length} 课。</span></div>
+        <div class="panel-list">` + all.map((l) => {
+        const ok2 = done[l.id];
+        return `<div class="panel-row rc-row" data-lesson="${l.id}"><div class="pr-ic">${l.ic}</div>
+          <div><b>${l.title} ${ok2 ? '<span class="rc-ok">✓ 已学</span>' : ''}</b><div class="pr-text">${l.summary}</div></div>
+          <em>${ok2 ? '复习' : '学习'}</em></div>`;
+      }).join('') + `</div>`;
     } else if (kind === 'analytics') {
       const foldRate = window.OppModel.betsFaced ? Math.round(window.OppModel.folds / window.OppModel.betsFaced * 100) : 0;
       const log = Store.getHandLog();
@@ -1451,6 +1461,7 @@
       html = `<div class="panel-hero"><b>帮助中心</b><span>新手教程、规则说明与训练建议。</span></div>
         <div class="panel-list">
         <div class="panel-row achv-ready"><div class="pr-ic">🎓</div><div><b>新手教程</b><div class="pr-text">用图文引导带你认识牌桌、训练提示、行动与复盘。</div></div><button class="pr-claim" data-tutorial="1">重新观看</button></div>
+        <div class="panel-row rc-row" data-open-lessons="1"><div class="pr-ic">📚</div><div><b>学习课程</b><div class="pr-text">位置/底池赔率/听牌/激进度/诈唬/牌面解读 6 门进阶课，每课带自测。</div></div><em>进入</em></div>
         ${panelRow('📘', '规则说明', '标准德州扑克（Hold’em），支持单挑、6 人桌、9 人桌；7 张取最优 5 张比大小。')}
         ${panelRow('🧮', '训练建议', '先看胜率与底池赔率再决策；多用牌谱复盘找出偏误；不确定时切考试模式自测。')}
         ${panelRow('🔒', '本地说明', '纯本地训练 App，不接真钱、不联网必需、不采集数据。')}
@@ -1801,6 +1812,7 @@
     SceneRouter.register('replay', (pm) => { showScreen('home'); openReplay(pm.handId); }); // ReplayScene / HandReviewOverlay
     SceneRouter.register('strategyLab', () => { showScreen('home'); openPanel('strategyLab'); }); // StrategyLabScene
     SceneRouter.register('handDex', () => { showScreen('home'); openPanel('handDex'); });       // 牌型图鉴
+    SceneRouter.register('lessons', (pm) => { showScreen('home'); if (pm && pm.lessonId) openLesson(pm.lessonId); else openPanel('lessons'); }); // 学习课程
   }
 
   /* ---------- 事件绑定 ---------- */
@@ -1887,6 +1899,48 @@
     paint();
   }
 
+  // 教学课程运行器：分页讲解 → 自测题 → 答对点亮课程
+  function openLesson(id) {
+    const L = window.RHCore.Lessons, lesson = L.byId(id);
+    if (!lesson) return;
+    const pages = lesson.pages, total = pages.length;
+    let i = 0, phase = 'page', answered = -1;   // phase: page | quiz
+    const ov = document.createElement('div'); ov.id = 'lesson-ov'; ov.className = 'tut-ov';
+    const card = document.createElement('div'); card.className = 'tut-card'; ov.appendChild(card);
+    document.body.appendChild(ov);
+    function paint() {
+      if (phase === 'page') {
+        const s = pages[i];
+        const dots = pages.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('') + `<i class="${'quiz'}"></i>`;
+        card.innerHTML = `<div class="tut-ic">${lesson.ic}</div><h3>${s.h}</h3><p>${s.b}</p>
+          <div class="tut-dots">${dots}</div>
+          <div class="tut-btns"><button class="pr-ghost" data-le="exit">退出</button>
+          <button class="pr-claim" data-le="next">${i === total - 1 ? '去自测 ▶' : '下一步'}</button></div>`;
+      } else {
+        const q = lesson.quiz;
+        const opts = q.options.map((o, k) => {
+          const cls = answered < 0 ? '' : (k === q.answer ? ' le-right' : (k === answered ? ' le-wrong' : ''));
+          return `<button class="le-opt${cls}" data-le-opt="${k}" ${answered >= 0 ? 'disabled' : ''}>${o}</button>`;
+        }).join('');
+        const fb = answered < 0 ? '' : `<div class="le-explain ${answered === q.answer ? 'ok' : 'no'}">${answered === q.answer ? '✓ 答对了！' : '✗ 正确答案已标绿。'} ${q.explain}</div>`;
+        card.innerHTML = `<div class="tut-ic">📝</div><h3>自测：${lesson.title}</h3><p>${q.q}</p>
+          <div class="le-opts">${opts}</div>${fb}
+          <div class="tut-btns"><button class="pr-ghost" data-le="exit">退出</button>
+          ${answered >= 0 ? `<button class="pr-claim" data-le="done">完成课程</button>` : ''}</div>`;
+      }
+    }
+    ov.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-le]'), opt = e.target.closest('[data-le-opt]');
+      if (opt && answered < 0) { answered = parseInt(opt.dataset.leOpt, 10); try { (answered === lesson.quiz.answer ? Sfx.reward : Sfx.button)(); } catch (_) {} paint(); return; }
+      if (!b) return;
+      try { Sfx.button(); } catch (_) {}
+      if (b.dataset.le === 'exit') { ov.remove(); openPanel('lessons'); return; }
+      if (b.dataset.le === 'next') { if (i < total - 1) { i++; paint(); } else { phase = 'quiz'; paint(); } return; }
+      if (b.dataset.le === 'done') { if (answered === lesson.quiz.answer) Store.markLesson(id); ov.remove(); openPanel('lessons'); return; }
+    });
+    paint();
+  }
+
   function setupEvents() {
     // 路由
     $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); SceneRouter.go('select'); });
@@ -1957,6 +2011,9 @@
       if (rpEnter) { replayState = { idx: parseInt(rpEnter.dataset.replay, 10), step: 0 }; $('panel-body').innerHTML = renderHandReplay(replayState.idx, 0); try { Sfx.button(); } catch (_) {} return; }
       if (rpStep && !rpStep.disabled) { const [i, s] = rpStep.dataset.replayStep.split(':').map((x) => parseInt(x, 10)); replayState = { idx: i, step: s }; $('panel-body').innerHTML = renderHandReplay(i, s); try { Sfx.button(); } catch (_) {} return; }
       if (rpExit) { replayState = null; $('panel-body').innerHTML = renderHandDetail(parseInt(rpExit.dataset.replayExit, 10)); try { Sfx.button(); } catch (_) {} return; }
+      const les = e.target.closest('[data-lesson]'), olz = e.target.closest('[data-open-lessons]');
+      if (olz) { openPanel('lessons'); return; }
+      if (les) { closeModal(); openLesson(les.dataset.lesson); return; }
       const sc = e.target.closest('[data-claim-season]'), sca = e.target.closest('[data-claim-season-all]');
       if (sc) { const r = Store.claimSeason(sc.dataset.claimSeason); if (r) { Sfx.reward(); toast(`赛季奖励 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }
       if (sca) { const r = Store.claimSeasonAll(); if (r) { Sfx.reward(); toast(`领取 ${r.n} 级 🪙+${fmtChips(r.coins)}${r.diamonds ? ' 💎+' + r.diamonds : ''}`); syncWallet(true); syncHome(); $('panel-body').innerHTML = renderSeasonTrack(); } return; }

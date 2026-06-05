@@ -300,6 +300,10 @@
     save();
   }
   // 汇总(终身)：VPIP/PFR/激进度 AF/WTSD/W$SD/正确决策率 + 最大漏洞
+  // 教学课程进度：记录每课是否学完(quiz 答对)
+  function markLesson(id) { if (!id) return; profile.lessonDone = profile.lessonDone || {}; profile.lessonDone[id] = true; save(); }
+  function getLessonDone() { return Object.assign({}, profile.lessonDone || {}); }
+
   function getPokerStats() {
     const n = profile.st_pre || 0;
     const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
@@ -527,7 +531,7 @@
     buyScene: _scene.buy, setScene: _scene.set,
     setMuted, recordHand, recordAllin, addXp, levelInfo,
     canSpin, doSpin, WHEEL,
-    getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats, recordStatHand, getPokerStats,
+    getTasks, claimTask, getAchievements, claimAchv, hasClaimable, getStats, recordStatHand, getPokerStats, markLesson, getLessonDone,
     nextHandNo, addHandRecord, getHandLog, clearHandLog, toggleCoach, recordHandType, getHandDex,
     addSeasonXp, getSeason, claimSeason, claimSeasonAll, rankInfo, recordRank,
     canDailyGift, claimDailyGift, addVault, getVault, crackVault,

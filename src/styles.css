@@ -441,7 +441,7 @@ html, body {
 @keyframes topBannerIn { 0%{opacity:0;transform:translateY(-14px) scale(.9)} 10%{opacity:1;transform:none} 85%{opacity:1} 100%{opacity:0;transform:translateY(-10px)} }
 
 /* ---------- 新手引导 ---------- */
-#tut-ov { position:fixed; inset:0; z-index:9998; background:rgba(4,16,10,.82); display:flex; align-items:center; justify-content:center; padding:24px; }
+#tut-ov, .tut-ov { position:fixed; inset:0; z-index:9998; background:rgba(4,16,10,.82); display:flex; align-items:center; justify-content:center; padding:24px; }
 .tut-card { width:100%; max-width:340px; background:linear-gradient(180deg,#143726,#0c2418); border:1px solid var(--gold); border-radius:18px;
   padding:22px 20px; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.6); animation:pop .3s ease; }
 .tut-card .tut-ic { font-size:46px; line-height:1; }
@@ -452,6 +452,14 @@ html, body {
 .tut-dots i.on { background:var(--gold); width:18px; border-radius:4px; }
 .tut-btns { display:flex; gap:10px; justify-content:center; }
 .tut-btns .pr-claim, .tut-btns .pr-ghost { flex:1; }
+.le-opts { display:flex; flex-direction:column; gap:8px; margin:0 0 12px; }
+.le-opt { width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.05); color:#eafff2; font-size:13px; text-align:left; }
+.le-opt:disabled { opacity:1; }
+.le-opt.le-right { border-color:#3ddc84; background:rgba(61,220,132,.18); color:#bff7d6; }
+.le-opt.le-wrong { border-color:#e2574c; background:rgba(226,87,76,.16); color:#ffd2cd; }
+.le-explain { font-size:12px; line-height:1.55; text-align:left; border-radius:10px; padding:10px 12px; margin:0 0 12px; }
+.le-explain.ok { background:rgba(61,220,132,.12); color:#cdeedd; }
+.le-explain.no { background:rgba(226,87,76,.10); color:#f2d9d6; }
 
 .coin-burst { position:absolute; width:16px; height:16px; border-radius:50%; margin:-8px; pointer-events:none; z-index:21;
   background:radial-gradient(circle at 38% 32%,#fff 0 3px,var(--gold) 4px 100%); border:1.5px solid #fff8; }
