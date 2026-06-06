@@ -28,7 +28,7 @@
           const delay = idx * STEP; idx++;
           _order.push({ type: 'hole', seat: si, cardIndex: j, delay, duration: DUR });
           el.style.animationDelay = delay + 'ms'; el.classList.add('deal-in');
-          flyTo(el, delay, DUR);
+          // 真实牌的飞入由 CardRow(SeatLayer/PlayerHandLayer) 持有的 CardSlot 负责，这里只记录顺序+门控，不再造幽灵牌
         });
       });
     }
@@ -43,7 +43,7 @@
       const range = street === 'flop' ? els.slice(0, 3) : street === 'turn' ? els.slice(3, 4) : els.slice(4, 5);
       stagger(range, 'flip-in', street === 'flop' ? 140 : 0);
       _order = range.map((el, i) => ({ type: street, cardIndex: i, delay: i * 140, duration: DUR }));
-      range.forEach((el, i) => flyTo(el, i * 140, DUR));
+      // 公共牌真实飞入由 CommunityCardLayer(CardRow/CardSlot) 负责，这里只翻面定格+记录顺序，不再造幽灵牌
       return range;
     }
     // D：单张牌完整生命周期 —— reserved(占位,不显示牌面) → flying → landed → revealed(到达后才注入牌面)

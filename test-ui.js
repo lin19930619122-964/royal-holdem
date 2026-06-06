@@ -24,7 +24,7 @@ const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); 
 const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
   'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/HandClassDescriber.js', 'core/ai/BoardTextureDescriber.js', 'core/ai/ActionHistoryFormatter.js', 'core/ai/DecisionReasonFormatter.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/OpponentModel.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js',
   'gamefeel/GameFeelEvent.js', 'gamefeel/GameFeelConfig.js', 'gamefeel/TableAnimationQueue.js', 'gamefeel/HapticDirector.js', 'gamefeel/ChipFlyAnimator.js', 'gamefeel/CardSlot.js', 'gamefeel/CardDealAnimator.js', 'gamefeel/PotWinAnimator.js', 'gamefeel/HighlightDirector.js', 'gamefeel/GameFeelDirector.js',
-  'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/PlayerViewModel.js',
+  'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/PlayerViewModel.js', 'view/table/CardRow.js',
   'view/table/layers/_base.js', 'view/table/layers/TableBackgroundLayer.js', 'view/table/layers/TableFeltLayer.js', 'view/table/layers/SeatLayer.js', 'view/table/layers/DealerButtonLayer.js', 'view/table/layers/CommunityCardLayer.js', 'view/table/layers/PotLayer.js', 'view/table/layers/BetChipLayer.js', 'view/table/layers/PlayerHandLayer.js', 'view/table/layers/ActionPanelLayer.js', 'view/table/layers/TrainingAssistantLayer.js', 'view/table/layers/ChatEmojiLayer.js', 'view/table/layers/GiftAnimationLayer.js', 'view/table/layers/HistoryLayer.js', 'view/table/layers/ModalLayer.js',
   'view/table/TableScene.js', 'controllers/DealController.js', 'controllers/ShowdownController.js', 'controllers/SettlementController.js', 'controllers/ActionController.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
   'router.js', 'ui.js'];
@@ -184,6 +184,59 @@ ok(window.GameFeel && typeof window.GameFeel.isBusy === 'function' && typeof win
   const first = order[0];
   ok(first && first.delay === 0 && first.duration > 0 && first.type === 'hole', 'D 每张有 delay/duration/from-to(逐张 90ms 错开)');
   ok(GF.isBusy(), 'D 发牌后 isBusy()=true(ActionPanel 门控期)');
+})();
+// Live Integration Sprint：A/D 真实接入 —— CardRow/CardSlot 驱动 live 牌位
+(function () {
+  const CardRow = window.RHCore.CardRow, doc = window.document;
+  ok(CardRow && typeof CardRow.render === 'function', 'LI CardRow 模块存在(SeatLayer/PlayerHandLayer/CommunityCardLayer 共用)');
+  // A：live 牌桌发牌后，英雄手牌经 PlayerHandLayer 渲染并持有 CardSlot
+  window.SceneRouter.go('table', { players: 6 });
+  window.document.getElementById('btn-start').click();
+  const hero = doc.querySelector('#seats .seat.me .player-cards');
+  ok(hero && hero.children.length === 2, 'LI 英雄两张底牌由 layer 渲染');
+  ok(hero._slots && hero._slots.length === 2, 'LI 英雄 .player-cards 持有 2 个 CardSlot(layer 拥有)');
+  ok(hero._slots[0].state === 'revealed' && hero._slots[0].data.ownerType === 'hero', 'LI jsdom 无布局→同步 revealed，ownerType=hero');
+  // D：模拟有布局的浏览器 —— 发牌前显示牌背、不显示最终牌面；真实牌飞行中
+  const cont = doc.createElement('div'); doc.body.appendChild(cont);
+  const deck = doc.getElementById('deck-anchor');
+  cont.getBoundingClientRect = () => ({ width: 60, height: 84, left: 120, top: 240 });
+  if (deck) deck.getBoundingClientRect = () => ({ width: 40, height: 56, left: 10, top: 10 });
+  const faces = ['<div class="card small cf-classic" data-ck="As">A</div>', '<div class="card small cf-classic" data-ck="Kd">K</div>'];
+  const backs = ['<div class="card back small"></div>', '<div class="card back small"></div>'];
+  CardRow.render(cont, { count: 2, faceHTML: faces, backHTML: backs, revealed: true, fresh: true, deckAnchor: deck, reducedMotion: false, sig: 'li-a', ownerType: 'hero', seatIndex: 0 });
+  ok(cont.children.length === 2 && !/data-ck/.test(cont.innerHTML), 'LI(D) 有布局+fresh：飞行前只显示牌背、不显示真实牌面');
+  ok(cont._slots[0].state === 'flying', 'LI(D) 发牌前 CardSlot=flying(真实牌飞行，无幽灵)');
+  // 到达后 reveal：以即时定时器跑完飞行→揭示
+  const realST = window.setTimeout; window.setTimeout = (fn) => { try { fn(); } catch (e) {} return 0; };
+  CardRow.render(cont, { count: 2, faceHTML: faces, backHTML: backs, revealed: true, fresh: true, deckAnchor: deck, reducedMotion: false, sig: 'li-b', ownerType: 'hero', seatIndex: 0 });
+  window.setTimeout = realST;
+  ok(/data-ck="As"/.test(cont.innerHTML) && /data-ck="Kd"/.test(cont.innerHTML), 'LI(D) 到达后真实牌面就地 reveal(无幽灵叠加)');
+  // 对手发牌前为牌背(faceUp=false)，摊牌才 reveal
+  CardRow.render(cont, { count: 2, faceHTML: faces, backHTML: backs, revealed: false, fresh: false, sig: 'li-opp', ownerType: 'opponent', seatIndex: 3 });
+  ok(!/data-ck/.test(cont.innerHTML), 'LI 对手未摊牌→只牌背，不提前渲染真实牌面');
+  CardRow.reveal(cont, faces, 'li-opp-rv');
+  ok(/data-ck="As"/.test(cont.innerHTML), 'LI 对手 REVEAL_HAND→翻面显示真实牌');
+  cont.remove();
+  // A：ui.js 不再直接拼底牌 innerHTML，改由 layer/CardRow；且座位牌位经 seatsVM 委托
+  const uiSrc = fs.readFileSync(path.join(__dirname, 'src/ui.js'), 'utf8');
+  ok(!/cardsEl\.innerHTML\s*=\s*p\.hole\.map/.test(uiSrc), 'A ui.js 不再直接拼 .player-cards 底牌 innerHTML');
+  ok(/seats:\s*seatsVM/.test(uiSrc), 'A ui.js render 把 seatsVM 交给 TableScene(layer 渲染牌位)');
+  // C 保持：ui.js 0 处直接 GF.emit(全部经控制器)
+  ok((uiSrc.match(/GF\.emit\(/g) || []).length === 0, 'C ui.js 仍 0 处直接 GF.emit(emit 源在控制器)');
+  // 各层确实经 CardRow 渲染
+  ['SeatLayer', 'PlayerHandLayer', 'CommunityCardLayer'].forEach((n) => {
+    const s = fs.readFileSync(path.join(__dirname, 'src/view/table/layers/' + n + '.js'), 'utf8');
+    ok(/CardRow/.test(s), 'A ' + n + ' 经 CardRow 渲染牌位');
+  });
+  ok(!/deal-ghost/.test(uiSrc), 'D 旧幽灵牌(deal-ghost)已从 ui.js 移除');
+  // A：ui.js 不再循环渲染座位表现(头像/筹码/动作文字)，改由 SeatLayer
+  ok(!/\.av-emoji'\)\.textContent/.test(uiSrc) && !/\.pchips'\)\.textContent/.test(uiSrc), 'A ui.js render 不再直接写座位头像/筹码 DOM');
+  const seatLayerSrc = fs.readFileSync(path.join(__dirname, 'src/view/table/layers/SeatLayer.js'), 'utf8');
+  ok(/applySeat/.test(seatLayerSrc) && /SeatView\.update/.test(seatLayerSrc), 'A SeatLayer 接管座位表现落地(applySeat + SeatView.update)');
+  // SeatLayer 真的把 VM 落到座位 DOM：座位筹码经 layer 渲染(非空)
+  const seat1 = doc.querySelectorAll('#seats .seat')[1];
+  const chipsTxt = seat1 && seat1.querySelector('.pchips') && seat1.querySelector('.pchips').textContent;
+  ok(typeof chipsTxt === 'string' && /\d/.test(chipsTxt), 'A 座位筹码由 SeatLayer 落到 DOM(非空，证明座位表现已迁出 ui.js)');
 })();
 // ⅔池 / 精确输入控件存在
 ok(window.document.querySelector('.quick[data-q="twothird"]'), '⅔池 快捷下注存在');

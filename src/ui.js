@@ -260,21 +260,7 @@
       deckAnchorEl: () => $('deck-anchor'),
       seatCardAnchor: (i) => { const el = seatEls[i]; return el ? el.querySelector('.player-cards') : null; },   // 命名卡位锚点
       communityCardAnchor: () => $('board'),
-      // D：从牌堆锚点飞一张幽灵牌到目标卡位(真实 from/to 轨迹 + duration + onComplete)
-      flyDealCard: (toEl, delayMs, durMs, onComplete) => {
-        const dur = durMs || 320;
-        try {
-          const deck = $('deck-anchor'); if (!deck || !toEl || !fxLayer || typeof toEl.getBoundingClientRect !== 'function') { if (onComplete) setTimeout(onComplete, (delayMs || 0) + dur); return; }
-          const a = deck.getBoundingClientRect(), b = toEl.getBoundingClientRect(), lr = fxLayer.getBoundingClientRect();
-          if (!b.width && !b.height) { if (onComplete) onComplete(); return; } // 无布局(jsdom)时跳过视觉但仍回调
-          const g = document.createElement('div'); g.className = 'deal-ghost';
-          g.style.left = (a.left - lr.left) + 'px'; g.style.top = (a.top - lr.top) + 'px';
-          fxLayer.appendChild(g);
-          const dx = b.left - a.left, dy = b.top - a.top;
-          setTimeout(() => { requestAnimationFrame(() => { g.style.transition = `transform ${dur}ms cubic-bezier(.2,.8,.3,1.05), opacity ${dur}ms`; g.style.transform = `translate(${dx}px,${dy}px)`; g.style.opacity = '0.2'; }); }, delayMs || 0);
-          setTimeout(() => { g.remove(); if (onComplete) onComplete(); }, (delayMs || 0) + dur + 40);
-        } catch (e) { if (onComplete) onComplete(); }
-      },
+      // D：旧幽灵牌路径已移除。真实牌的飞入由 CardRow/CardSlot 直接驱动真实 .card 元素(SeatLayer/PlayerHandLayer/CommunityCardLayer)。
       potEl: () => $('pot-display'),
       winnerAnchorEl: (i) => { const n = node(i); return (n && n.chipToWinnerAnchor) || seatEls[i]; },
       fly: (from, to, opts) => { try { if (window.Fx && Fx.flyChip && from && to) Fx.flyChip(from, to, fxLayer, opts || { count: 1 }); } catch (e) { /* ignore */ } },
@@ -299,7 +285,10 @@
         revealedSeats.add(seat);
         const el = seatEls[seat]; if (!el) return;
         const p = game.players[seat], cards = el.querySelector('.player-cards');
-        if (cards && p && p.hole && p.hole.length) cards.innerHTML = p.hole.map((c) => cardFaceHTML(c, true, true)).join('');
+        // 经 CardRow.reveal 把该座位牌从背翻成正面(flip-in)，DOM 写入归 CardRow(CardSlot 体系)
+        if (cards && p && p.hole && p.hole.length && window.RHCore.CardRow) {
+          window.RHCore.CardRow.reveal(cards, p.hole.map((c) => cardFaceHTML(c, true, true)), 'rv' + seat + p.hole.map((c) => c.rank + c.suit).join(''));
+        }
         el.classList.add('seat-revealed');
         const hn = el.querySelector('.hand-name'); if (hn && payload && payload.hand) { hn.textContent = payload.hand; hn.classList.remove('hidden'); }
       } catch (e) { /* ignore */ } },
@@ -328,8 +317,18 @@
 
   // A：注入给各 Layer 的渲染上下文(底池/公共牌/庄家 由对应 layer 自行渲染)
   let _tableCtx = null;
+  function prefersReducedMotion() { try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
   function tableContext() {
-    if (!_tableCtx) _tableCtx = { renderCard: cardFaceHTML, rollPot, emit: (e) => { if (Ctl) Ctl.deal.dealStreet(e === 'DEAL_FLOP' ? 'flop' : e === 'DEAL_TURN' ? 'turn' : 'river'); }, sfxDeal: () => { try { Sfx.deal(); } catch (_) {} } };
+    if (!_tableCtx) _tableCtx = {
+      renderCard: cardFaceHTML, renderBack: cardBackHTML, rollPot,
+      emit: (e) => { if (Ctl) Ctl.deal.dealStreet(e === 'DEAL_FLOP' ? 'flop' : e === 'DEAL_TURN' ? 'turn' : 'river'); },
+      sfxDeal: () => { try { Sfx.deal(); } catch (_) {} },
+      seatCardEl: (i) => { const el = seatEls[i]; return el ? el.querySelector('.player-cards') : null; },  // 各座底牌容器(供 SeatLayer/PlayerHandLayer)
+      seatEl: (i) => seatEls[i],                              // 座位根元素(供 SeatLayer 落座位表现)
+      betEl: (i) => betEls[i],                                // 座位前下注筹码堆元素
+      deckAnchorEl: () => $('deck-anchor'),
+      reducedMotion: prefersReducedMotion(),
+    };
     _tableCtx.SEAT_POS = SEAT_POS;   // 每桌座位布局可变，刷新
     return _tableCtx;
   }
@@ -348,6 +347,50 @@
     return `<div class="card${red}${fl}${cf}${dl}"${ck}><span class="ci tl">${r}<i>${s}</i></span><span class="pip">${s}</span><span class="ci br">${r}<i>${s}</i></span></div>`;
   }
   const cardBackHTML = (small, dealIdx) => `<div class="card back${small ? ' small' : ''}${dealAttr(dealIdx == null ? -1 : dealIdx)}"></div>`;
+
+  // A：单座位的「数据」ViewModel(纯数据，含牌位+表现)。SeatLayer/PlayerHandLayer 据此落 DOM，ui.js 不再循环渲染座位。
+  // D：fresh 时 faceHTML 带 deal-in/错开延时；浏览器里 CardRow 先牌背后飞入再 reveal，jsdom 同步落地。
+  function buildSeatVM(i) {
+    const p = game.players[i], result = game.result;
+    const isHero = (i === 0);
+    const isActing = game.current === i && game.bettingOpen;
+    // 牌位数据
+    const revealed = p.isHuman || revealedSeats.has(i);
+    const fresh = game.handNo !== lastDealtHandNo && p.hole.length > 0 && !p.out;
+    const count = (p.out || p.hole.length === 0) ? 0 : p.hole.length;
+    const flipReveal = revealed && !isHero;                                  // 对手摊牌翻面(flip-in)；英雄不翻
+    const faceHTML = p.hole.map((c, ci) => cardFaceHTML(c, true, flipReveal, fresh ? ci : -1));
+    const backHTML = p.hole.map((_, ci) => cardBackHTML(true, fresh ? ci : -1));
+    const sig = 'h' + game.handNo + (revealed ? 'F' + p.hole.map((c) => c.rank + c.suit).join('') : 'B' + p.hole.length) + (p.out ? 'o' : '');
+    // 表现数据
+    let name = p.name, title = null;
+    if (p.isHuman) {
+      const sp = Store.get(), wq = Skins.watches[sp.activeWatch], tt = Skins.titles[sp.activeTitle];
+      name = (wq && wq.icon ? wq.icon + ' ' : '') + p.name;
+      if (tt && tt.text) title = { text: tt.text, color: tt.color };
+    }
+    let blind = '';
+    if (game.phase !== 'idle' && !p.out) { if (i === game.sbIdx) blind = 'SB'; else if (i === game.bbIdx) blind = 'BB'; }
+    const la = p.lastAction || '';
+    const laClass = p.lastAction === '弃牌' ? 'fold' : (['加注', '下注', '全下'].includes(p.lastAction) ? 'raise' : '');
+    const laPop = !!(p.lastAction && p.lastAction !== prevLA[i]);
+    const betHTML = (p.bet > 0 && !p.out) ? chipStackHTML(p.bet) : null;
+    const winnerBadge = (result && p.winThisHand > 0) ? ('+' + fmtChips(p.winThisHand)) : null;
+    const handName = (result && result.showdown && result.handNames && revealed && !p.folded && result.handNames[p.id]) ? result.handNames[p.id] : null;
+    const pvm = window.RHCore.PlayerViewModel.build(p, {
+      seatIndex: i, isDealer: i === game.button, isSmallBlind: i === game.sbIdx, isBigBlind: i === game.bbIdx,
+      isThinking: isActing, timerPercent: turnTimerPct, isWinner: !!(result && p.winThisHand > 0), winStreak: seatWinStreak[i] || 0,
+      isTrustee: !!p.out, avatarFrameId: i === 0 ? Store.get().activeFrame : null,
+      bestCardIds: bestKeysBySeat[i] || [], quickWord: pendingQuickWord[i] || null,
+    });
+    pendingQuickWord[i] = null;
+    return {
+      seatIndex: i, isHero, out: !!p.out, count, revealed, fresh, sig, faceHTML, backHTML,
+      avatarEmoji: p.out ? '💀' : p.avatar, isHuman: p.isHuman, name, title, chips: p.out ? '—' : fmtChips(p.chips),
+      folded: p.folded && !p.out, active: isActing, blind, humanThinking: isActing && p.isHuman,
+      lastAction: la, laClass, laPop, betHTML, winnerBadge, handName, pvm,
+    };
+  }
 
   // 底池数字滚动(从当前显示值平滑增到目标)
   function rollPot(target) {
@@ -384,7 +427,10 @@
     const potPulse = potNow > prevPot && prevPot >= 0;
     prevPot = potNow;
     const showDealer = (game.button >= 0 && game.phase !== 'idle' && !game.players[game.button].out) ? game.button : -1;
-    window.RHCore.TableScene.ensure().render({ pot: potNow, potPulse, board: game.board, button: showDealer, ctx: tableContext() });
+    // A：座位「数据」交给 SeatLayer(表现+对手牌)/PlayerHandLayer(英雄牌)；ui.js 只建 ViewModel，不再循环渲染座位 DOM
+    const seatsVM = []; let anyFreshDeal = false;
+    for (let i = 0; i < game.N; i++) { const cv = buildSeatVM(i); if (cv.fresh) anyFreshDeal = true; seatsVM.push(cv); }
+    window.RHCore.TableScene.ensure().render({ pot: potNow, potPulse, board: game.board, button: showDealer, seats: seatsVM, ctx: tableContext() });
     renderSidePots();
 
     const banner = $('phase-banner');
@@ -392,91 +438,13 @@
       banner.textContent = PHASE_LABEL[game.phase]; banner.style.opacity = '0.9';
     } else banner.style.opacity = '0';
 
-    const result = game.result;
-    let anyFreshDeal = false;
+    // 仅保留「动画触发」副作用(非渲染)：下注飞向底池 + 全下闪屏 + prev 状态追踪
     for (let i = 0; i < game.N; i++) {
-      const p = game.players[i], el = seatEls[i];
-      el.querySelector('.av-emoji').textContent = p.out ? '💀' : p.avatar;
-      const pname = el.querySelector('.pname');
-      pname.classList.toggle('is-human', p.isHuman);
-      const ptl = el.querySelector('.ptitle');
-      if (p.isHuman) {
-        const sp = Store.get(), wq = Skins.watches[sp.activeWatch], tt = Skins.titles[sp.activeTitle];
-        pname.textContent = (wq && wq.icon ? wq.icon + ' ' : '') + p.name;
-        if (tt && tt.text) { ptl.textContent = tt.text; ptl.style.color = tt.color; ptl.classList.remove('hidden'); } else ptl.classList.add('hidden');
-      } else { pname.textContent = p.name; ptl.classList.add('hidden'); }
-      el.querySelector('.pchips').textContent = p.out ? '—' : fmtChips(p.chips);
-      el.classList.toggle('folded', p.folded && !p.out);
-      const isActing = game.current === i && game.bettingOpen;
-      el.classList.toggle('active', isActing);
-      // 小盲/大盲标记（庄位 D 由 dealerBtn 单独显示）
-      const bb = el.querySelector('.blind-badge');
-      let blindTxt = '';
-      if (game.phase !== 'idle' && !p.out) { if (i === game.sbIdx) blindTxt = 'SB'; else if (i === game.bbIdx) blindTxt = 'BB'; }
-      bb.textContent = blindTxt; bb.classList.toggle('hidden', !blindTxt);
-      // 倒计时光圈：仅在你的回合显示（环形随 25s 收缩）
-      const ring = el.querySelector('.turn-ring');
-      if (isActing && p.isHuman) { ring.classList.remove('hidden'); }
-      else { ring.classList.add('hidden'); ring.style.animation = 'none'; }
-
-      const la = el.querySelector('.last-action');
-      la.textContent = p.lastAction || '';
-      la.className = 'last-action';
-      if (p.lastAction === '弃牌') la.classList.add('fold');
-      else if (['加注', '下注', '全下'].includes(p.lastAction)) la.classList.add('raise');
-      if (p.lastAction && p.lastAction !== prevLA[i]) la.classList.add('pop');
+      const p = game.players[i];
       if (p.lastAction === '全下' && prevLA[i] !== '全下' && prevLA[i] !== undefined) flashAllIn();
       prevLA[i] = p.lastAction;
-
-      // 下注筹码飞向底池
-      if (p.bet > prevBet[i]) {
-        Fx.flyChip(el, potEl, fxLayer, { count: 1 });
-      }
+      if (p.bet > prevBet[i]) Fx.flyChip(seatEls[i], potEl, fxLayer, { count: 1 });
       prevBet[i] = p.bet;
-
-      const betEl = betEls[i];
-      if (p.bet > 0 && !p.out) {
-        betEl.classList.remove('hidden');
-        betEl.innerHTML = chipStackHTML(p.bet);
-      } else betEl.classList.add('hidden');
-
-      // E：对手手牌只有被 REVEAL_HAND 事件逐家翻开后才正面显示(不再 render 一次性全亮)
-      const revealed = p.isHuman || revealedSeats.has(i);
-      const sig = (revealed ? 'F' + p.hole.map((c) => c.rank + c.suit).join('') : 'B' + p.hole.length) + (p.out ? 'o' : '');
-      if (sig !== seatSig[i]) {
-        const cardsEl = el.querySelector('.player-cards');
-        const freshDeal = game.handNo !== lastDealtHandNo && p.hole.length > 0;   // 新一手→逐张发牌
-        const flipReveal = revealed && !p.isHuman && seatSig[i].startsWith('B') && p.hole.length > 0; // 摊牌翻面
-        if (p.hole.length === 0 || p.out) cardsEl.innerHTML = '';
-        else if (revealed) cardsEl.innerHTML = p.hole.map((c, ci) => cardFaceHTML(c, true, flipReveal, freshDeal ? ci : -1)).join('');
-        else cardsEl.innerHTML = p.hole.map((_, ci) => cardBackHTML(true, freshDeal ? ci : -1)).join('');
-        if (freshDeal) anyFreshDeal = true;
-        seatSig[i] = sig;
-      }
-
-      const badge = el.querySelector('.winner-badge');
-      if (result && p.winThisHand > 0) {
-        badge.classList.remove('hidden'); badge.textContent = `+${fmtChips(p.winThisHand)}`;
-      } else badge.classList.add('hidden');
-
-      // 摊牌：座位上方显示牌型
-      const hn = el.querySelector('.hand-name');
-      if (result && result.showdown && result.handNames && revealed && !p.folded && result.handNames[p.id]) {
-        hn.textContent = result.handNames[p.id]; hn.classList.remove('hidden');
-      } else hn.classList.add('hidden');
-
-      // B：用 PlayerViewModel 驱动「此前空占位」节点(头像框/连胜/托管/弃罩/赢家光/最佳光/倒计时/盲注/庄D/下注堆/气泡)
-      try {
-        const vm = window.RHCore.PlayerViewModel.build(p, {
-          seatIndex: i, isDealer: i === game.button, isSmallBlind: i === game.sbIdx, isBigBlind: i === game.bbIdx,
-          isThinking: game.current === i && game.bettingOpen, timerPercent: turnTimerPct,
-          isWinner: !!(result && p.winThisHand > 0), winStreak: seatWinStreak[i] || 0,
-          isTrustee: !!p.out, avatarFrameId: i === 0 ? Store.get().activeFrame : null,
-          bestCardIds: bestKeysBySeat[i] || [], quickWord: pendingQuickWord[i] || null,
-        });
-        window.RHCore.SeatView.update(el, vm);
-        pendingQuickWord[i] = null;
-      } catch (e) { /* ignore */ }
     }
     if (anyFreshDeal) { lastDealtHandNo = game.handNo; fireHoleDeal(); }   // 卡牌 DOM 就绪 → 发底牌飞行事件
     // 庄家按钮由 DealerButtonLayer 在上方 TableScene.render(vm) 中渲染(不再内联)
