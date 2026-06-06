@@ -384,12 +384,12 @@ ok(window.RHCore.Lessons && window.RHCore.Lessons.count >= 6, 'Lessons 注册表
   GL.reset(); ok(GL.send(0, gseat, 'coffee', { now: 1 }) && GL.send(0, gseat, 'coffee', { now: 2 }) === false, 'P341 礼物冷却生效');
   // 5) HistoryLayer
   const HL = RH.TableScene.ensure().get('HistoryLayer');
-  HL.render({ history: { handNo: 7, streetLabel: '翻牌', canReplay: true, actions: [{ seat: 1, nickname: '老紧', position: 'UTG', action: '加注', amount: 300, amountText: '300', marker: '' }, { seat: 2, nickname: '跟注站', position: 'BB', action: '全下', amount: 5000, amountText: '5000', marker: 'allin' }], recentHands: [{ no: 6, net: 1200, netText: '1200' }] } });
+  HL.render({ history: { handNo: 7, streetLabel: '翻牌', canReplay: true, replayNo: 7, actions: [{ seat: 1, nickname: '老紧', position: 'UTG', action: '加注', amount: 300, amountText: '300', marker: '' }, { seat: 2, nickname: '跟注站', position: 'BB', action: '全下', amount: 5000, amountText: '5000', marker: 'allin' }], recentHands: [{ no: 6, net: 1200, netText: '1200' }] } });
   const hs = doc.getElementById('hand-strip');
   ok(/老紧/.test(hs.innerHTML) && /加注/.test(hs.innerHTML) && /300/.test(hs.innerHTML), 'P341 行动历史显示昵称/动作/金额');
   ok(/UTG/.test(hs.innerHTML) && /BB/.test(hs.innerHTML), 'P341 行动历史显示位置');
   ok(/ha-mark allin/.test(hs.innerHTML), 'P341 all-in 特殊标记');
-  ok(/data-replay-hand="7"/.test(hs.innerHTML), 'P341 一手结束→完整复盘入口');
+  ok(/data-replay-hand="7"/.test(hs.innerHTML), 'P341 一手结束→完整复盘入口(用 replayNo)');
   ok(/hs-item/.test(hs.innerHTML), 'P341 近期手净额保留');
   // 6) ModalLayer
   const ML = RH.TableScene.ensure().get('ModalLayer');

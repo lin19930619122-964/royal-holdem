@@ -8,9 +8,10 @@
     "test:ai": "node src/core/ai/__tests__/poker-brain.test.js && node src/core/ai/__tests__/opponent-model.test.js",
     "test:gamefeel": "node src/gamefeel/__tests__/gamefeel.test.js",
     "test-ui": "node test-ui.js",
+    "test:bugbash": "node test-bugbash.js",
     "test-engine": "node test-engine.js",
     "sim:ai": "node src/core/ai/__tests__/sim.js",
-    "test": "npm run test:rules && npm run test:ai && npm run test:gamefeel && node test-engine.js && node test-core.js && node test-bot.js && node test-gamefeel.js && node test-adapter.js && node test-ui.js && node test-mp.js"
+    "test": "npm run test:rules && npm run test:ai && npm run test:gamefeel && node test-engine.js && node test-core.js && node test-bot.js && node test-gamefeel.js && node test-adapter.js && node test-ui.js && node test-bugbash.js && node test-mp.js"
   },
   "author": "",
   "license": "MIT",

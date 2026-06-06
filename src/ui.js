@@ -361,11 +361,15 @@
     return rel <= 2 + Math.floor((N - 3) / 3) ? 'UTG' : 'MP';
   }
   let tableActionLog = [];   // 当前手的逐条行动(供 HistoryLayer)；emitHandStart 清空
+  let currentHandId = null;  // 每手唯一 id = seed#handNo（debug 复现用）
   // HistoryLayer 输入：当前手号·街道 + 最近 5 条行动 + 近期手净额
   function buildHistoryVM() {
     if (!game) return null;
     const recent = Store.getHandLog().slice(0, 6).map((h) => ({ no: h.no, net: h.net, netText: fmtChips(h.net) }));
-    return { handNo: game.handNo, streetLabel: streetLabelOf(game.board.length), actions: tableActionLog.slice(), recentHands: recent, canReplay: game.phase === 'ended' };
+    const canReplay = game.phase === 'ended';
+    // BUG-FIX(P1)：复盘入口要用 Store 手牌记录的 no(全局递增)，不是 game.handNo(每桌从 1)；否则打开错误/不存在的手
+    const replayNo = (canReplay && recent[0]) ? recent[0].no : null;
+    return { handNo: game.handNo, streetLabel: streetLabelOf(game.board.length), actions: tableActionLog.slice(), recentHands: recent, canReplay, replayNo };
   }
   // TrainingAssistantLayer 输入：decision(轮到你) / observe(对手行动) / summary(本手结束)
   function buildTrainingVM() {
@@ -383,7 +387,8 @@
     }
     if (!me.hole || me.hole.length !== 2 || !handAnalysis || game.phase === 'idle') return { visible: false };
     const a = handAnalysis, pot = game.pot || 0;
-    const spr = pot > 0 && me.chips ? Math.round((me.chips / pot) * 10) / 10 : null;
+    // BUG-FIX(P1)：SPR 是翻后概念(对底池的承诺比)，翻前无意义且会显示成 1247.9 这种荒数 → 仅翻后(≥3 张)显示，并封顶
+    const spr = (game.board.length >= 3 && pot > 0 && me.chips) ? Math.min(99, Math.round((me.chips / pot) * 10) / 10) : null;
     const note = (a.po != null && a.winPct != null && a.winPct < a.po) ? '跟注偏 -EV，考虑弃牌' : '';
     const reason = [a.pos && a.pos.advice, a.outs ? `听牌 ${a.outs} outs` : '', a.rec ? '建议' + a.rec : ''].filter(Boolean).join(' · ');
     return {
@@ -618,6 +623,7 @@
   function resumeAfterModal() { try { if (game && game.bettingOpen && game.current === 0 && (!GF || !GF.isBusy())) enableHumanControls(); } catch (e) { /* ignore */ } }
   function openTableModal(kind, data) {
     const M = tLayer('ModalLayer'); if (!M) return; data = data || {};
+    hideHumanControls();   // BUG-FIX(P1)：弹窗打开即暂停回合倒计时(清 _turnTimer)，避免在弹窗里被 25s 自动弃牌
     const base = { onClose: resumeAfterModal };
     if (kind === 'exit') return M.open('exit', Object.assign(base, { onConfirm: () => SceneRouter.go('hall') }));
     if (kind === 'rebuy') { const amt = (tableConfig && tableConfig.buyin) || 10000; return M.open('rebuy', Object.assign(base, { amount: amt, amountText: fmtChips(amt), onConfirm: () => { const me = game && game.players[0]; if (me) { me.chips = (me.chips || 0) + amt; toast('训练筹码 +' + fmtChips(amt)); render(); } } })); }
@@ -640,6 +646,65 @@
       } }));
     }
     return M.open(kind, Object.assign(base, data));
+  }
+
+  // ---------- Debug / Repro 能力 ----------
+  function cardSlotStatesOf() {
+    const out = { hero: [], opponents: {}, board: [] };
+    try {
+      for (let i = 0; i < (game ? game.N : 0); i++) {
+        const c = seatEls[i] && seatEls[i].querySelector('.player-cards');
+        const slots = (c && c._slots) || [];
+        const states = slots.map((s) => s && s.data ? { state: s.state, cardId: s.data.cardId, faceUp: s.data.faceUp, best5: s.data.isBestFive } : null);
+        if (i === 0) out.hero = states; else out.opponents[i] = states;
+      }
+      const b = $('board'); const bs = (b && b._slots) || [];
+      out.board = bs.map((s) => s && s.data ? { state: s.state, cardId: s.data.cardId, faceUp: s.data.faceUp, best5: s.data.isBestFive } : null);
+    } catch (e) { /* ignore */ }
+    return out;
+  }
+  function actionPanelStateOf() {
+    const btn = (id) => { const e = $(id); return e ? { hidden: e.classList.contains('hidden'), disabled: !!e.disabled } : null; };
+    return {
+      areaVisible: !!($('action-area') && !$('action-area').classList.contains('hidden')),
+      fold: btn('btn-fold'), check: btn('btn-check'), call: btn('btn-call'), raise: btn('btn-raise'),
+      confirmRaise: btn('btn-confirm-raise'), startVisible: !!($('start-area') && !$('start-area').classList.contains('hidden')),
+      gfBusy: !!(GF && GF.isBusy && GF.isBusy()), reason: (GF && GF.isBusy && GF.isBusy()) ? 'deal-animation-gating' : (currentModalOpen() ? 'modal-open' : (game && game.current === 0 && game.bettingOpen ? 'hero-turn' : 'not-hero-turn')),
+    };
+  }
+  function currentModalOpen() { const M = tLayer('ModalLayer'); return !!(M && M.isOpen && M.isOpen()); }
+  function buildDebugSnapshot() {
+    if (!game) return { error: 'no active game' };
+    const rw = (game._raw && game._raw()) || {};
+    const me = game.players[0];
+    const opts = (game.current != null && game.bettingOpen) ? game.actionOptions() : null;
+    return {
+      handId: currentHandId, seed: rw.seed, handNo: game.handNo, street: game.street, phase: game.phase,
+      buttonSeat: game.button, sbIdx: game.sbIdx, bbIdx: game.bbIdx, blinds: { sb: game.smallBlind, bb: game.bigBlind, ante: game.ante },
+      stacks: game.players.map((p) => ({ seat: p.id, name: p.name, chips: p.chips, bet: p.bet, folded: p.folded, allIn: p.allIn, out: p.out })),
+      pot: game.pot, sidePots: (game.result && game.result.pots) || (rw.result && rw.result.pots) || null,
+      board: (game.board || []).map((c) => c.rank + c.suit),
+      heroCards: (me.hole || []).map((c) => c.rank + c.suit),
+      visibleCards: [...document.querySelectorAll('#seats .seat .player-cards .card[data-ck]'), ...document.querySelectorAll('#board .card[data-ck]')].map((e) => e.getAttribute('data-ck')),
+      legalActions: opts, currentPlayer: game.current,
+      actionHistory: tableActionLog.slice(), reducerLog: (game.log || []).filter((e) => e.hand === game.handNo),
+      gameFeelEvents: (GF && GF.getEventLog) ? GF.getEventLog().slice(-30) : [],
+      cardSlotStates: cardSlotStatesOf(), modalState: { open: currentModalOpen(), kind: (tLayer('ModalLayer') || {}).kind ? tLayer('ModalLayer').kind() : null },
+      actionPanelState: actionPanelStateOf(),
+    };
+  }
+  function installDebugHoldem() {
+    if (typeof window === 'undefined') return;
+    window.__debugHoldem = {
+      dumpState: () => buildDebugSnapshot(),
+      dumpHandHistory: () => (game && game.log ? game.log.slice() : []),
+      dumpGameFeelEvents: () => (GF && GF.getEventLog ? GF.getEventLog().slice() : []),
+      dumpCardSlots: () => cardSlotStatesOf(),
+      replayHand: (handId) => { const no = String(handId).split('#').pop(); openReplay(no); },
+      startSeed: (seed, cfg) => { const base = tableConfig || resolveTableConfig({}); startTable(Object.assign({}, base, cfg || {}, { seed: seed })); return buildDebugSnapshot(); },
+      trainingVM: () => buildTrainingVM(), historyVM: () => buildHistoryVM(),
+      _game: () => game,   // 仅调试：取当前 game(只读用)
+    };
   }
 
   // 记录 AI 本局行动统计（用于对手画像）
@@ -876,8 +941,9 @@
     const p = game.players[game.current];
     if (Ctl) Ctl.action.thinking(game.current);   // 轮到谁：座位光圈/操作区亮起
     if (p.isHuman) {
-      // D：发牌动画期间禁用 ActionPanel，动画完成后才激活
-      if (GF && GF.isBusy()) { try { window.RHCore.ActionPanel.disableAll && window.RHCore.ActionPanel.disableAll(); } catch (e) {} hideHumanControls(); GF.onceIdle(() => { if (game && game.bettingOpen && game.current === 0) enableHumanControls(); }); }
+      // D：发牌动画期间禁用 ActionPanel，动画完成后才激活；弹窗打开期间也不激活(关闭时 resumeAfterModal 恢复)
+      if (currentModalOpen()) { try { window.RHCore.ActionPanel.disableAll && window.RHCore.ActionPanel.disableAll(); } catch (e) {} hideHumanControls(); }
+      else if (GF && GF.isBusy()) { try { window.RHCore.ActionPanel.disableAll && window.RHCore.ActionPanel.disableAll(); } catch (e) {} hideHumanControls(); GF.onceIdle(() => { if (game && game.bettingOpen && game.current === 0 && !currentModalOpen()) enableHumanControls(); }); }
       else enableHumanControls();
     } else {
       hideHumanControls();
@@ -925,6 +991,7 @@
   // 发牌相关事件统一出口：HAND_START → POST_BLINDS → DEAL_HOLE_CARD(逐张) → 英雄强起手提示
   function emitHandStart() {
     bestKeysBySeat = {}; revealedSeats.clear(); tableActionLog = [];
+    try { const rw = game._raw && game._raw(); currentHandId = (rw ? rw.seed : 0) + '#' + game.handNo; } catch (e) { currentHandId = '?#' + (game ? game.handNo : 0); }
     try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); document.querySelectorAll('.seat-revealed').forEach((e) => e.classList.remove('seat-revealed')); const f = $('table-felt'); if (f) f.classList.remove('showdown-dim'); } catch (e) { /* ignore */ }
     if (!Ctl) { Sfx.deal(); return; }
     Ctl.deal.handStart();
@@ -1962,7 +2029,7 @@
     tableConfig = cfg;
     SEAT_POS = SEAT_LAYOUTS[cfg.players] || SEAT_LAYOUTS[6];
     // 牌桌引擎：由 reducer 核心驱动（经 GameAdapter，接口仍兼容旧 game.js）
-    game = window.RHCore.GameAdapter.create({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1 });
+    game = window.RHCore.GameAdapter.create({ smallBlind: cfg.sb, bigBlind: cfg.bb, startChips: cfg.buyin, ante: cfg.ante || 0, bots: cfg.players - 1, seed: cfg.seed });
     // SNG 锦标赛：所有人等额起始筹码，盲注递增，淘汰制
     sng = (cfg.mode === 'sng') ? { level: 0, hands: 0, places: {}, baseSb: cfg.sb, baseBb: cfg.bb } : null;
     // 按难度配置 AI：bot 决策一律走 V4 PokerBrain 画像(BotDecisionEngine)；ai.js 仅供人类胜率提示
@@ -2361,6 +2428,7 @@
     action: window.RHCore.ActionController.create(GF),
   };
   window.GameControllers = Ctl;
+  installDebugHoldem();
   window.RHCore.TableScene.ensure();          // 显式化 14 层
   window.RHCore.ActionPanel.mount();           // 仅补 legal-hint，不造假按钮；执行仍由既有处理器
   registerScenes();

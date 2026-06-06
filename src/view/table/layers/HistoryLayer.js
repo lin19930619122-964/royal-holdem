@@ -25,7 +25,7 @@
       el.classList.remove('hidden');
       let html = '';
       if (acts.length) {
-        const replay = h.canReplay ? `<button class="ha-replay" data-replay-hand="${h.handNo}">复盘#${h.handNo}</button>` : '';
+        const replay = (h.canReplay && h.replayNo != null) ? `<button class="ha-replay" data-replay-hand="${h.replayNo}">复盘#${h.replayNo}</button>` : '';
         html += `<span class="ha-head">#${h.handNo} <i>${h.streetLabel || ''}</i>${replay}</span>` + acts.map(actionRow).join('');
       }
       if (recent.length) {
