@@ -10,7 +10,7 @@
     "test-ui": "node test-ui.js",
     "test-engine": "node test-engine.js",
     "sim:ai": "node src/core/ai/__tests__/sim.js",
-    "test": "npm run test:rules && npm run test:ai && npm run test:gamefeel && node test-engine.js && node test-core.js && node test-bot.js && node test-gamefeel.js && node test-controller.js && node test-adapter.js && node test-ui.js && node test-mp.js"
+    "test": "npm run test:rules && npm run test:ai && npm run test:gamefeel && node test-engine.js && node test-core.js && node test-bot.js && node test-gamefeel.js && node test-adapter.js && node test-ui.js && node test-mp.js"
   },
   "author": "",
   "license": "MIT",

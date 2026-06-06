@@ -2,10 +2,12 @@
    通过 stage 注入：seatCardEls(i)→[card els], boardCardEls()→[card els]。给卡牌加 deal-in/flip-reveal 类，
    按序错开 animation-delay。实际 keyframes 在 styles.css。无 DOM 时安全跳过。 */
 (function (root, factory) {
-  const m = factory();
+  const req = (typeof require !== 'undefined');
+  const CardSlot = req ? require('./CardSlot.js') : (typeof window !== 'undefined' ? window.RHCore.CardSlot : null);
+  const m = factory(CardSlot);
   if (typeof module !== 'undefined' && module.exports) module.exports = m;
   if (typeof window !== 'undefined') (window.RHCore = window.RHCore || {}).CardDealAnimator = m;
-})(this, function () {
+})(this, function (CardSlot) {
   function create(stage) {
     stage = stage || {};
     const STEP = 90, DUR = 320;     // 每张间隔 90ms（60-120ms 区间）、飞行 320ms
@@ -44,11 +46,23 @@
       range.forEach((el, i) => flyTo(el, i * 140, DUR));
       return range;
     }
+    // D：单张牌完整生命周期 —— reserved(占位,不显示牌面) → flying → landed → revealed(到达后才注入牌面)
+    function dealCard(opts) {
+      opts = opts || {};
+      const slot = opts.targetSlot || (CardSlot && opts.slotEl ? CardSlot.create(opts.slotEl) : null);
+      if (slot) slot.reserve();                                   // 飞行前：占位，不显示最终牌面
+      _order.push({ type: opts.type || 'card', cardId: opts.cardId, delay: opts.delay || 0, duration: opts.duration || DUR, faceUp: !!opts.faceUp });
+      const reveal = () => { if (slot) slot.land(); if (opts.onArrive) opts.onArrive(); if (slot) slot.reveal(opts.faceHTML != null ? opts.faceHTML : ''); if (opts.onReveal) opts.onReveal(); if (opts.onComplete) opts.onComplete(); };
+      if (opts.reducedMotion || !stage.flyDealCard || !opts.toAnchor) { reveal(); return slot; }   // 关闭动画：直接 reveal
+      if (slot) slot.fly();
+      stage.flyDealCard(opts.toAnchor, opts.delay || 0, opts.duration || DUR, reveal);   // 飞到达后 onComplete=reveal
+      return slot;
+    }
     function dealFlop() { return boardReveal('flop'); }
     function dealTurn() { return boardReveal('turn'); }
     function dealRiver() { return boardReveal('river'); }
     function lastOrder() { return _order.slice(); }
-    return { dealHoleCards, dealHole: dealHoleCards, dealFlop, dealTurn, dealRiver, revealBoard: boardReveal, stagger, lastOrder };
+    return { dealHoleCards, dealHole: dealHoleCards, dealCard, dealFlop, dealTurn, dealRiver, revealBoard: boardReveal, stagger, lastOrder };
   }
   return { create };
 });

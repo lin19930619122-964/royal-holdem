@@ -91,6 +91,26 @@ ok(got && got.ev === E.HERO_WIN_BIG && got.juice === 'epic', '5 onVisual 收到�
   must.forEach((m) => ok(evs.includes(m), '5b 控制器 emit ' + m));
 })();
 
+// 5c) D：CardSlot 状态机 + dealCard 揭示管线(飞行前不显示牌面，到达后才 reveal)
+(function () {
+  const CardSlot = require('../CardSlot.js');
+  const CardDeal = require('../CardDealAnimator.js');
+  const slotEl = { innerHTML: '', dataset: {}, classList: { add() {}, remove() {} } };
+  const slot = CardSlot.create(slotEl);
+  eq(slot.state, 'empty', '5c 初始 empty');
+  slot.reserve(); eq(slot.state, 'reserved', '5c reserve→reserved');
+  ok(!/A♠/.test(slotEl.innerHTML) && /slot-ph/.test(slotEl.innerHTML), '5c reserved 不显示牌面(占位)');
+  // 同步 dealCard(reducedMotion)：reserved→landed→revealed，只有 reveal 注入牌面
+  let arrived = false, revealed = false, completed = false;
+  const s2el = { innerHTML: '', dataset: {}, classList: { add() {}, remove() {} } };
+  const cd = CardDeal.create({ /* 无 flyDealCard → 直接 reveal */ });
+  const s2 = CardSlot.create(s2el);
+  cd.dealCard({ targetSlot: s2, faceHTML: '<div class="card">A♠</div>', reducedMotion: true, onArrive: () => { arrived = true; ok(!/A♠/.test(s2el.innerHTML), '5c onArrive 时牌面尚未注入'); }, onReveal: () => { revealed = true; }, onComplete: () => { completed = true; } });
+  ok(arrived && revealed && completed, '5c dealCard 走完 onArrive→onReveal→onComplete');
+  ok(/A♠/.test(s2el.innerHTML), '5c reveal 后才注入真实牌面');
+  ok(s2.state === 'revealed' && s2el.dataset.slot === 'revealed', '5c 终态 revealed');
+})();
+
 // 6) juiceOf
 eq(GF.juiceOf(E.PLAYER_ALL_IN), 'epic', '6 全下=epic');
 eq(GF.juiceOf(E.PLAYER_CHECK), 'subtle', '6 过牌=subtle');
