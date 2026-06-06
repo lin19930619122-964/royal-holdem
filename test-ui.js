@@ -21,13 +21,13 @@ window.HTMLCanvasElement.prototype.getContext = () => ({ scale() {}, clearRect()
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  ✗ ' + m); } };
 
-const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
+const FILES = ['version.js', 'codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voice.js', 'fx.js', 'social.js', 'poker.js', 'ai.js', 'game.js',
   'core/poker/SeededRng.js', 'core/poker/types.js', 'core/poker/Card.js', 'core/poker/Deck.js', 'core/poker/HandEvaluator.js', 'core/poker/HandComparator.js', 'core/poker/SidePot.js', 'core/poker/TableState.js', 'core/poker/LegalActions.js', 'core/poker/HandHistory.js', 'core/poker/GameReducer.js', 'core/poker/Equity.js', 'core/poker/selectors.js', 'core/ai/types.js', 'core/ai/BotProfiles.js', 'core/ai/BotProfile.js', 'core/ai/PreflopMatrix.js', 'core/ai/BoardTexture.js', 'core/ai/EquityCalculator.js', 'core/ai/HandClassDescriber.js', 'core/ai/BoardTextureDescriber.js', 'core/ai/ActionHistoryFormatter.js', 'core/ai/DecisionReasonFormatter.js', 'core/ai/PostflopHeuristics.js', 'core/ai/PokerBrain.js', 'core/ai/OpponentModel.js', 'core/ai/BotDecisionEngine.js', 'game/table/GameAdapter.js',
   'gamefeel/GameFeelEvent.js', 'gamefeel/GameFeelConfig.js', 'gamefeel/TableAnimationQueue.js', 'gamefeel/HapticDirector.js', 'gamefeel/ChipFlyAnimator.js', 'gamefeel/CardSlot.js', 'gamefeel/CardDealAnimator.js', 'gamefeel/PotWinAnimator.js', 'gamefeel/HighlightDirector.js', 'gamefeel/GameFeelDirector.js',
   'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/PlayerViewModel.js', 'view/table/CardRow.js',
   'view/table/layers/_base.js', 'view/table/layers/TableBackgroundLayer.js', 'view/table/layers/TableFeltLayer.js', 'view/table/layers/SeatLayer.js', 'view/table/layers/DealerButtonLayer.js', 'view/table/layers/CommunityCardLayer.js', 'view/table/layers/PotLayer.js', 'view/table/layers/BetChipLayer.js', 'view/table/layers/PlayerHandLayer.js', 'view/table/layers/ActionPanelLayer.js', 'view/table/layers/TrainingAssistantLayer.js', 'view/table/layers/ChatEmojiLayer.js', 'view/table/layers/GiftAnimationLayer.js', 'view/table/layers/HistoryLayer.js', 'view/table/layers/ModalLayer.js',
   'view/table/TableScene.js', 'controllers/DealController.js', 'controllers/ShowdownController.js', 'controllers/SettlementController.js', 'controllers/ActionController.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
-  'router.js', 'ui.js'];
+  'router.js', 'ui.js', 'qa-capture.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
 const S = window.Store, body = window.document.getElementById('panel-body');
@@ -413,6 +413,40 @@ ok(window.RHCore.Lessons && window.RHCore.Lessons.count >= 6, 'Lessons 注册表
   ok(!/hh\.innerHTML =/.test(uiSrc341), 'P341 ui.js 不再直接渲染训练提示 DOM');
   ok(!/el\.innerHTML = '<span class="hs-label/.test(uiSrc341), 'P341 ui.js 不再直接渲染桌内历史简条');
   ok(/buildTrainingVM|TrainingAssistantLayer/.test(uiSrc341) && /buildHistoryVM/.test(uiSrc341), 'P341 训练/历史改由 layer(VM 驱动)');
+})();
+
+// QA Capture Patch（v54）：真机 bug 采集入口
+(function () {
+  const doc = window.document;
+  ok(window.__APP_VERSION === 'v54', 'QA: appVersion=v54');
+  ok('__BUILD_COMMIT' in window, 'QA: __BUILD_COMMIT 注入位存在');
+  ok(window.__debugHoldem && typeof window.__debugHoldem.dumpState === 'function', 'QA: 保留 window.__debugHoldem');
+  ok(window.__qaCapture && typeof window.__qaCapture.snapshot === 'function', 'QA: __qaCapture 采集入口存在');
+  // 进桌发牌后取完整快照，校验全部必需字段
+  window.SceneRouter.go('table', { players: 6 });
+  window.document.getElementById('btn-start').click();
+  const snap = window.__qaCapture.snapshot();
+  const REQ = ['appVersion', 'commit', 'handId', 'seed', 'street', 'currentPlayer', 'heroSeat', 'buttonSeat', 'stacks', 'pot', 'sidePots', 'board', 'heroCards', 'visibleCards', 'legalActions', 'actionHistory', 'gameFeelEvents', 'cardSlotStates', 'modalState', 'actionPanelState', 'trainingVM', 'historyVM', 'lastError'];
+  REQ.forEach((k) => ok(k in snap, 'QA: 完整 snapshot 含 ' + k));
+  ok(snap.appVersion === 'v54' && snap.heroSeat === 0, 'QA: snapshot 自带 appVersion + heroSeat');
+  // 复制项齐全（dumpState/handHistory/GameFeelEvents/CardSlots/TrainingVM/HistoryVM/完整 snapshot）
+  ok(window.__qaCapture.items.length === 7, 'QA: 7 个复制项');
+  ['state', 'hh', 'gfe', 'slots', 'tvm', 'hvm', 'full'].forEach((id) => ok(window.__qaCapture.items.some((x) => x.id === id), 'QA: 复制项 ' + id));
+  // 默认隐藏；连点 5 次版本号打开
+  window.__qaCapture.close();
+  ok(!window.__qaCapture.isOpen(), 'QA: 面板默认隐藏');
+  for (let i = 0; i < 5; i++) window.__qaCapture._tap();
+  ok(window.__qaCapture.isOpen() && doc.getElementById('qa-panel') && !doc.getElementById('qa-panel').classList.contains('hidden'), 'QA: 连点 5 次版本号→打开 QA 面板');
+  // clipboard 不支持 → textarea 回落
+  const savedClip = window.navigator.clipboard; try { delete window.navigator.clipboard; } catch (e) { /* ignore */ }
+  doc.querySelector('#qa-panel [data-qa-copy="full"]').click();
+  const taEl = doc.querySelector('#qa-panel .qa-ta');
+  ok(taEl && !taEl.classList.contains('hidden') && taEl.value.length > 0, 'QA: 无 clipboard→回落到可长按复制的 textarea(已填快照)');
+  if (savedClip) { try { window.navigator.clipboard = savedClip; } catch (e) {} }
+  window.__qaCapture.close();
+  ok(!window.__qaCapture.isOpen() && doc.getElementById('qa-panel').classList.contains('hidden'), 'QA: 关闭后隐藏');
+  // QA 入口不影响正式玩法：牌桌仍在、座位仍渲染
+  ok(!doc.getElementById('screen-table').classList.contains('hidden') && doc.querySelectorAll('#seats .seat').length === 6, 'QA: 入口不影响牌桌玩法');
 })();
 
 ok(!/传奇/.test(window.document.body.innerHTML), 'no 传奇 trademark in DOM');

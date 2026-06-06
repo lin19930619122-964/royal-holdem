@@ -158,6 +158,7 @@
         </div>
         <div class="table-meta"><span class="blind-chip" id="blindInfo">50/100</span><span class="hand-chip" id="handInfo">第0手</span></div>
         <button id="btn-table-menu" class="table-menu-btn" aria-label="牌桌菜单">⚙</button>
+        <span id="app-version" class="app-version" title="连点 5 次打开 QA 采集">v54</span>
       </header>
 
       <main id="table-wrap">
@@ -268,6 +269,7 @@
     <div id="modal-toast" class="toast hidden"></div>
   </div>
 
+  <script src="version.js"></script>
   <script src="codec.js"></script>
   <script src="skins.js"></script>
   <script src="store.js"></script>
@@ -348,6 +350,7 @@
   <script src="core/Lessons.js"></script>
   <script src="router.js"></script>
   <script src="ui.js"></script>
+  <script src="qa-capture.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

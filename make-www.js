@@ -22,6 +22,14 @@ function copyDir(s, d) {
 rmrf(WWW);
 copyDir(SRC, WWW);
 
+// 注入真实 commit 到 version.js（QA 快照用）：CI 用 GITHUB_SHA，本地用 git
+(function injectCommit() {
+  let commit = process.env.GITHUB_SHA ? process.env.GITHUB_SHA.slice(0, 7) : 'unknown';
+  if (commit === 'unknown') { try { commit = require('child_process').execSync('git rev-parse --short HEAD').toString().trim(); } catch (e) { /* leave unknown */ } }
+  const vp = path.join(WWW, 'version.js');
+  try { let v = fs.readFileSync(vp, 'utf8'); v = v.replace(/__BUILD_COMMIT\s*=\s*'[^']*'/, `__BUILD_COMMIT = '${commit}'`); fs.writeFileSync(vp, v); console.log(`version.js commit 注入 = ${commit}`); } catch (e) { console.log('version.js 注入跳过:', e.message); }
+})();
+
 // 注入联机服务器地址
 const onlinePath = path.join(WWW, 'online.html');
 let html = fs.readFileSync(onlinePath, 'utf8');
