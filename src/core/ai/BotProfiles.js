@@ -25,5 +25,29 @@
     maniac: { id: 'maniac', displayName: '疯狗型', archetype: 'maniac', vpipTarget: 0.60, pfrTarget: 0.45, aggression: 0.95, bluffFrequency: 0.32, callDownLightness: 0.58, trapFrequency: 0.02, foldToCbet: 0.28, threeBetFrequency: 0.26, tiltFactor: 0.45, reactionTimeMs: [250, 800] },
   };
   const ARCHETYPES = Object.keys(DEFAULT_BOT_PROFILES);
-  return { DEFAULT_BOT_PROFILES, ARCHETYPES };
+  // 每种画像的昵称池（原创，便于学习识别打法）+ 程序化头像 emoji（无真实头像资源时的默认头像）
+  const IDENTITY = {
+    nit: { avatar: '🧊', nicknames: ['老紧', '岩石哥', '收牌僧', '深海冷石'] },
+    tight_aggressive: { avatar: '🥶', nicknames: ['枪口冷面', '紧凶刀客', '冷面狙击', '精准猎手'] },
+    balanced_reg: { avatar: '🤓', nicknames: ['均衡常规', '稳健老炮', '教科书', '线人'] },
+    loose_passive: { avatar: '😌', nicknames: ['温吞水', '看一张', '佛系老王', '水鱼'] },
+    calling_station: { avatar: '🍺', nicknames: ['跟注站', '不弃哥', '咖啡跟注', '黏王'] },
+    loose_aggressive: { avatar: '😈', nicknames: ['松凶玩家', '按钮位猎手', '火力全开', '压力机器'] },
+    maniac: { avatar: '🤪', nicknames: ['疯狗玩家', '全下狂人', '掀桌侠', '油门焊死'] },
+  };
+  function styleLabelOf(archetype) { const p = DEFAULT_BOT_PROFILES[archetype]; return (p && p.displayName) || '常规玩家'; }
+  function avatarOf(archetype) { return (IDENTITY[archetype] || IDENTITY.balanced_reg).avatar; }
+  // 为一桌的 bot 画像分配「不重复」的昵称（同画像多座位也不撞名）。profiles: [{archetype}|null]，返回 [{nickname,avatar,styleLabel}|null]
+  function assignIdentities(archetypes) {
+    const used = new Set();
+    return (archetypes || []).map((arch) => {
+      if (!arch) return null;
+      const pool = (IDENTITY[arch] || IDENTITY.balanced_reg).nicknames;
+      let pick = pool.find((n) => !used.has(n));
+      if (!pick) { let k = 2; while (used.has(pool[0] + k)) k++; pick = pool[0] + k; }   // 池用尽→加序号兜底
+      used.add(pick);
+      return { nickname: pick, avatar: avatarOf(arch), styleLabel: styleLabelOf(arch) };
+    });
+  }
+  return { DEFAULT_BOT_PROFILES, ARCHETYPES, IDENTITY, styleLabelOf, avatarOf, assignIdentities };
 });

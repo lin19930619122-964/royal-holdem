@@ -227,6 +227,7 @@
   function buildSeats() {
     seatsEl.innerHTML = '';
     seatsEl.className = game.N >= 8 ? 'many' : '';
+    ['ChatEmojiLayer', 'GiftAnimationLayer'].forEach((n) => { const L = tLayer(n); if (L && L.reset) L.reset(); });   // 新桌重置社交冷却
     seatEls.length = 0; betEls.length = 0; seatSig.length = 0; prevBet.length = 0; prevLA.length = 0;
     boardCount = -1; prevPot = -1; _potShown = 0; if (boardEl) boardEl._count = undefined;   // 重置公共牌层计数
     for (let i = 0; i < game.N; i++) {
@@ -348,6 +349,51 @@
   }
   const cardBackHTML = (small, dealIdx) => `<div class="card back${small ? ' small' : ''}${dealAttr(dealIdx == null ? -1 : dealIdx)}"></div>`;
 
+  // 桌内内容层访问器 + 行动日志 + 位置/街道工具
+  function tLayer(name) { try { return window.RHCore.TableScene.ensure().get(name); } catch (e) { return null; } }
+  function streetLabelOf(n) { return n === 0 ? '翻牌前' : n === 3 ? '翻牌' : n === 4 ? '转牌' : n === 5 ? '河牌' : ''; }
+  function posLabelOf(seat) {
+    if (!game || game.button == null || game.button < 0) return '';
+    const N = game.N, rel = (((seat - game.button) % N) + N) % N;   // 0=按钮
+    if (N === 2) return rel === 0 ? 'BTN' : 'BB';
+    if (rel === 0) return 'BTN'; if (rel === 1) return 'SB'; if (rel === 2) return 'BB';
+    if (rel === N - 1) return 'CO'; if (rel === N - 2) return 'HJ';
+    return rel <= 2 + Math.floor((N - 3) / 3) ? 'UTG' : 'MP';
+  }
+  let tableActionLog = [];   // 当前手的逐条行动(供 HistoryLayer)；emitHandStart 清空
+  // HistoryLayer 输入：当前手号·街道 + 最近 5 条行动 + 近期手净额
+  function buildHistoryVM() {
+    if (!game) return null;
+    const recent = Store.getHandLog().slice(0, 6).map((h) => ({ no: h.no, net: h.net, netText: fmtChips(h.net) }));
+    return { handNo: game.handNo, streetLabel: streetLabelOf(game.board.length), actions: tableActionLog.slice(), recentHands: recent, canReplay: game.phase === 'ended' };
+  }
+  // TrainingAssistantLayer 输入：decision(轮到你) / observe(对手行动) / summary(本手结束)
+  function buildTrainingVM() {
+    if (!game || !Store.get().coachMode) return { visible: false };
+    const me = game.players[0];
+    if (game.phase === 'ended' && game.result) {
+      const last = Store.getHandLog()[0];
+      const net = last ? last.net : (me.winThisHand || 0);
+      return { visible: true, mode: 'summary', short: `本手结束 · 净 ${net >= 0 ? '+' : ''}${fmtChips(net)}`, canExpand: !!(last && last.summary), summaryDetail: last ? (last.summary || '') : '' };
+    }
+    const heroTurn = game.current === 0 && game.bettingOpen && !me.folded && !me.out;
+    if (!heroTurn) {
+      const last = tableActionLog[tableActionLog.length - 1];
+      return { visible: true, mode: 'observe', short: last ? `${last.nickname}（${last.position}）${last.action}${last.amount > 0 ? ' ' + last.amountText : ''}` : '观察对手行动' };
+    }
+    if (!me.hole || me.hole.length !== 2 || !handAnalysis || game.phase === 'idle') return { visible: false };
+    const a = handAnalysis, pot = game.pot || 0;
+    const spr = pot > 0 && me.chips ? Math.round((me.chips / pot) * 10) / 10 : null;
+    const note = (a.po != null && a.winPct != null && a.winPct < a.po) ? '跟注偏 -EV，考虑弃牌' : '';
+    const reason = [a.pos && a.pos.advice, a.outs ? `听牌 ${a.outs} outs` : '', a.rec ? '建议' + a.rec : ''].filter(Boolean).join(' · ');
+    return {
+      visible: true, mode: 'decision', short: `${a.name} · 胜率 ${a.winPct}%`, handClass: a.name,
+      winPct: a.winPct, tiePct: a.tiePct, losePct: a.losePct, potOdds: a.po, spr, outs: a.outs,
+      suggestion: a.rec, reason, posTag: a.pos && a.pos.label, posLabel: a.pos && a.pos.label,
+      rangeEq: a.rangeEq, rangePct: a.rangePct, aggrName: a.aggrName, note, canExpand: true,
+    };
+  }
+
   // A：单座位的「数据」ViewModel(纯数据，含牌位+表现)。SeatLayer/PlayerHandLayer 据此落 DOM，ui.js 不再循环渲染座位。
   // D：fresh 时 faceHTML 带 deal-in/错开延时；浏览器里 CardRow 先牌背后飞入再 reveal，jsdom 同步落地。
   function buildSeatVM(i) {
@@ -363,11 +409,13 @@
     const backHTML = p.hole.map((_, ci) => cardBackHTML(true, fresh ? ci : -1));
     const sig = 'h' + game.handNo + (revealed ? 'F' + p.hole.map((c) => c.rank + c.suit).join('') : 'B' + p.hole.length) + (p.out ? 'o' : '');
     // 表现数据
-    let name = p.name, title = null;
+    let name = p.name || (p.isHuman ? '你' : '玩家' + (i + 1)), title = null;
     if (p.isHuman) {
       const sp = Store.get(), wq = Skins.watches[sp.activeWatch], tt = Skins.titles[sp.activeTitle];
-      name = (wq && wq.icon ? wq.icon + ' ' : '') + p.name;
+      name = (wq && wq.icon ? wq.icon + ' ' : '') + (p.name || '你');
       if (tt && tt.text) title = { text: tt.text, color: tt.color };
+    } else if (p.styleLabel) {
+      title = { text: p.styleLabel, color: '#8fd9b6' };   // 对手风格标签(便于学习识别打法)
     }
     let blind = '';
     if (game.phase !== 'idle' && !p.out) { if (i === game.sbIdx) blind = 'SB'; else if (i === game.bbIdx) blind = 'BB'; }
@@ -430,7 +478,7 @@
     // A：座位「数据」交给 SeatLayer(表现+对手牌)/PlayerHandLayer(英雄牌)；ui.js 只建 ViewModel，不再循环渲染座位 DOM
     const seatsVM = []; let anyFreshDeal = false;
     for (let i = 0; i < game.N; i++) { const cv = buildSeatVM(i); if (cv.fresh) anyFreshDeal = true; seatsVM.push(cv); }
-    window.RHCore.TableScene.ensure().render({ pot: potNow, potPulse, board: game.board, button: showDealer, seats: seatsVM, ctx: tableContext() });
+    window.RHCore.TableScene.ensure().render({ pot: potNow, potPulse, board: game.board, button: showDealer, seats: seatsVM, training: buildTrainingVM(), history: buildHistoryVM(), ctx: tableContext() });
     renderSidePots();
 
     const banner = $('phase-banner');
@@ -438,10 +486,15 @@
       banner.textContent = PHASE_LABEL[game.phase]; banner.style.opacity = '0.9';
     } else banner.style.opacity = '0';
 
-    // 仅保留「动画触发」副作用(非渲染)：下注飞向底池 + 全下闪屏 + prev 状态追踪
+    // 「动画触发」副作用(非渲染) + 行动日志(供 HistoryLayer) + 系统级礼物反馈
+    const bigPot = (game.pot || 0) >= (game.bigBlind || 100) * 40;
     for (let i = 0; i < game.N; i++) {
       const p = game.players[i];
-      if (p.lastAction === '全下' && prevLA[i] !== '全下' && prevLA[i] !== undefined) flashAllIn();
+      if (p.lastAction && p.lastAction !== prevLA[i] && prevLA[i] !== undefined) {
+        tableActionLog.push({ seat: i, nickname: p.name || ('玩家' + (i + 1)), position: posLabelOf(i), action: p.lastAction, amount: p.bet || 0, amountText: fmtChips(p.bet || 0), marker: p.lastAction === '全下' ? 'allin' : (bigPot ? 'bigpot' : '') });
+        if (p.lastAction === '全下') { flashAllIn(); const g = tLayer('GiftAnimationLayer'); if (g) g.systemTrigger('allin', seatEls[i]); }   // 全下→系统筹码雨
+        else if (bigPot) { const g = tLayer('GiftAnimationLayer'); if (g) g.systemTrigger('bigpot', seatEls[i]); }                          // 大底池→灯牌
+      }
       prevLA[i] = p.lastAction;
       if (p.bet > prevBet[i]) Fx.flyChip(seatEls[i], potEl, fxLayer, { count: 1 });
       prevBet[i] = p.bet;
@@ -449,24 +502,7 @@
     if (anyFreshDeal) { lastDealtHandNo = game.handNo; fireHoleDeal(); }   // 卡牌 DOM 就绪 → 发底牌飞行事件
     // 庄家按钮由 DealerButtonLayer 在上方 TableScene.render(vm) 中渲染(不再内联)
 
-    // 实时"你的牌型"(翻牌后，帮助练牌)
-    const hh = $('hand-hint'), me = game.players[0];
-    if (Store.get().coachMode && me && me.hole.length === 2 && !me.folded && !me.out && handAnalysis && game.phase !== 'idle' && game.phase !== 'gameover') {
-      const a = handAnalysis;
-      const draw = (a.outs && a.outs > 0) ? `听牌 ${a.outs} outs · ` : '';
-      const odds = a.po != null ? `底池赔率 ${a.po}% · ` : '';
-      const posTag = a.pos ? `<span class="pos-tag">${a.pos.label}</span> ` : '';
-      const posAdvice = (a.pos && game.board.length === 0) ? `<div class="hh3">📍 ${a.pos.advice}</div>` : '';
-      const range = a.rangeEq != null
-        ? `<div class="hh3">⚔ ${a.aggrName}${a.aggrStyle ? '(' + a.aggrStyle + ')' : ''} 范围≈前 ${a.rangePct}% · 对其范围胜率 <b>${a.rangeEq}%</b></div>`
-        : '';
-      hh.innerHTML =
-        `<div class="hh1">${posTag}${a.name} · 胜率 <b>${a.winPct}%</b><button class="hh-detail" data-scene="strategyLab">详</button></div>` +
-        `<div class="hh2">赢${a.winPct} 平${a.tiePct} 输${a.losePct}% · ${draw}${odds}${a.opp}人 · <em>${a.rec}</em></div>` +
-        posAdvice + range;
-      hh.classList.remove('hidden');
-    } else hh.classList.add('hidden');
-
+    // 训练提示由 TrainingAssistantLayer(#hand-hint)在上方 TableScene.render(vm.training) 渲染(不再内联)
     highlightBest5();
     updateMessage();
   }
@@ -488,17 +524,10 @@
     mark(seatEls[focus.id] && seatEls[focus.id].querySelector('.player-cards'));
   }
 
-  // 历史简条（牌桌底部，最近几手输赢与净额）
+  // 桌内历史简条：委托 HistoryLayer 渲染(行动历史 + 近期手净额)。ui.js 不再直接拼简条 DOM。
   function updateHandStrip() {
-    const el = $('hand-strip'); if (!el) return;
-    const log = Store.getHandLog().slice(0, 8);
-    if (!log.length) { el.classList.add('hidden'); return; }
-    el.classList.remove('hidden');
-    el.innerHTML = '<span class="hs-label">近期</span>' + log.map((h) => {
-      const cls = h.net > 0 ? 'up' : h.net < 0 ? 'down' : 'flat';
-      const sign = h.net > 0 ? '+' : '';
-      return `<span class="hs-item ${cls}">#${h.no} ${sign}${fmtChips(h.net)}</span>`;
-    }).join('');
+    const L = tLayer('HistoryLayer'); if (!L) return;
+    L.render({ history: buildHistoryVM() });
   }
 
   function flashAllIn() {
@@ -552,26 +581,20 @@
     base *= (mult[style] || 1);
     return Math.max(5, Math.min(90, Math.round(base)));
   }
-  // 你说一句快捷语：座位上方冒泡，随机对手回应
+  // 你说一句快捷语：经 ChatEmojiLayer(冷却+气泡+表情)，随机对手回应
   function sayPhrase(text) {
     if (!game || !seatEls[0]) return;
+    const CE = tLayer('ChatEmojiLayer'); if (!CE) return;
+    const isEmoji = !!(CE.EMOJIS && CE.EMOJIS.indexOf(text) >= 0) || !!(window.Social && Social.EMOJIS && Social.EMOJIS.indexOf(text) >= 0);
+    const ok = isEmoji ? CE.playEmoji(seatEls[0], 0, text) : CE.send(seatEls[0], 0, text);
+    if (!ok) { toast('稍等片刻再发'); return; }   // 冷却中
+    pendingQuickWord[0] = text;
     Fx.speechBubble(seatEls[0], text, 'mine', seatIsTop(0));
-    // B：英雄快捷语进 SeatView 气泡；表情走 emojiMount 一次性动画
-    const SV = window.RHCore.SeatView;
-    if (seatEls[0]._nodes) {
-      pendingQuickWord[0] = text;
-      SV.showBubble(seatEls[0]._nodes.quickWordBubble, text);
-      if (window.Social && Social.EMOJIS && Social.EMOJIS.indexOf(text) >= 0) SV.popMount(seatEls[0], 'emoji', text);
-    }
     Sfx.button();
     const opps = activeOpponents();
     if (opps.length && Math.random() < 0.8) {
       const opp = opps[Math.floor(Math.random() * opps.length)];
-      setTimeout(() => {
-        const el = seatEls[opp.id];
-        const reply = Social.pickChatter(Math.random() < 0.5 ? 'raise' : 'fold') || '哼';
-        if (el) Fx.speechBubble(el, reply, '', seatIsTop(opp.id));
-      }, 900 + Math.random() * 700);
+      setTimeout(() => { if (seatEls[opp.id]) CE.botSay(seatEls[opp.id], opp.id, Math.random() < 0.5 ? 'raise' : 'fold', { force: true }); }, 900 + Math.random() * 700);
     }
   }
   // 送礼物：扣训练筹码（如有价），飞向随机对手并命中爆开
@@ -585,10 +608,40 @@
     if (gf.cost > 0) { Store.get().coins -= gf.cost; Store.save(); syncWallet(true); }
     closeModal();
     Fx.flyGift(seatEls[0], seatEls[target.id], fxLayer, gf.icon);
-    window.RHCore.SeatView.popMount(seatEls[target.id], 'gift', gf.icon);   // B：礼物落到 giftMount 一次性动画
+    const GL = tLayer('GiftAnimationLayer');                                // 经 GiftAnimationLayer(冷却+一次性动画+清理)
+    if (GL) GL.send(0, seatEls[target.id], gf.id || 'applause', { force: true });
+    else window.RHCore.SeatView.popMount(seatEls[target.id], 'gift', gf.icon);
     try { Sfx.gift(gf.sfx); } catch (_) {}
-    setTimeout(() => { if (seatEls[target.id]) Fx.speechBubble(seatEls[target.id], Social.pickChatter('win') || '多谢', '', seatIsTop(target.id)); }, 1000);
+    setTimeout(() => { const CE = tLayer('ChatEmojiLayer'); if (CE && seatEls[target.id]) CE.botSay(seatEls[target.id], target.id, 'win', { force: true }); }, 1000);
   }
+  // 牌桌内弹窗(经 ModalLayer)：退出确认 / 设置 / 补充筹码 / 快捷语 / 手牌详情 / 策略 / 本手总结。ActionPanel 由 ModalLayer 门控，关闭后恢复。
+  function resumeAfterModal() { try { if (game && game.bettingOpen && game.current === 0 && (!GF || !GF.isBusy())) enableHumanControls(); } catch (e) { /* ignore */ } }
+  function openTableModal(kind, data) {
+    const M = tLayer('ModalLayer'); if (!M) return; data = data || {};
+    const base = { onClose: resumeAfterModal };
+    if (kind === 'exit') return M.open('exit', Object.assign(base, { onConfirm: () => SceneRouter.go('hall') }));
+    if (kind === 'rebuy') { const amt = (tableConfig && tableConfig.buyin) || 10000; return M.open('rebuy', Object.assign(base, { amount: amt, amountText: fmtChips(amt), onConfirm: () => { const me = game && game.players[0]; if (me) { me.chips = (me.chips || 0) + amt; toast('训练筹码 +' + fmtChips(amt)); render(); } } })); }
+    if (kind === 'quickword') { const CE = tLayer('ChatEmojiLayer'); return M.open('quickword', Object.assign(base, { phrases: (CE && CE.PHRASES) || [], emojis: (CE && CE.EMOJIS) || [], onPick: (text) => sayPhrase(text) })); }
+    if (kind === 'settings') {
+      const s = Store.get();
+      const rows = [
+        { id: 'coach', label: '训练教练提示', value: s.coachMode ? '开' : '关' },
+        { id: 'sound', label: '音效', value: s.muted ? '关' : '开' },
+        { id: 'quickword', label: '快捷语 / 表情', value: '›' },
+        { id: 'rebuy', label: '补充训练筹码', value: '›' },
+        { id: 'exit', label: '退出牌桌', value: '›' },
+      ];
+      return M.open('settings', Object.assign(base, { rows, onOpt: (v) => {
+        if (v === 'coach') { Store.toggleCoach(); render(); openTableModal('settings'); }
+        else if (v === 'sound') { const m = !Store.get().muted; Store.get().muted = m; Store.save(); Sfx.setMuted(m); if (window.Voice) Voice.setMuted(m); openTableModal('settings'); }
+        else if (v === 'quickword') openTableModal('quickword');
+        else if (v === 'rebuy') openTableModal('rebuy');
+        else if (v === 'exit') openTableModal('exit');
+      } }));
+    }
+    return M.open(kind, Object.assign(base, data));
+  }
+
   // 记录 AI 本局行动统计（用于对手画像）
   function recordSeatAct(p) {
     const pr = seatProfiles[p.id];
@@ -603,14 +656,11 @@
   }
   // AI 行动时偶尔闲聊（冒泡）。voiced=该回合已播语音则跳过，避免与语音撞车
   function maybeChatter(p, voiced) {
-    if (voiced || !p || p.isHuman || !window.Social || !seatEls[p.id]) return;
+    if (voiced || !p || p.isHuman || !seatEls[p.id]) return;
     const key = ACT2VOICE[p.lastAction];
-    let ck = (key === 'raise') ? 'raise' : (key === 'allin') ? 'allin' : (key === 'fold') ? 'fold' : null;
+    const ck = (key === 'raise') ? 'raise' : (key === 'allin') ? 'allin' : (key === 'fold') ? 'fold' : null;
     if (!ck) return;
-    if (Math.random() < 0.32) {
-      const line = Social.pickChatter(ck);
-      if (line) { pendingQuickWord[p.id] = line; if (seatEls[p.id]) window.RHCore.SeatView.showBubble(seatEls[p.id]._nodes.quickWordBubble, line); }
-    }
+    if (Math.random() < 0.32) { const CE = tLayer('ChatEmojiLayer'); if (CE) CE.botSay(seatEls[p.id], p.id, ck); }   // bot 低频原创短语(经冷却)
   }
   // AI 思考时长：按决策难度变化（弃牌快、跟注中、加注/全下慢），更像真人
   function aiThinkDelay(action) {
@@ -699,6 +749,7 @@
     if (humanWon) {
       const meWin = (game.players[0].winThisHand) || 0;
       if (Ctl) Ctl.settle.heroWin(meWin, meWin >= game.bigBlind * 40); else Sfx.win();
+      if (meWin >= game.bigBlind * 40) { const g = tLayer('GiftAnimationLayer'); if (g) g.systemTrigger('herowin', seatEls[0]); }   // 英雄大赢→系统掌声
       Fx.vibrate(60);
       // 连胜烈焰：≥2 连胜起阶梯升级（程序化火焰，无大资源）
       const streak = Store.get().winStreak || 0;
@@ -873,7 +924,7 @@
 
   // 发牌相关事件统一出口：HAND_START → POST_BLINDS → DEAL_HOLE_CARD(逐张) → 英雄强起手提示
   function emitHandStart() {
-    bestKeysBySeat = {}; revealedSeats.clear();
+    bestKeysBySeat = {}; revealedSeats.clear(); tableActionLog = [];
     try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); document.querySelectorAll('.seat-revealed').forEach((e) => e.classList.remove('seat-revealed')); const f = $('table-felt'); if (f) f.classList.remove('showdown-dim'); } catch (e) { /* ignore */ }
     if (!Ctl) { Sfx.deal(); return; }
     Ctl.deal.handStart();
@@ -1917,6 +1968,12 @@
     // 按难度配置 AI：bot 决策一律走 V4 PokerBrain 画像(BotDecisionEngine)；ai.js 仅供人类胜率提示
     const BDE = window.RHCore.BotDecisionEngine;
     game.players.forEach((pl, i) => { if (!pl.isHuman) { pl.botProfile = BDE.profileForSeat(cfg.level, i); } });
+    // 对手昵称/头像/风格：原创昵称池去重分配，写入 player 数据(供 PlayerViewModel/SeatLayer/replay；不在 DOM 硬写)
+    const ids = window.RHCore.BotProfiles.assignIdentities(game.players.map((pl) => pl.isHuman ? null : ((pl.botProfile && pl.botProfile.archetype) || 'balanced_reg')));
+    game.players.forEach((pl, i) => {
+      if (pl.isHuman) { pl.name = pl.name || '你'; pl.avatar = pl.avatar || (Store.get().activeAvatar ? '😎' : '😎'); pl.styleLabel = ''; return; }
+      const id = ids[i] || {}; pl.name = id.nickname || pl.name || ('玩家' + (i + 1)); pl.avatar = id.avatar || '🙂'; pl.styleLabel = id.styleLabel || '';
+    });
     AI.setSims(cfg.level === 'master' ? 260 : cfg.level === 'hard' ? 220 : 170);
     // 对手画像：记录每个 bot 的 V4 画像 + 本局观察统计(入池/加注/弃牌/全下)
     seatProfiles = game.players.map((pl) => pl.isHuman ? null : {
@@ -2094,8 +2151,14 @@
     // 路由
     $('btn-play').addEventListener('click', () => { Sfx.resume(); if (window.Music && !Sfx.isMuted()) Music.start(); Sfx.button(); SceneRouter.go('select'); });
     $('btn-select-back').addEventListener('click', () => { Sfx.button(); SceneRouter.go('hall'); });
-    $('btn-table-back').addEventListener('click', () => { Sfx.button(); SceneRouter.go('hall'); });
+    $('btn-table-back').addEventListener('click', () => { Sfx.button(); openTableModal('exit'); });   // 退出确认走 ModalLayer
     $('btn-rematch').addEventListener('click', () => { if (!tableConfig) return; Sfx.button(); startTable(tableConfig); toast('🔄 已换桌，对手已更换'); });
+    const tm = $('btn-table-menu'); if (tm) tm.addEventListener('click', () => { Sfx.button(); openTableModal('settings'); });
+    // 桌内训练助手展开/收起 + 桌内历史简条复盘入口
+    document.body.addEventListener('click', (e) => {
+      if (e.target.closest('[data-ta-toggle]')) { const L = tLayer('TrainingAssistantLayer'); if (L && L.toggle) L.toggle(); return; }
+      const rh = e.target.closest('[data-replay-hand]'); if (rh) { Sfx.button(); openReplay(rh.getAttribute('data-replay-hand')); return; }
+    });
     $('room-list').addEventListener('click', (e) => {
       const card = e.target.closest('[data-room],[data-custom]'); if (!card) return;
       Sfx.button();

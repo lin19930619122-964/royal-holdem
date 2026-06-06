@@ -331,6 +331,90 @@ ok(window.RHCore.Lessons && window.RHCore.Lessons.count >= 6, 'Lessons 注册表
   ok(/✓ 已学/.test(body.innerHTML), '面板显示已学标记');
 })();
 
+// Phase 3/4.1: Table Content Layers & Seat Data Sprint
+(function () {
+  const RH = window.RHCore, doc = window.document;
+  // 1) 对手昵称/头像/风格 数据(9 人桌)
+  window.SceneRouter.go('table', { players: 9 });
+  window.document.getElementById('btn-start').click();
+  const seats = [...doc.querySelectorAll('#seats .seat')];
+  const oppNames = seats.slice(1).map((s) => s.querySelector('.pname').textContent);
+  ok(oppNames.every((n) => n && n.length > 0), 'P341 对手昵称全部非空(9 座)');
+  ok(new Set(oppNames).size === oppNames.length, 'P341 对手昵称不重复');
+  ok(seats.slice(1).every((s) => (s.querySelector('.av-emoji').textContent || '').length > 0), 'P341 对手头像(程序化 emoji)非空');
+  ok(seats[1].querySelector('.ptitle').textContent.length > 0, 'P341 对手风格标签显示(便于学习识别)');
+  const pvm = RH.PlayerViewModel.build({ id: 1, seat: 1, name: '老紧', avatar: '🧊', chips: 1000, hole: [] }, { seatIndex: 1 });
+  ok(pvm.nickname === '老紧' && pvm.avatar === '🧊', 'P341 nickname/avatar 来自 PlayerViewModel(非 DOM 硬写)');
+  const ids = RH.BotProfiles.assignIdentities(['nit', 'nit', 'calling_station']);
+  ok(ids[0].nickname && ids[1].nickname && ids[0].nickname !== ids[1].nickname, 'P341 同画像昵称去重');
+  ok(ids[2].styleLabel === '跟注站', 'P341 风格标签来自画像');
+  // 2) TrainingAssistantLayer
+  const TA = RH.TableScene.ensure().get('TrainingAssistantLayer');
+  ok(TA && typeof TA.toggle === 'function' && typeof TA.render === 'function', 'P341 TrainingAssistantLayer 独立 render/toggle');
+  TA.render({ training: { visible: true, mode: 'decision', short: '顶对 · 胜率 72%', handClass: '顶对', winPct: 72, tiePct: 2, losePct: 26, potOdds: 25, spr: 3.2, suggestion: '加注', reason: '价值下注', canExpand: true } });
+  const hh = doc.getElementById('hand-hint');
+  ok(/胜率 72%/.test(hh.innerHTML) && /加注/.test(hh.innerHTML), 'P341 训练助手显示当前牌型/胜率/建议');
+  ok(!/SPR/.test(hh.innerHTML), 'P341 默认只显示短提示(详情收起)');
+  TA.toggle();
+  ok(/SPR/.test(hh.innerHTML) && /底池赔率/.test(hh.innerHTML) && /价值下注/.test(hh.innerHTML), 'P341 展开后显示 SPR/底池赔率/理由(可展开详情)');
+  TA.render({ training: { visible: true, mode: 'summary', short: '本手结束 · 净 +3000' } });
+  ok(/本手结束/.test(hh.innerHTML), 'P341 摊牌结束后显示本手总结');
+  TA.render({ training: { visible: true, mode: 'observe', short: '老紧（UTG）加注' } });
+  ok(/老紧/.test(hh.innerHTML), 'P341 非你行动时显示观察对手行动');
+  // 3) ChatEmojiLayer
+  const CE = RH.TableScene.ensure().get('ChatEmojiLayer');
+  ok(CE && CE.PHRASES.length >= 8 && typeof CE.send === 'function', 'P341 ChatEmojiLayer 原创快捷语 ≥8 + send');
+  let clock = 100000; CE._setNow(() => clock); CE.reset();
+  const seatEl = seats[2];
+  ok(CE.send(seatEl, 2, '压力给到你') && /压力给到你/.test(seatEl._nodes.quickWordBubble.textContent) && !seatEl._nodes.quickWordBubble.classList.contains('hidden'), 'P341 发送快捷语→座位气泡显示');
+  ok(CE.send(seatEl, 2, '摊牌吧') === false, 'P341 冷却内再次发送被拦截(5 秒冷却生效)');
+  clock += 6000;
+  ok(CE.send(seatEl, 2, '摊牌吧') === true, 'P341 冷却结束后可再发');
+  CE.playEmoji(seatEl, 2, '🔥', { force: true });
+  ok(/pop-anim/.test(seatEl._nodes.emojiMount.innerHTML), 'P341 表情→emojiMount 一次性动画');
+  // 自动消失：气泡定时器存在(SeatView.showBubble 设置 _t)
+  ok(seatEl._nodes.quickWordBubble._t != null, 'P341 气泡设置了自动消失定时器');
+  // 4) GiftAnimationLayer
+  const GL = RH.TableScene.ensure().get('GiftAnimationLayer');
+  ok(GL && GL.GIFTS.length >= 5 && typeof GL.send === 'function', 'P341 GiftAnimationLayer 原创反应 ≥5(筹码雨/咖啡/纸飞机/掌声/灯牌)');
+  const gseat = seats[3];
+  ok(GL.send(0, gseat, 'applause', { force: true }), 'P341 送礼→giftMount 动画');
+  ok(/pop-anim/.test(gseat._nodes.giftMount.innerHTML), 'P341 giftMount 非空(一次性动画占位)');
+  ok(GL.systemTrigger('allin', gseat), 'P341 系统级反馈(all-in→筹码雨)');
+  GL.reset(); ok(GL.send(0, gseat, 'coffee', { now: 1 }) && GL.send(0, gseat, 'coffee', { now: 2 }) === false, 'P341 礼物冷却生效');
+  // 5) HistoryLayer
+  const HL = RH.TableScene.ensure().get('HistoryLayer');
+  HL.render({ history: { handNo: 7, streetLabel: '翻牌', canReplay: true, actions: [{ seat: 1, nickname: '老紧', position: 'UTG', action: '加注', amount: 300, amountText: '300', marker: '' }, { seat: 2, nickname: '跟注站', position: 'BB', action: '全下', amount: 5000, amountText: '5000', marker: 'allin' }], recentHands: [{ no: 6, net: 1200, netText: '1200' }] } });
+  const hs = doc.getElementById('hand-strip');
+  ok(/老紧/.test(hs.innerHTML) && /加注/.test(hs.innerHTML) && /300/.test(hs.innerHTML), 'P341 行动历史显示昵称/动作/金额');
+  ok(/UTG/.test(hs.innerHTML) && /BB/.test(hs.innerHTML), 'P341 行动历史显示位置');
+  ok(/ha-mark allin/.test(hs.innerHTML), 'P341 all-in 特殊标记');
+  ok(/data-replay-hand="7"/.test(hs.innerHTML), 'P341 一手结束→完整复盘入口');
+  ok(/hs-item/.test(hs.innerHTML), 'P341 近期手净额保留');
+  // 6) ModalLayer
+  const ML = RH.TableScene.ensure().get('ModalLayer');
+  ok(ML && typeof ML.open === 'function' && typeof ML.close === 'function', 'P341 ModalLayer open/close/isOpen');
+  const tableModal = doc.getElementById('table-modal');
+  ok(tableModal && tableModal.id === 'table-modal' && tableModal.id !== 'modal-overlay', 'P341 table modal 独立于 Hall #modal-overlay(不混用)');
+  let disabled = false; const realDA = RH.ActionPanel.disableAll; RH.ActionPanel.disableAll = () => { disabled = true; };
+  ML.open('settings', { rows: [{ id: 'coach', label: '教练', value: '开' }] });
+  RH.ActionPanel.disableAll = realDA;
+  ok(ML.isOpen() && !tableModal.classList.contains('hidden') && /牌桌设置/.test(tableModal.innerHTML), 'P341 打开牌桌设置弹窗');
+  ok(disabled, 'P341 打开 modal→ActionPanel 被门控(disableAll)');
+  let closed = false; ML.open('exit', { onClose: () => { closed = true; } });
+  ok(/退出牌桌/.test(tableModal.innerHTML), 'P341 退出确认弹窗');
+  tableModal.querySelector('[data-tm="close"]').click();
+  ok(!ML.isOpen() && closed && tableModal.classList.contains('hidden'), 'P341 关闭 modal→隐藏并触发恢复回调');
+  let picked = null; ML.open('quickword', { phrases: ['摊牌吧'], emojis: ['🔥'], onPick: (t) => { picked = t; } });
+  tableModal.querySelector('[data-tm="say"]').click();
+  ok(picked === '摊牌吧', 'P341 快捷语选择面板→选词回调');
+  // 7) ui.js 不再直接渲染这些桌内区域
+  const uiSrc341 = fs.readFileSync(path.join(__dirname, 'src/ui.js'), 'utf8');
+  ok(!/hh\.innerHTML =/.test(uiSrc341), 'P341 ui.js 不再直接渲染训练提示 DOM');
+  ok(!/el\.innerHTML = '<span class="hs-label/.test(uiSrc341), 'P341 ui.js 不再直接渲染桌内历史简条');
+  ok(/buildTrainingVM|TrainingAssistantLayer/.test(uiSrc341) && /buildHistoryVM/.test(uiSrc341), 'P341 训练/历史改由 layer(VM 驱动)');
+})();
+
 ok(!/传奇/.test(window.document.body.innerHTML), 'no 传奇 trademark in DOM');
 
 console.log(`\nUI 回归: ${pass} 通过, ${fail} 失败`);
