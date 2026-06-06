@@ -74,6 +74,23 @@ GF.onVisual((ev, pl, juice) => { if (ev === E.HERO_WIN_BIG) got = { ev, juice, a
 GF.emit(E.HERO_WIN_BIG, { winners: [{ seat: 0, amount: 9999 }], potBb: 80 });
 ok(got && got.ev === E.HERO_WIN_BIG && got.juice === 'epic', '5 onVisual 收到事件+epic 级别');
 
+// 5b) C：4 控制器是事件唯一 emit 源(经 director)
+(function () {
+  const Deal = require('../../controllers/DealController.js');
+  const Show = require('../../controllers/ShowdownController.js');
+  const Settle = require('../../controllers/SettlementController.js');
+  const Act = require('../../controllers/ActionController.js');
+  const G = GFD.create({ audio, stage, haptics, immediate: true });
+  const deal = Deal.create(G), show = Show.create(G), settle = Settle.create(G), act = Act.create(G);
+  deal.handStart(); deal.postBlinds(0, 1); deal.dealHole([0, 1]); deal.dealFlop(); deal.dealTurn(); deal.dealRiver();
+  show.start(); show.reveal(0, '两对'); show.bestHand([{ seat: 0, cardKeys: ['As'] }]);
+  settle.potToWinner([{ seat: 0, amount: 100 }], 5); settle.heroWin(100, true); settle.heroBadBeat(); settle.heroGoodFold(0); settle.sessionSummary(10, {}); settle.achievement('x', 1);
+  act.thinking(0); act.acted(1, '加注'); act.fold(2); act.allIn(0);
+  const evs = G.getEventLog().map((e) => e.event);
+  const must = ['HAND_START', 'POST_BLINDS', 'DEAL_HOLE_CARD', 'DEAL_FLOP', 'DEAL_TURN', 'DEAL_RIVER', 'SHOWDOWN_START', 'REVEAL_HAND', 'BEST_HAND_HIGHLIGHT', 'POT_TO_WINNER', 'HERO_WIN_BIG', 'HERO_BAD_BEAT', 'HERO_GOOD_FOLD', 'SESSION_SUMMARY', 'ACHIEVEMENT_UNLOCKED', 'PLAYER_THINKING', 'PLAYER_RAISE', 'PLAYER_FOLD', 'PLAYER_ALL_IN'];
+  must.forEach((m) => ok(evs.includes(m), '5b 控制器 emit ' + m));
+})();
+
 // 6) juiceOf
 eq(GF.juiceOf(E.PLAYER_ALL_IN), 'epic', '6 全下=epic');
 eq(GF.juiceOf(E.PLAYER_CHECK), 'subtle', '6 过牌=subtle');

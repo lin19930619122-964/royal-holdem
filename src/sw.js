@@ -15,7 +15,7 @@ const ASSETS = [
   './core/Lessons.js',
   './gamefeel/GameFeelEvent.js', './gamefeel/GameFeelConfig.js', './gamefeel/TableAnimationQueue.js', './gamefeel/HapticDirector.js',
   './gamefeel/ChipFlyAnimator.js', './gamefeel/CardDealAnimator.js', './gamefeel/PotWinAnimator.js', './gamefeel/HighlightDirector.js', './gamefeel/GameFeelDirector.js',
-  './view/table/SeatView.js', './view/table/ActionPanel.js', './view/table/PlayerViewModel.js', './view/table/TableScene.js',
+  './view/table/SeatView.js', './view/table/ActionPanel.js', './view/table/PlayerViewModel.js', './view/table/TableScene.js', './controllers/DealController.js', './controllers/ShowdownController.js', './controllers/SettlementController.js', './controllers/ActionController.js',
   './view/table/layers/_base.js', './view/table/layers/TableBackgroundLayer.js', './view/table/layers/TableFeltLayer.js', './view/table/layers/SeatLayer.js',
   './view/table/layers/DealerButtonLayer.js', './view/table/layers/CommunityCardLayer.js', './view/table/layers/PotLayer.js', './view/table/layers/BetChipLayer.js',
   './view/table/layers/PlayerHandLayer.js', './view/table/layers/ActionPanelLayer.js', './view/table/layers/TrainingAssistantLayer.js', './view/table/layers/ChatEmojiLayer.js',

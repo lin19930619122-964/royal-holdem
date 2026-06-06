@@ -81,6 +81,7 @@
   const seatEls = [], betEls = [], seatSig = [], prevBet = [];
   let boardCount = -1, lastDecoratedHand = -1, lastSyncedHand = -1, prevPot = -1;
   let GF = null;              // GameFeelDirector 单例(init 创建)
+  let Ctl = null;            // C：牌局事件控制器集合(deal/showdown/settle/action)
   let _potShown = 0;          // 底池数字滚动当前显示值
   let humanWinPct = null;
   let handAnalysis = null;
@@ -328,7 +329,7 @@
   // A：注入给各 Layer 的渲染上下文(底池/公共牌/庄家 由对应 layer 自行渲染)
   let _tableCtx = null;
   function tableContext() {
-    if (!_tableCtx) _tableCtx = { renderCard: cardFaceHTML, rollPot, emit: (e) => { if (GF) GF.emit(e); }, sfxDeal: () => { try { Sfx.deal(); } catch (_) {} } };
+    if (!_tableCtx) _tableCtx = { renderCard: cardFaceHTML, rollPot, emit: (e) => { if (Ctl) Ctl.deal.dealStreet(e === 'DEAL_FLOP' ? 'flop' : e === 'DEAL_TURN' ? 'turn' : 'river'); }, sfxDeal: () => { try { Sfx.deal(); } catch (_) {} } };
     _tableCtx.SEAT_POS = SEAT_POS;   // 每桌座位布局可变，刷新
     return _tableCtx;
   }
@@ -667,10 +668,9 @@
 
   function actSound(p) {
     if (!p) return;
-    // 行动音效统一经 GameFeelDirector(事件→AudioManager)
-    const ev = { 弃牌: 'PLAYER_FOLD', 过牌: 'PLAYER_CHECK', 跟注: 'PLAYER_CALL', 加注: 'PLAYER_RAISE', 下注: 'PLAYER_BET', 全下: 'PLAYER_ALL_IN' }[p.lastAction];
-    if (ev && GF) { GF.emit(ev, { seat: p.id }); return; }
-    switch (p.lastAction) { // 兜底(GF 未就绪)
+    // 行动事件经 ActionController(→GameFeelDirector→AudioManager)
+    if (Ctl && Ctl.action.acted(p.id, p.lastAction)) return;
+    switch (p.lastAction) { // 兜底(控制器未就绪)
       case '弃牌': Sfx.fold(); break;
       case '过牌': Sfx.check(); break;
       case '跟注': Sfx.chip(); break;
@@ -691,11 +691,11 @@
     if (result.summary) { rb.textContent = '🏆 ' + result.summary; rb.classList.remove('hidden'); rb.style.animation = 'none'; void rb.offsetWidth; rb.style.animation = ''; }
     if (result.showdown) {
       revealedSeats.clear();   // E：清空，由 REVEAL_HAND 事件逐家翻开
-      if (GF) {
-        GF.emit('SHOWDOWN_START', {});
-        // 逐家亮牌事件(按座位/摊牌顺序)：每个被摊牌玩家一个 REVEAL_HAND，队列带延时→真实 stagger
-        (result.reveal || []).forEach((seat) => { const pl = game.players[seat]; GF.emit('REVEAL_HAND', { seat, hand: (result.handNames && result.handNames[pl.id]) || '', hole: (pl.hole || []).slice() }); });
-      } else { (result.reveal || []).forEach((seat) => revealedSeats.add(seat)); }   // 无 GF：立即全亮兜底
+      if (Ctl) {
+        Ctl.showdown.start();
+        // 逐家亮牌(按座位/摊牌顺序)：ShowdownController.reveal，队列带延时→真实 stagger
+        (result.reveal || []).forEach((seat) => { const pl = game.players[seat]; Ctl.showdown.reveal(seat, (result.handNames && result.handNames[pl.id]) || '', (pl.hole || []).slice()); });
+      } else { (result.reveal || []).forEach((seat) => revealedSeats.add(seat)); }   // 无控制器：立即全亮兜底
     }
     const winners = [];
     for (let i = 0; i < game.N; i++) {
@@ -720,19 +720,17 @@
         } catch (e) { /* ignore */ }
       });
     }
-    // 最佳五张高亮(公共牌 + 各赢家手牌) + 收池(底池→赢家，经 GameFeel)
-    if (GF) {
+    // 最佳五张高亮(公共牌 + 各赢家手牌) + 收池(底池→赢家)，经 Showdown/SettlementController
+    if (Ctl) {
       try {
-        if (result.showdown && winners.length) {
-          GF.emit('BEST_HAND_HIGHLIGHT', { highlight: winners.map((w) => ({ seat: w.seat, cardKeys: bestKeysBySeat[w.seat] || [] })) });
-        }
+        if (result.showdown && winners.length) Ctl.showdown.bestHand(winners.map((w) => ({ seat: w.seat, cardKeys: bestKeysBySeat[w.seat] || [] })));
         const potBb = game.bigBlind ? (winners.reduce((s, w) => s + w.amount, 0) / game.bigBlind) : 0;
-        GF.emit('POT_TO_WINNER', { winners, potBb });
+        Ctl.settle.potToWinner(winners, potBb);
       } catch (e) { winners.forEach((w) => Fx.flyChip(potEl, seatEls[w.seat], fxLayer, { count: 4 })); }
     } else { winners.forEach((w) => Fx.flyChip(potEl, seatEls[w.seat], fxLayer, { count: 4 })); }
     if (humanWon) {
       const meWin = (game.players[0].winThisHand) || 0;
-      if (GF) GF.emit(meWin >= game.bigBlind * 40 ? 'HERO_WIN_BIG' : 'HERO_WIN_SMALL', { amount: meWin }); else Sfx.win();
+      if (Ctl) Ctl.settle.heroWin(meWin, meWin >= game.bigBlind * 40); else Sfx.win();
       Fx.vibrate(60);
       // 连胜烈焰：≥2 连胜起阶梯升级（程序化火焰，无大资源）
       const streak = Store.get().winStreak || 0;
@@ -741,11 +739,11 @@
         try { Sfx.streak(L || 1); } catch (_) {}
         if (streak >= 4) Fx.shake($('table-wrap'), streak >= 6 ? 9 : 6);
       }
-    } else if (GF) {
+    } else if (Ctl) {
       // bad beat：摊牌时英雄持强成牌(两对+)仍落败 → 触发复盘提示
       const meHand = result.showdown && result.handScores && result.handScores[0];
       const strong = meHand && meHand[0] >= 2 && !game.players[0].folded;
-      GF.emit(strong ? 'HERO_BAD_BEAT' : 'HERO_LOSE', { handScore: meHand || null });
+      if (strong) Ctl.settle.heroBadBeat(meHand || null); else Ctl.settle.heroLose(meHand || null);
     } else { Sfx.lose(); }
 
     // 牌型特效：摊牌时按牌型等级炸场(对子小、同花顺最炸)。优先展示你的牌型
@@ -857,7 +855,7 @@
     }
 
     const p = game.players[game.current];
-    if (GF) GF.emit('PLAYER_THINKING', { seat: game.current });   // 轮到谁：座位光圈/操作区亮起
+    if (Ctl) Ctl.action.thinking(game.current);   // 轮到谁：座位光圈/操作区亮起
     if (p.isHuman) {
       // D：发牌动画期间禁用 ActionPanel，动画完成后才激活
       if (GF && GF.isBusy()) { try { window.RHCore.ActionPanel.disableAll && window.RHCore.ActionPanel.disableAll(); } catch (e) {} hideHumanControls(); GF.onceIdle(() => { if (game && game.bettingOpen && game.current === 0) enableHumanControls(); }); }
@@ -909,21 +907,21 @@
   function emitHandStart() {
     bestKeysBySeat = {}; revealedSeats.clear();
     try { document.querySelectorAll('.best5').forEach((e) => e.classList.remove('best5')); document.querySelectorAll('.seat-revealed').forEach((e) => e.classList.remove('seat-revealed')); const f = $('table-felt'); if (f) f.classList.remove('showdown-dim'); } catch (e) { /* ignore */ }
-    if (!GF) { Sfx.deal(); return; }
-    GF.emit('HAND_START', {});
-    GF.emit('POST_BLINDS', { sb: game.sbIdx, bb: game.bbIdx });
+    if (!Ctl) { Sfx.deal(); return; }
+    Ctl.deal.handStart();
+    Ctl.deal.postBlinds(game.sbIdx, game.bbIdx);
     pendingHoleDeal = true;   // DEAL_HOLE_CARD 在 render 创建好卡牌 DOM 后再发(见 render)，确保飞行有目标
   }
   let pendingHoleDeal = false;
   // 卡牌 DOM 就绪后发底牌事件(供 render 调用)：逐张飞行 + 门控 + 英雄强起手
   function fireHoleDeal() {
-    if (!pendingHoleDeal || !GF) return; pendingHoleDeal = false;
+    if (!pendingHoleDeal || !Ctl) return; pendingHoleDeal = false;
     const seated = []; for (let i = 0; i < game.N; i++) if (!game.players[i].out) seated.push(i);
-    GF.emit('DEAL_HOLE_CARD', { seatIndices: seated });
+    Ctl.deal.dealHole(seated);
     const me = game.players[0];
     if (me && me.hole && me.hole.length === 2) {
       const code = (window.RHCore.PokerBrain.handCode(me.hole[0], me.hole[1]));
-      if (['AA', 'KK', 'QQ', 'JJ', 'AKs', 'AKo'].includes(code)) GF.emit('HERO_PREMIUM_HAND', { seat: 0, code });
+      if (['AA', 'KK', 'QQ', 'JJ', 'AKs', 'AKo'].includes(code)) Ctl.deal.premiumHand(0, code);
     }
   }
 
@@ -1095,7 +1093,7 @@
     });
     window.OppModel.record(action, facing);
     // 好弃牌：面对下注弃牌且复盘判定正确 → HERO_GOOD_FOLD（进入 GameFeel）
-    if (action === 'fold' && facing && v.good === true && GF) GF.emit('HERO_GOOD_FOLD', { seat: 0 });
+    if (action === 'fold' && facing && v.good === true && Ctl) Ctl.settle.heroGoodFold(0);
     game.act(action, amount);
     if (p.lastAction === '全下') Store.recordAllin();
     actSound(p);
@@ -1129,7 +1127,7 @@
   function showSessionSummary() {
     try {
       const s = Store.getPokerStats();
-      if (GF) GF.emit('SESSION_SUMMARY', { hands: sessionHands, stats: s });
+      if (Ctl) Ctl.settle.sessionSummary(sessionHands, s);
       const line = `VPIP ${s.vpip}% · PFR ${s.pfr}% · 激进 ${s.af} · 摊牌 ${s.wtsd}% · 正确率 ${s.correct}%`;
       if (Fx && typeof Fx.rewardPop === 'function') Fx.rewardPop(fxLayer, '📊', `本场小结(已打 ${sessionHands} 手)`, `${line}　｜　漏洞：${s.leak}`);
       else toast(`本场小结：${line}`);
@@ -1973,7 +1971,7 @@
     render();
     // 入场特效：牌桌放大 + 座驾驶过 + 发牌音
     const tf = $('table-felt'); tf.classList.remove('enter'); void tf.offsetWidth; tf.classList.add('enter');
-    Sfx.resume(); playVehicleEntrance(); setTimeout(() => { if (GF) GF.emit('DEAL_HOLE_CARD'); else Sfx.deal(); }, 120);
+    Sfx.resume(); playVehicleEntrance(); setTimeout(() => { try { Sfx.deal(); } catch (_) {} }, 120);  // 开场提示音(真实发牌由 fireHoleDeal 经 DealController)
     // 教学桌(TutorialTable)强制弹教程；否则仅首次进桌弹
     if (cfg.mode === 'tutorial') setTimeout(() => runTutorial(true), 500);
     else if (!Store.get().tutorialDone) setTimeout(() => runTutorial(false), 500);
@@ -2210,7 +2208,7 @@
       const tut = e.target.closest('[data-tutorial]');
       if (tut) { closeModal(); SceneRouter.go('tutorial', {}); return; }
       if (tk) { const r = Store.claimTask(tk.dataset.claimTask); if (r) { Sfx.reward(); toast(`领取成功 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); syncHome(); openPanel('missions'); } }
-      else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { if (GF) GF.emit('ACHIEVEMENT_UNLOCKED', { id: ac.dataset.claimAchv, coins: r.coins }); else Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
+      else if (ac) { const r = Store.claimAchv(ac.dataset.claimAchv); if (r) { if (Ctl) Ctl.settle.achievement(ac.dataset.claimAchv, r.coins); else Sfx.reward(); toast(`成就奖励 🪙+${fmtChips(r.coins)} 💎+${r.diamonds}`); syncWallet(true); openPanel('achievements'); } }
       else if (clr) { Store.clearHandLog(); $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (back) { $('panel-body').innerHTML = renderHandLogList(); try { Sfx.button(); } catch (_) {} }
       else if (oh) { openPanel('tableHistory'); }
@@ -2324,6 +2322,14 @@
   GF = window.RHCore.GameFeelDirectorV2.create({ audio: _audioMgr, stage: buildGameFeelStage() });
   GF.quickWord = (id, key) => _audioMgr.quickWord(id, key);   // 兼容 maybeVoice 调用
   window.GameFeel = GF;
+  // C：牌局事件 emit 源抽离到 4 个控制器；ui.js 只调控制器，不直接 emit GameFeelEvent
+  Ctl = {
+    deal: window.RHCore.DealController.create(GF),
+    showdown: window.RHCore.ShowdownController.create(GF),
+    settle: window.RHCore.SettlementController.create(GF),
+    action: window.RHCore.ActionController.create(GF),
+  };
+  window.GameControllers = Ctl;
   window.RHCore.TableScene.ensure();          // 显式化 14 层
   window.RHCore.ActionPanel.mount();           // 仅补 legal-hint，不造假按钮；执行仍由既有处理器
   registerScenes();

@@ -26,7 +26,7 @@ const FILES = ['codec.js', 'skins.js', 'store.js', 'sound.js', 'music.js', 'voic
   'gamefeel/GameFeelEvent.js', 'gamefeel/GameFeelConfig.js', 'gamefeel/TableAnimationQueue.js', 'gamefeel/HapticDirector.js', 'gamefeel/ChipFlyAnimator.js', 'gamefeel/CardDealAnimator.js', 'gamefeel/PotWinAnimator.js', 'gamefeel/HighlightDirector.js', 'gamefeel/GameFeelDirector.js',
   'view/table/SeatView.js', 'view/table/ActionPanel.js', 'view/table/PlayerViewModel.js',
   'view/table/layers/_base.js', 'view/table/layers/TableBackgroundLayer.js', 'view/table/layers/TableFeltLayer.js', 'view/table/layers/SeatLayer.js', 'view/table/layers/DealerButtonLayer.js', 'view/table/layers/CommunityCardLayer.js', 'view/table/layers/PotLayer.js', 'view/table/layers/BetChipLayer.js', 'view/table/layers/PlayerHandLayer.js', 'view/table/layers/ActionPanelLayer.js', 'view/table/layers/TrainingAssistantLayer.js', 'view/table/layers/ChatEmojiLayer.js', 'view/table/layers/GiftAnimationLayer.js', 'view/table/layers/HistoryLayer.js', 'view/table/layers/ModalLayer.js',
-  'view/table/TableScene.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
+  'view/table/TableScene.js', 'controllers/DealController.js', 'controllers/ShowdownController.js', 'controllers/SettlementController.js', 'controllers/ActionController.js', 'services/EventBus.js', 'services/AudioManager.js', 'services/GameFeelDirector.js', 'core/Lessons.js',
   'router.js', 'ui.js'];
 for (const f of FILES) { try { new window.Function(fs.readFileSync(path.join(SRC, f), 'utf8')).call(window); } catch (e) { console.log('LOAD FAIL ' + f + ': ' + e.message); fail++; } }
 
